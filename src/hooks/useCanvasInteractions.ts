@@ -45,9 +45,17 @@ export function useCanvasInteractions({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Create a temporary canvas to hold the ImageData
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = originalImageDataRef.current.width;
+    tempCanvas.height = originalImageDataRef.current.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+    tempCtx.putImageData(originalImageDataRef.current, 0, 0);
+    
     // Apply current scale and offset
     ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
-    ctx.putImageData(originalImageDataRef.current, 0, 0);
+    ctx.drawImage(tempCanvas, 0, 0);
 
     // Draw selected zone highlight
     if (selectedZoneId !== null && zones.length > 0 && labels) {
