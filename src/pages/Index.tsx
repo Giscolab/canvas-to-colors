@@ -45,7 +45,8 @@ const Index = () => {
       toast.success("Modèle généré avec succès !");
     } catch (error) {
       console.error("Processing error:", error);
-      toast.error("Erreur lors du traitement de l'image");
+      const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
+      toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
     }

@@ -180,6 +180,7 @@ function labelConnectedComponents(
   const labels = new Int32Array(width * height).fill(-1);
   const zones: Zone[] = [];
   let currentLabel = 0;
+  const MAX_STACK_SIZE = 500000; // Limit stack size to prevent memory issues
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -191,10 +192,20 @@ function labelConnectedComponents(
         let sumX = 0;
         let sumY = 0;
 
-        // Flood fill
+        // Flood fill with strict limits
         const stack: Array<[number, number]> = [[x, y]];
+        let iterations = 0;
+        const MAX_ITERATIONS = 1000000; // 1M iterations max per zone
         
-        while (stack.length > 0) {
+        while (stack.length > 0 && iterations < MAX_ITERATIONS) {
+          iterations++;
+          
+          // Prevent stack overflow
+          if (stack.length > MAX_STACK_SIZE) {
+            console.warn(`Stack size limit reached for zone at (${x}, ${y})`);
+            break;
+          }
+          
           const [cx, cy] = stack.pop()!;
           const cidx = cy * width + cx;
           
@@ -218,18 +229,23 @@ function labelConnectedComponents(
           stack.push([cx + 1, cy + 1]);
         }
 
-        zones.push({
-          id: currentLabel,
-          colorIdx,
-          area: pixels.length,
-          pixels,
-          centroid: {
-            x: Math.round(sumX / pixels.length),
-            y: Math.round(sumY / pixels.length)
-          }
-        });
+        if (iterations >= MAX_ITERATIONS) {
+          console.warn(`Max iterations reached for zone at (${x}, ${y})`);
+        }
 
-        currentLabel++;
+        if (pixels.length > 0) {
+          zones.push({
+            id: currentLabel,
+            colorIdx,
+            area: pixels.length,
+            pixels,
+            centroid: {
+              x: Math.round(sumX / pixels.length),
+              y: Math.round(sumY / pixels.length)
+            }
+          });
+          currentLabel++;
+        }
       }
     }
   }
@@ -426,6 +442,9 @@ function traceContours(
     [0, 1], [-1, 1], [-1, 0], [-1, -1]
   ];
   
+  const MAX_PATH_LENGTH = 10000; // Strict limit on path length
+  const MAX_ITERATIONS = 50000; // Absolute max iterations per contour
+  
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
@@ -451,12 +470,28 @@ function traceContours(
       
       if (!isBoundary) continue;
       
-      // Trace the contour
+      // Trace the contour with strict iteration limits
       const path: Array<{ x: number; y: number }> = [];
       let cx = x, cy = y;
       let dir = 0;
+      let iterations = 0;
+      const startX = x;
+      const startY = y;
       
       do {
+        iterations++;
+        
+        // Multiple exit conditions to prevent infinite loops
+        if (iterations >= MAX_ITERATIONS) {
+          console.warn(`Max iterations (${MAX_ITERATIONS}) reached for contour at (${x}, ${y})`);
+          break;
+        }
+        
+        if (path.length >= MAX_PATH_LENGTH) {
+          console.warn(`Max path length (${MAX_PATH_LENGTH}) reached for contour at (${x}, ${y})`);
+          break;
+        }
+        
         path.push({ x: cx, y: cy });
         visited.add(cy * width + cx);
         
@@ -480,9 +515,17 @@ function traceContours(
           }
         }
         
-        if (!found || path.length > width * height) break;
+        if (!found) {
+          // No next pixel found, stop tracing
+          break;
+        }
         
-      } while (cx !== x || cy !== y);
+        // Check if we've returned to start (only after at least 4 pixels)
+        if (path.length > 3 && cx === startX && cy === startY) {
+          break;
+        }
+        
+      } while (true);
       
       if (path.length > 3) {
         contours.push({ zoneId: label, path });
@@ -538,10 +581,21 @@ function findBestLabelPosition(
   width: number,
   height: number
 ): { x: number; y: number } {
+  // Skip expensive calculation for very large zones
+  const MAX_ZONE_SIZE_FOR_OPTIMIZATION = 100000;
+  if (zone.pixels.length > MAX_ZONE_SIZE_FOR_OPTIMIZATION) {
+    // Fallback to centroid for huge zones
+    return zone.centroid;
+  }
+  
   let bestIdx = 0;
   let bestScore = 0;
+  const MAX_STEPS = 1000; // Limit steps in each direction
   
-  for (let i = 0; i < zone.pixels.length; i++) {
+  // Sample pixels if zone is large (check every 10th pixel)
+  const sampleRate = zone.pixels.length > 10000 ? 10 : 1;
+  
+  for (let i = 0; i < zone.pixels.length; i += sampleRate) {
     const pixelIdx = zone.pixels[i];
     const x = pixelIdx % width;
     const y = Math.floor(pixelIdx / width);
@@ -556,13 +610,16 @@ function findBestLabelPosition(
       let count = 0;
       let cx = x + dx;
       let cy = y + dy;
+      let steps = 0;
       
-      while (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+      // Strict limit on steps per direction
+      while (cx >= 0 && cx < width && cy >= 0 && cy < height && steps < MAX_STEPS) {
         const cidx = cy * width + cx;
         if (labels[cidx] !== zone.id) break;
         count++;
         cx += dx;
         cy += dy;
+        steps++;
       }
       
       return count;
@@ -713,7 +770,15 @@ export async function processImage(
   minRegionSize: number,
   smoothness: number
 ): Promise<ProcessedResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const GLOBAL_TIMEOUT = 30000; // 30 seconds max
+    const startTime = Date.now();
+    
+    // Global timeout
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs.'));
+    }, GLOBAL_TIMEOUT);
+    
     const img = new Image();
     const reader = new FileReader();
 
@@ -833,7 +898,11 @@ export async function processImage(
       console.log('Step 10: Generating legend...');
       const legend = generateLegend(mergedZones, palette, width * height);
       
-      console.log(`Processing complete: ${mergedZones.length} zones, ${contours.length} contours`);
+      const totalTime = Date.now() - startTime;
+      console.log(`Processing complete: ${mergedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
+      
+      // Clear timeout
+      clearTimeout(timeoutId);
       
       resolve({
         contours: contoursData,
@@ -844,6 +913,16 @@ export async function processImage(
         svg,
         legend
       });
+    };
+
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(new Error('Erreur lors du chargement de l\'image'));
+    };
+
+    reader.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(new Error('Erreur lors de la lecture du fichier'));
     };
 
     reader.readAsDataURL(imageFile);
