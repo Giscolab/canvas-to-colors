@@ -352,6 +352,7 @@ function mergeSmallZones(
 
 /**
  * Apply morphological operations for edge smoothing
+ * Uses a larger neighborhood (range=4) for more aggressive smoothing inspired by pbnify
  */
 function smoothZones(
   labels: Int32Array,
@@ -364,29 +365,35 @@ function smoothZones(
   for (let iter = 0; iter < iterations; iter++) {
     const next = new Int32Array(current);
     
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
+    const range = 4; // Larger range for more aggressive smoothing (from pbnify)
+    
+    for (let y = range; y < height - range; y++) {
+      for (let x = range; x < width - range; x++) {
         const idx = y * width + x;
-        const centerLabel = current[idx];
         
-        // Count neighbor labels (8-neighbors)
+        // Count neighbor labels in larger vicinity
         const counts = new Map<number, number>();
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nidx = (y + dy) * width + (x + dx);
+        let maxCount = 0;
+        
+        for (let yy = y - range; yy <= y + range; yy++) {
+          for (let xx = x - range; xx <= x + range; xx++) {
+            const nidx = yy * width + xx;
             const label = current[nidx];
-            counts.set(label, (counts.get(label) || 0) + 1);
+            const count = (counts.get(label) || 0) + 1;
+            counts.set(label, count);
+            
+            if (count > maxCount) {
+              maxCount = count;
+            }
           }
         }
         
-        // Use majority vote
-        let maxCount = 0;
-        let majorityLabel = centerLabel;
+        // Find first label with max count (majority vote)
+        let majorityLabel = current[idx];
         for (const [label, count] of counts) {
-          if (count > maxCount) {
-            maxCount = count;
+          if (count === maxCount) {
             majorityLabel = label;
+            break;
           }
         }
         
@@ -522,12 +529,69 @@ function generateSVG(
 // ============= NUMBERED VERSION =============
 
 /**
- * Create numbered version with numbers at zone centroids
+ * Calculate "goodness score" for label position (from pbnify algorithm)
+ * Finds the most centered position within a zone by checking continuity in 4 directions
+ */
+function findBestLabelPosition(
+  zone: Zone,
+  labels: Int32Array,
+  width: number,
+  height: number
+): { x: number; y: number } {
+  let bestIdx = 0;
+  let bestScore = 0;
+  
+  for (let i = 0; i < zone.pixels.length; i++) {
+    const pixelIdx = zone.pixels[i];
+    const x = pixelIdx % width;
+    const y = Math.floor(pixelIdx / width);
+    
+    // Count continuous pixels in 4 directions
+    const directions = [
+      [-1, 0], [1, 0],  // left, right
+      [0, -1], [0, 1]   // up, down
+    ];
+    
+    const counts = directions.map(([dx, dy]) => {
+      let count = 0;
+      let cx = x + dx;
+      let cy = y + dy;
+      
+      while (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+        const cidx = cy * width + cx;
+        if (labels[cidx] !== zone.id) break;
+        count++;
+        cx += dx;
+        cy += dy;
+      }
+      
+      return count;
+    });
+    
+    // Goodness = product of continuity in all 4 directions
+    const score = counts[0] * counts[1] * counts[2] * counts[3];
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+  
+  const bestPixelIdx = zone.pixels[bestIdx];
+  return {
+    x: bestPixelIdx % width,
+    y: Math.floor(bestPixelIdx / width)
+  };
+}
+
+/**
+ * Create numbered version with optimal label positioning (enhanced with pbnify algorithm)
  */
 function createNumberedVersion(
   imageData: ImageData,
   zones: Zone[],
-  palette: string[]
+  palette: string[],
+  labels: Int32Array
 ): ImageData {
   const width = imageData.width;
   const height = imageData.height;
@@ -545,10 +609,12 @@ function createNumberedVersion(
   ctx.textBaseline = 'middle';
   
   for (const zone of zones) {
-    if (zone.area < 100) continue; // Skip tiny zones
+    if (zone.area < 100) continue; // Skip tiny zones (from pbnify threshold)
     
     const number = zone.id + 1;
-    const { x, y } = zone.centroid;
+    
+    // Use optimal position from pbnify algorithm instead of centroid
+    const position = findBestLabelPosition(zone, labels, width, height);
     
     // Choose contrasting color
     const [r, g, b] = hexToRgb(palette[zone.colorIdx]);
@@ -559,11 +625,11 @@ function createNumberedVersion(
     // Draw outline
     ctx.strokeStyle = outlineColor;
     ctx.lineWidth = 3;
-    ctx.strokeText(number.toString(), x, y);
+    ctx.strokeText(number.toString(), position.x, position.y);
     
     // Draw number
     ctx.fillStyle = textColor;
-    ctx.fillText(number.toString(), x, y);
+    ctx.fillText(number.toString(), position.x, position.y);
   }
   
   return ctx.getImageData(0, 0, width, height);
@@ -759,9 +825,9 @@ export async function processImage(
       console.log('Step 8: Generating SVG...');
       const svg = generateSVG(contours, mergedZones, palette, width, height);
       
-      // STEP 9: Create numbered version
+      // STEP 9: Create numbered version with optimal positioning
       console.log('Step 9: Creating numbered version...');
-      const numberedData = createNumberedVersion(quantizedData, mergedZones, palette);
+      const numberedData = createNumberedVersion(quantizedData, mergedZones, palette, smoothedLabels);
       
       // STEP 10: Generate legend
       console.log('Step 10: Generating legend...');
