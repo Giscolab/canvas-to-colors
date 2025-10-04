@@ -16,16 +16,42 @@ interface CanvasProps {
 }
 
 export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON }: CanvasProps) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const contoursCanvasRef = useRef<HTMLCanvasElement>(null);
+  const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const colorizedCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (processedData?.numbered && canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
+    if (processedData?.contours && contoursCanvasRef.current) {
+      const ctx = contoursCanvasRef.current.getContext('2d');
       if (ctx) {
+        contoursCanvasRef.current.width = processedData.contours.width;
+        contoursCanvasRef.current.height = processedData.contours.height;
+        ctx.putImageData(processedData.contours, 0, 0);
+      }
+    }
+  }, [processedData?.contours]);
+
+  useEffect(() => {
+    if (processedData?.numbered && numberedCanvasRef.current) {
+      const ctx = numberedCanvasRef.current.getContext('2d');
+      if (ctx) {
+        numberedCanvasRef.current.width = processedData.numbered.width;
+        numberedCanvasRef.current.height = processedData.numbered.height;
         ctx.putImageData(processedData.numbered, 0, 0);
       }
     }
-  }, [processedData]);
+  }, [processedData?.numbered]);
+
+  useEffect(() => {
+    if (processedData?.colorized && colorizedCanvasRef.current) {
+      const ctx = colorizedCanvasRef.current.getContext('2d');
+      if (ctx) {
+        colorizedCanvasRef.current.width = processedData.colorized.width;
+        colorizedCanvasRef.current.height = processedData.colorized.height;
+        ctx.putImageData(processedData.colorized, 0, 0);
+      }
+    }
+  }, [processedData?.colorized]);
 
   return (
     <Card className="p-6 flex-1">
@@ -92,7 +118,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center">
               {processedData?.contours ? (
                 <canvas 
-                  ref={canvasRef}
+                  ref={contoursCanvasRef}
                   className="max-w-full max-h-full"
                 />
               ) : (
@@ -105,7 +131,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center">
               {processedData?.numbered ? (
                 <canvas 
-                  ref={canvasRef}
+                  ref={numberedCanvasRef}
                   className="max-w-full max-h-full"
                 />
               ) : (
@@ -118,7 +144,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center">
               {processedData?.colorized ? (
                 <canvas 
-                  ref={canvasRef}
+                  ref={colorizedCanvasRef}
                   className="max-w-full max-h-full"
                 />
               ) : (
