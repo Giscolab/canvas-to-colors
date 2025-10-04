@@ -444,9 +444,16 @@ function traceContours(
   
   const MAX_PATH_LENGTH = 10000; // Strict limit on path length
   const MAX_ITERATIONS = 50000; // Absolute max iterations per contour
+  const MAX_CONTOURS = 500; // Maximum number of contours to prevent memory issues
   
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
+      // Stop if we've reached the maximum number of contours
+      if (contours.length >= MAX_CONTOURS) {
+        console.warn(`Max contours (${MAX_CONTOURS}) reached. Stopping contour tracing.`);
+        return contours;
+      }
+      
       const idx = y * width + x;
       const label = labels[idx];
       
@@ -477,18 +484,21 @@ function traceContours(
       let iterations = 0;
       const startX = x;
       const startY = y;
+      let limitReached = false;
       
       do {
         iterations++;
         
         // Multiple exit conditions to prevent infinite loops
         if (iterations >= MAX_ITERATIONS) {
-          console.warn(`Max iterations (${MAX_ITERATIONS}) reached for contour at (${x}, ${y})`);
+          console.warn(`Max iterations (${MAX_ITERATIONS}) reached for contour at (${x}, ${y}). Skipping.`);
+          limitReached = true;
           break;
         }
         
         if (path.length >= MAX_PATH_LENGTH) {
-          console.warn(`Max path length (${MAX_PATH_LENGTH}) reached for contour at (${x}, ${y})`);
+          console.warn(`Max path length (${MAX_PATH_LENGTH}) reached for contour at (${x}, ${y}). Skipping.`);
+          limitReached = true;
           break;
         }
         
@@ -527,7 +537,8 @@ function traceContours(
         
       } while (true);
       
-      if (path.length > 3) {
+      // Only add valid contours that didn't hit limits
+      if (!limitReached && path.length > 3) {
         contours.push({ zoneId: label, path });
       }
     }
@@ -548,6 +559,20 @@ function generateSVG(
   width: number,
   height: number
 ): string {
+  // Safety check: if too many contours, return a simplified SVG
+  const MAX_CONTOURS_FOR_SVG = 1000;
+  if (contours.length > MAX_CONTOURS_FOR_SVG) {
+    console.warn(`Too many contours (${contours.length}). Generating simplified SVG.`);
+    // Return a basic SVG with colored rectangles for each zone instead
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
+    svg += `  <g id="zones">\n`;
+    svg += `    <rect width="${width}" height="${height}" fill="#f0f0f0" />\n`;
+    svg += `    <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="20">Too many zones detected</text>\n`;
+    svg += `  </g>\n`;
+    svg += `</svg>`;
+    return svg;
+  }
+  
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
   svg += `  <g id="zones">\n`;
   
