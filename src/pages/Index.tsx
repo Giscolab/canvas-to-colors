@@ -6,6 +6,8 @@ import { ColorPalette } from "@/components/ColorPalette";
 import { Canvas } from "@/components/Canvas";
 import { processImage, ProcessedResult } from "@/lib/imageProcessing";
 import { toast } from "sonner";
+import Confetti from "react-confetti";
+import { useWindowSize } from "@/hooks/useWindowSize";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -15,13 +17,15 @@ const Index = () => {
   const [smoothness, setSmoothness] = useState(50);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedData, setProcessedData] = useState<ProcessedResult | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const { width, height } = useWindowSize();
 
   const handleImageSelect = (file: File) => {
     setSelectedFile(file);
     const url = URL.createObjectURL(file);
     setSelectedImageUrl(url);
     setProcessedData(null);
-    toast.success("Image chargée avec succès !");
+    toast.success("Image chargée avec succès ! 🎨");
   };
 
   const handleProcess = async () => {
@@ -31,7 +35,7 @@ const Index = () => {
     }
 
     setIsProcessing(true);
-    toast.info("Traitement de l'image en cours...");
+    toast.info("Traitement de l'image en cours... ⚡");
 
     try {
       const result = await processImage(
@@ -42,7 +46,9 @@ const Index = () => {
       );
       
       setProcessedData(result);
-      toast.success("Modèle généré avec succès !");
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 5000);
+      toast.success("🎉 Modèle généré avec succès !");
     } catch (error) {
       console.error("Processing error:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
@@ -71,7 +77,7 @@ const Index = () => {
         a.href = url;
         a.download = 'paint-by-numbers.png';
         a.click();
-        toast.success("Export PNG réussi !");
+        toast.success("✅ Export PNG réussi !");
       }
     });
   };
@@ -101,15 +107,25 @@ const Index = () => {
     a.href = url;
     a.download = 'paint-by-numbers-data.json';
     a.click();
-    toast.success("Export JSON réussi !");
+    toast.success("✅ Export JSON réussi !");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary">
+    <div className="min-h-screen">
+      {showConfetti && (
+        <Confetti
+          width={width}
+          height={height}
+          recycle={false}
+          numberOfPieces={500}
+          gravity={0.3}
+        />
+      )}
+      
       <Header />
       
       <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-[350px_1fr] gap-6">
+        <div className="grid lg:grid-cols-[380px_1fr] gap-6">
           {/* Left Panel */}
           <div className="space-y-6">
             <ImageUpload 
@@ -143,9 +159,9 @@ const Index = () => {
         </div>
       </main>
 
-      <footer className="border-t border-border mt-12 py-6">
+      <footer className="glass border-t border-border/50 mt-12 py-6">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>PaintByNumbers Studio • Créé avec ❤️ par Lovable</p>
+          <p className="font-medium">PaintByNumbers Studio • Créé avec ❤️ et ✨</p>
         </div>
       </footer>
     </div>

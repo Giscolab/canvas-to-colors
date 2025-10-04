@@ -1,9 +1,10 @@
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Download, Image as ImageIcon, FileCode, Grid3x3, X } from "lucide-react";
+import { Download, Image as ImageIcon, FileCode, Grid3x3, X, ZoomIn, ZoomOut, Maximize2, RefreshCw } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { useCanvasInteractions, Zone } from "@/hooks/useCanvasInteractions";
+import { Badge } from "@/components/ui/badge";
 
 interface CanvasProps {
   originalImage: string | null;
@@ -25,6 +26,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
   
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [activeTab, setActiveTab] = useState("original");
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const contoursInteractions = useCanvasInteractions({
     canvasRef: contoursCanvasRef,
@@ -83,17 +85,57 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
     }
   }, [processedData?.colorized]);
 
+  const getActiveInteractions = () => {
+    switch (activeTab) {
+      case "contours": return contoursInteractions;
+      case "numbered": return numberedInteractions;
+      case "colorized": return colorizedInteractions;
+      default: return null;
+    }
+  };
+
+  const activeInteractions = getActiveInteractions();
+  const zonesCount = processedData?.zones?.length || 0;
+
   return (
-    <Card className="p-6 flex-1 relative">
+    <Card className={`p-6 flex-1 relative glass hover-lift ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-lg">Zone de travail</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-lg">Zone de travail</h3>
+            {processedData && zonesCount > 0 && (
+              <Badge variant="secondary" className="animate-pulse">
+                {zonesCount} zones
+              </Badge>
+            )}
+          </div>
           <div className="flex gap-2">
+            {activeInteractions && activeTab !== "original" && (
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => activeInteractions.resetTransform()}
+                  className="hover-lift"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="hover-lift"
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
+              </>
+            )}
             <Button 
               variant="outline" 
               size="sm"
               onClick={onExportPNG}
               disabled={!processedData}
+              className="hover-lift hover:border-primary"
             >
               <Download className="mr-2 h-4 w-4" />
               PNG
@@ -103,6 +145,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
               size="sm"
               onClick={onExportJSON}
               disabled={!processedData}
+              className="hover-lift hover:border-primary"
             >
               <FileCode className="mr-2 h-4 w-4" />
               JSON
@@ -110,77 +153,103 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </div>
         </div>
 
+        {activeInteractions && activeTab !== "original" && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ZoomIn className="h-4 w-4" />
+            <span>Zoom: {Math.round(activeInteractions.scale * 100)}%</span>
+            <span className="text-xs ml-2">• Molette pour zoomer • Glisser pour déplacer</span>
+          </div>
+        )}
+
         {selectedZone && (
-          <div className="absolute top-20 right-8 bg-card border border-border shadow-lg rounded-lg p-4 z-10 min-w-[200px] animate-fade-in">
+          <div className="absolute top-20 right-8 glass shadow-xl rounded-xl p-4 z-10 min-w-[220px] animate-scale-in border border-primary/20">
             <div className="flex items-start justify-between mb-3">
-              <h4 className="font-semibold text-sm">Zone #{selectedZone.id}</h4>
+              <h4 className="font-semibold flex items-center gap-2">
+                Zone #{selectedZone.colorIdx + 1}
+                <Badge variant="outline" className="text-xs">
+                  ID: {selectedZone.id}
+                </Badge>
+              </h4>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 hover:bg-destructive/10"
                 onClick={() => setSelectedZone(null)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-3">
                 <div
-                  className="w-6 h-6 rounded border border-border"
+                  className="w-10 h-10 rounded-lg border-2 border-border shadow-md hover:scale-110 transition-transform"
                   style={{ backgroundColor: selectedZone.hex }}
                 />
-                <span className="font-mono text-xs text-muted-foreground">
-                  {selectedZone.hex}
-                </span>
-              </div>
-              <div className="text-muted-foreground">
-                <span className="font-medium">Surface:</span> {selectedZone.area} px
-              </div>
-              {selectedZone.percent !== undefined && (
-                <div className="text-muted-foreground">
-                  <span className="font-medium">Part:</span> {selectedZone.percent.toFixed(2)}%
+                <div>
+                  <span className="font-mono text-xs text-muted-foreground block">
+                    {selectedZone.hex}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Couleur #{selectedZone.colorIdx + 1}
+                  </span>
                 </div>
-              )}
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Surface:</span>
+                  <span className="font-medium">{selectedZone.area.toLocaleString()} px</span>
+                </div>
+                {selectedZone.percent !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Part:</span>
+                    <span className="font-medium">{selectedZone.percent.toFixed(2)}%</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="original">
+          <TabsList className="grid w-full grid-cols-4 glass">
+            <TabsTrigger value="original" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
               <ImageIcon className="mr-2 h-4 w-4" />
               Original
             </TabsTrigger>
-            <TabsTrigger value="contours" disabled={!processedData}>
+            <TabsTrigger value="contours" disabled={!processedData} className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
               <Grid3x3 className="mr-2 h-4 w-4" />
               Contours
             </TabsTrigger>
-            <TabsTrigger value="numbered" disabled={!processedData}>
+            <TabsTrigger value="numbered" disabled={!processedData} className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
               <Grid3x3 className="mr-2 h-4 w-4" />
               Numéroté
             </TabsTrigger>
-            <TabsTrigger value="colorized" disabled={!processedData}>
+            <TabsTrigger value="colorized" disabled={!processedData} className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
               <ImageIcon className="mr-2 h-4 w-4" />
               Aperçu
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="original" className="mt-4">
-            <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+            <div className="bg-secondary rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
               {originalImage ? (
                 <img 
                   src={originalImage} 
                   alt="Original" 
-                  className="max-w-full max-h-full object-contain"
+                  className="max-w-full max-h-full object-contain transition-transform hover:scale-105"
                 />
               ) : (
-                <p className="text-muted-foreground">Aucune image chargée</p>
+                <div className="text-center p-8">
+                  <ImageIcon className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Aucune image chargée</p>
+                  <p className="text-sm text-muted-foreground/70 mt-2">Uploadez une image pour commencer</p>
+                </div>
               )}
             </div>
           </TabsContent>
 
           <TabsContent value="contours" className="mt-4">
-            <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.contours ? (
                 <canvas 
                   ref={contoursCanvasRef}
@@ -188,13 +257,16 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
                   style={{ touchAction: 'none' }}
                 />
               ) : (
-                <p className="text-muted-foreground">Traitez d'abord une image</p>
+                <div className="text-center p-8">
+                  <Grid3x3 className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Traitez d'abord une image</p>
+                </div>
               )}
             </div>
           </TabsContent>
 
           <TabsContent value="numbered" className="mt-4">
-            <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.numbered ? (
                 <canvas 
                   ref={numberedCanvasRef}
@@ -202,13 +274,16 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
                   style={{ touchAction: 'none' }}
                 />
               ) : (
-                <p className="text-muted-foreground">Traitez d'abord une image</p>
+                <div className="text-center p-8">
+                  <Grid3x3 className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Traitez d'abord une image</p>
+                </div>
               )}
             </div>
           </TabsContent>
 
           <TabsContent value="colorized" className="mt-4">
-            <div className="bg-secondary rounded-lg aspect-video flex items-center justify-center overflow-hidden">
+            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.colorized ? (
                 <canvas 
                   ref={colorizedCanvasRef}
@@ -216,7 +291,10 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
                   style={{ touchAction: 'none' }}
                 />
               ) : (
-                <p className="text-muted-foreground">Traitez d'abord une image</p>
+                <div className="text-center p-8">
+                  <ImageIcon className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">Traitez d'abord une image</p>
+                </div>
               )}
             </div>
           </TabsContent>
