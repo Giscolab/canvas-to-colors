@@ -683,34 +683,54 @@ function createNumberedVersion(
   canvas.height = height;
   const ctx = canvas.getContext('2d')!;
   
-  ctx.putImageData(imageData, 0, 0);
+  // Start with white background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
   
-  // Draw numbers at centroids
-  ctx.font = 'bold 14px Arial';
+  // Draw thin black contours
+  const edgesData = detectEdges(labels, width, height);
+  for (let i = 0; i < edgesData.data.length; i += 4) {
+    if (edgesData.data[i] === 0) { // Black pixel = edge
+      const pixelIdx = i / 4;
+      const x = pixelIdx % width;
+      const y = Math.floor(pixelIdx / width);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   
   for (const zone of zones) {
-    if (zone.area < 100) continue; // Skip tiny zones (from pbnify threshold)
+    if (zone.area < 100) continue; // Skip tiny zones
     
-    const number = zone.id + 1;
+    // Use palette index as number (matching ColorPalette component)
+    const number = zone.colorIdx + 1;
     
-    // Use optimal position from pbnify algorithm instead of centroid
+    // Calculate font size based on zone area
+    const fontSize = Math.max(10, Math.min(48, Math.sqrt(zone.area) / 3));
+    ctx.font = `bold ${fontSize}px Arial`;
+    
+    // Use optimal position
     const position = findBestLabelPosition(zone, labels, width, height);
     
-    // Choose contrasting color
-    const [r, g, b] = hexToRgb(palette[zone.colorIdx]);
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    const textColor = brightness > 128 ? '#000' : '#fff';
-    const outlineColor = brightness > 128 ? '#fff' : '#000';
+    // White background for number
+    const padding = fontSize * 0.4;
+    const textMetrics = ctx.measureText(number.toString());
+    const bgWidth = textMetrics.width + padding * 2;
+    const bgHeight = fontSize + padding;
     
-    // Draw outline
-    ctx.strokeStyle = outlineColor;
-    ctx.lineWidth = 3;
-    ctx.strokeText(number.toString(), position.x, position.y);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(
+      position.x - bgWidth / 2, 
+      position.y - bgHeight / 2, 
+      bgWidth, 
+      bgHeight
+    );
     
-    // Draw number
-    ctx.fillStyle = textColor;
+    // Black number
+    ctx.fillStyle = '#000000';
     ctx.fillText(number.toString(), position.x, position.y);
   }
   
@@ -744,12 +764,21 @@ function generateLegend(zones: Zone[], palette: string[], totalPixels: number): 
 function detectEdges(labels: Int32Array, width: number, height: number): ImageData {
   const result = new ImageData(width, height);
   
+  // Fill with white background
+  for (let i = 0; i < result.data.length; i += 4) {
+    result.data[i] = 255;
+    result.data[i + 1] = 255;
+    result.data[i + 2] = 255;
+    result.data[i + 3] = 255;
+  }
+  
+  // Draw thin black contours
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
       const label = labels[idx];
       
-      // Check 4 neighbors
+      // Check 4 neighbors for edge detection
       let isEdge = false;
       const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
       
@@ -767,17 +796,14 @@ function detectEdges(labels: Int32Array, width: number, height: number): ImageDa
         }
       }
       
-      const offset = idx * 4;
+      // Draw black pixel for edges
       if (isEdge) {
-        result.data[offset] = 0;
-        result.data[offset + 1] = 0;
-        result.data[offset + 2] = 0;
-      } else {
-        result.data[offset] = 255;
-        result.data[offset + 1] = 255;
-        result.data[offset + 2] = 255;
+        const offset = idx * 4;
+        result.data[offset] = 0;     // R
+        result.data[offset + 1] = 0; // G
+        result.data[offset + 2] = 0; // B
+        result.data[offset + 3] = 255; // A
       }
-      result.data[offset + 3] = 255;
     }
   }
   
