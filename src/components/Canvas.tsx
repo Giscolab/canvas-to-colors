@@ -235,12 +235,12 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsList>
 
           <TabsContent value="original" className="mt-4">
-            <div className="bg-secondary rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
+            <div className="bg-secondary rounded-xl min-h-[400px] max-h-[800px] flex items-center justify-center overflow-hidden shadow-inner">
               {originalImage ? (
                 <img 
                   src={originalImage} 
                   alt="Original" 
-                  className="max-w-full max-h-full object-contain transition-transform hover:scale-105"
+                  className="w-auto h-auto max-w-full max-h-full object-contain transition-transform hover:scale-105"
                 />
               ) : (
                 <div className="text-center p-8">
@@ -253,11 +253,11 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="contours" className="mt-4">
-            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
+            <div className="bg-white rounded-xl min-h-[400px] max-h-[800px] flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.contours ? (
                 <canvas 
                   ref={contoursCanvasRef}
-                  className="max-w-full max-h-full cursor-move"
+                  className="cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (
@@ -270,11 +270,11 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="numbered" className="mt-4">
-            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
+            <div className="bg-white rounded-xl min-h-[400px] max-h-[800px] flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.numbered ? (
                 <canvas 
                   ref={numberedCanvasRef}
-                  className="max-w-full max-h-full cursor-move"
+                  className="cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (
@@ -287,11 +287,11 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="colorized" className="mt-4">
-            <div className="bg-white rounded-xl aspect-video flex items-center justify-center overflow-hidden shadow-inner">
+            <div className="bg-white rounded-xl min-h-[400px] max-h-[800px] flex items-center justify-center overflow-hidden shadow-inner">
               {processedData?.colorized ? (
                 <canvas 
                   ref={colorizedCanvasRef}
-                  className="max-w-full max-h-full cursor-move"
+                  className="cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (
