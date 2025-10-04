@@ -145,29 +145,6 @@ All colors MUST be HSL.
     border: 1px solid var(--glass-border);
   }
   
-  /* Premium animations */
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-  }
-  
-  @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 20px hsl(var(--primary) / 0.3); }
-    50% { box-shadow: 0 0 40px hsl(var(--primary) / 0.6); }
-  }
-  
-  @keyframes shimmer {
-    0% { background-position: -1000px 0; }
-    100% { background-position: 1000px 0; }
-  }
-  
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
-  }
-  
-  .animate-glow-pulse {
-    animation: glow-pulse 2s ease-in-out infinite;
-  }
   
   /* Hover effects */
   .hover-lift {
@@ -181,4 +158,33 @@ All colors MUST be HSL.
   .hover-glow:hover {
     box-shadow: var(--shadow-glow);
   }
+}
+
+/* === CANVAS FULLSIZE FIX === */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; 
+  overflow-y: auto; 
+}
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: auto; 
+  min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: auto; 
+}
+
+.canvas-container canvas,
+.canvas-container img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
