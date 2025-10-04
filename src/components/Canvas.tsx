@@ -257,7 +257,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
               {processedData?.contours ? (
                 <canvas 
                   ref={contoursCanvasRef}
-                  className="cursor-move"
+                  className="max-w-full max-h-full object-contain cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (
@@ -274,7 +274,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
               {processedData?.numbered ? (
                 <canvas 
                   ref={numberedCanvasRef}
-                  className="cursor-move"
+                  className="max-w-full max-h-full object-contain cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (
@@ -291,7 +291,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
               {processedData?.colorized ? (
                 <canvas 
                   ref={colorizedCanvasRef}
-                  className="cursor-move"
+                  className="max-w-full max-h-full object-contain cursor-move"
                   style={{ touchAction: 'none' }}
                 />
               ) : (

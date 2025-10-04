@@ -30,7 +30,6 @@ export function useCanvasInteractions({
   const [isPanning, setIsPanning] = useState(false);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   
   const animationFrameRef = useRef<number>();
   const originalImageDataRef = useRef<ImageData | null>(null);
@@ -87,33 +86,7 @@ export function useCanvasInteractions({
   // Update ref and trigger redraw when originalImageData changes
   useEffect(() => {
     originalImageDataRef.current = originalImageData;
-    setIsInitialized(false);
   }, [originalImageData]);
-
-  // Auto-fit image on load
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !originalImageData || isInitialized) return;
-
-    const containerWidth = canvas.parentElement?.clientWidth || 800;
-    const containerHeight = canvas.parentElement?.clientHeight || 600;
-    
-    const imageWidth = originalImageData.width;
-    const imageHeight = originalImageData.height;
-
-    // Calculate scale to fit image in container
-    const scaleX = (containerWidth - 40) / imageWidth;
-    const scaleY = (containerHeight - 40) / imageHeight;
-    const fitScale = Math.min(scaleX, scaleY, 1);
-
-    // Center the image
-    const offsetX = (containerWidth - imageWidth * fitScale) / 2;
-    const offsetY = (containerHeight - imageHeight * fitScale) / 2;
-
-    setScale(fitScale);
-    setOffset({ x: offsetX, y: offsetY });
-    setIsInitialized(true);
-  }, [canvasRef, originalImageData, isInitialized]);
 
   // Redraw when dependencies change
   useEffect(() => {
@@ -236,7 +209,8 @@ export function useCanvasInteractions({
     offset,
     selectedZoneId,
     resetTransform: () => {
-      setIsInitialized(false);
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
     },
   };
 }
