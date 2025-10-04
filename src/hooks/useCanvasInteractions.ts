@@ -34,20 +34,18 @@ export function useCanvasInteractions({
   const animationFrameRef = useRef<number>();
   const originalImageDataRef = useRef<ImageData | null>(null);
 
-  useEffect(() => {
-    originalImageDataRef.current = originalImageData;
-  }, [originalImageData]);
-
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !originalImageDataRef.current) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
+    // Clear and reset transform
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Apply current scale and offset
     ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
     ctx.putImageData(originalImageDataRef.current, 0, 0);
 
@@ -85,6 +83,12 @@ export function useCanvasInteractions({
     }
   }, [canvasRef, scale, offset, selectedZoneId, zones, labels]);
 
+  // Update ref and trigger redraw when originalImageData changes
+  useEffect(() => {
+    originalImageDataRef.current = originalImageData;
+  }, [originalImageData]);
+
+  // Redraw when dependencies change
   useEffect(() => {
     redraw();
   }, [redraw]);

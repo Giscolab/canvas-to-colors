@@ -52,38 +52,42 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
     onZoneSelect: setSelectedZone,
   });
 
+  // Initialize canvas when data is available or tab changes
   useEffect(() => {
     if (processedData?.contours && contoursCanvasRef.current) {
-      const ctx = contoursCanvasRef.current.getContext('2d');
+      const canvas = contoursCanvasRef.current;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
-        contoursCanvasRef.current.width = processedData.contours.width;
-        contoursCanvasRef.current.height = processedData.contours.height;
+        canvas.width = processedData.contours.width;
+        canvas.height = processedData.contours.height;
         ctx.putImageData(processedData.contours, 0, 0);
       }
     }
-  }, [processedData?.contours]);
+  }, [processedData?.contours, activeTab]);
 
   useEffect(() => {
     if (processedData?.numbered && numberedCanvasRef.current) {
-      const ctx = numberedCanvasRef.current.getContext('2d');
+      const canvas = numberedCanvasRef.current;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
-        numberedCanvasRef.current.width = processedData.numbered.width;
-        numberedCanvasRef.current.height = processedData.numbered.height;
+        canvas.width = processedData.numbered.width;
+        canvas.height = processedData.numbered.height;
         ctx.putImageData(processedData.numbered, 0, 0);
       }
     }
-  }, [processedData?.numbered]);
+  }, [processedData?.numbered, activeTab]);
 
   useEffect(() => {
     if (processedData?.colorized && colorizedCanvasRef.current) {
-      const ctx = colorizedCanvasRef.current.getContext('2d');
+      const canvas = colorizedCanvasRef.current;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
-        colorizedCanvasRef.current.width = processedData.colorized.width;
-        colorizedCanvasRef.current.height = processedData.colorized.height;
+        canvas.width = processedData.colorized.width;
+        canvas.height = processedData.colorized.height;
         ctx.putImageData(processedData.colorized, 0, 0);
       }
     }
-  }, [processedData?.colorized]);
+  }, [processedData?.colorized, activeTab]);
 
   const getActiveInteractions = () => {
     switch (activeTab) {
