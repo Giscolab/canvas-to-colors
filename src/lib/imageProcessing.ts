@@ -24,6 +24,7 @@ export interface ProcessedResult {
   zones: Zone[];
   svg: string;
   legend: LegendEntry[];
+  labels?: Int32Array;
 }
 
 interface Contour {
@@ -737,6 +738,56 @@ function createNumberedVersion(
   return ctx.getImageData(0, 0, width, height);
 }
 
+// ============= PREVIEW FUSION =============
+
+/**
+ * Create preview fusion: image + contours + numbers layered together
+ */
+function createPreviewFusion(
+  quantizedData: ImageData,
+  contoursData: ImageData,
+  numberedData: ImageData,
+  width: number,
+  height: number
+): ImageData {
+  const previewData = new ImageData(width, height);
+  
+  // Start with quantized image as base
+  for (let i = 0; i < quantizedData.data.length; i++) {
+    previewData.data[i] = quantizedData.data[i];
+  }
+  
+  // Overlay contours (black lines)
+  for (let i = 0; i < contoursData.data.length; i += 4) {
+    const contourR = contoursData.data[i];
+    // If contour pixel is black (edge), draw it
+    if (contourR === 0) {
+      previewData.data[i] = 0;     // R
+      previewData.data[i + 1] = 0; // G
+      previewData.data[i + 2] = 0; // B
+      previewData.data[i + 3] = 255; // A
+    }
+  }
+  
+  // Overlay numbers from numbered version
+  for (let i = 0; i < numberedData.data.length; i += 4) {
+    const r = numberedData.data[i];
+    const g = numberedData.data[i + 1];
+    const b = numberedData.data[i + 2];
+    
+    // If it's a number (black text on white background in numbered version)
+    // Numbers appear as dark pixels, detect them
+    if (r < 100 && g < 100 && b < 100) {
+      previewData.data[i] = 0;     // R - black
+      previewData.data[i + 1] = 0; // G - black
+      previewData.data[i + 2] = 0; // B - black
+      previewData.data[i + 3] = 255; // A
+    }
+  }
+  
+  return previewData;
+}
+
 // ============= LEGEND GENERATION =============
 
 /**
@@ -945,8 +996,12 @@ export async function processImage(
       console.log('Step 9: Creating numbered version...');
       const numberedData = createNumberedVersion(quantizedData, mergedZones, palette, smoothedLabels);
       
-      // STEP 10: Generate legend
-      console.log('Step 10: Generating legend...');
+      // STEP 10: Create preview version (fusion: image + contours + numbers)
+      console.log('Step 10: Creating preview fusion...');
+      const previewData = createPreviewFusion(quantizedData, contoursData, numberedData, width, height);
+      
+      // STEP 11: Generate legend
+      console.log('Step 11: Generating legend...');
       const legend = generateLegend(mergedZones, palette, width * height);
       
       const totalTime = Date.now() - startTime;
@@ -958,11 +1013,12 @@ export async function processImage(
       resolve({
         contours: contoursData,
         numbered: numberedData,
-        colorized: quantizedData,
+        colorized: previewData,
         palette,
         zones: mergedZones,
         svg,
-        legend
+        legend,
+        labels: smoothedLabels
       });
     };
 
