@@ -32,6 +32,47 @@ interface Contour {
   path: Array<{ x: number; y: number }>;
 }
 
+type CanvasLike = HTMLCanvasElement | OffscreenCanvas;
+type Canvas2DContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+interface CanvasHandle {
+  canvas: CanvasLike;
+  ctx: Canvas2DContext;
+}
+
+function createCanvasFactory() {
+  if (typeof document === 'undefined') {
+    if (typeof OffscreenCanvas === 'undefined') {
+      throw new Error('OffscreenCanvas is not supported in this environment.');
+    }
+    return {
+      createCanvas(width: number, height: number): CanvasHandle {
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          throw new Error('Unable to acquire 2D context from OffscreenCanvas');
+        }
+        return { canvas, ctx };
+      }
+    };
+  }
+
+  return {
+    createCanvas(width: number, height: number): CanvasHandle {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) {
+        throw new Error('Unable to acquire 2D context from canvas element');
+      }
+      return { canvas, ctx };
+    }
+  };
+}
+
+const canvasFactory = createCanvasFactory();
+
 // ============= COLOR UTILITIES =============
 
 function rgbToHex(r: number, g: number, b: number): string {
@@ -847,11 +888,8 @@ function createNumberedVersion(
 ): ImageData {
   const width = imageData.width;
   const height = imageData.height;
-  
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d')!;
+
+  const { ctx } = canvasFactory.createCanvas(width, height);
   
   // Start with white background
   ctx.fillStyle = '#ffffff';
@@ -1032,6 +1070,65 @@ function detectEdges(labels: Int32Array, width: number, height: number): ImageDa
 
 // ============= MAIN PROCESSING PIPELINE =============
 
+interface LoadedImageSource {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  cleanup?: () => void;
+}
+
+async function loadImageSource(imageFile: File): Promise<LoadedImageSource> {
+  if (typeof document === 'undefined') {
+    if (typeof createImageBitmap !== 'function') {
+      throw new Error('Image decoding is not supported in this environment.');
+    }
+    const bitmap = await createImageBitmap(imageFile);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      cleanup: () => bitmap.close()
+    };
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    const cleanup = () => {
+      reader.onload = null;
+      reader.onerror = null;
+      img.onload = null;
+      (img as any).onerror = null;
+    };
+
+    reader.onload = e => {
+      img.src = e.target?.result as string;
+    };
+
+    reader.onerror = () => {
+      cleanup();
+      reject(new Error('Impossible de lire le fichier image.'));
+    };
+
+    img.onload = () => {
+      cleanup();
+      resolve({
+        source: img,
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height
+      });
+    };
+
+    (img as any).onerror = () => {
+      cleanup();
+      reject(new Error('Impossible de charger l\'image fournie.'));
+    };
+
+    reader.readAsDataURL(imageFile);
+  });
+}
+
 /**
  * Process image: quantize, segment, merge, smooth, trace contours, generate SVG and numbered version
  */
@@ -1041,31 +1138,22 @@ export async function processImage(
   minRegionSize: number,
   smoothness: number
 ): Promise<ProcessedResult> {
-  return new Promise((resolve, reject) => {
-    const GLOBAL_TIMEOUT = 30000; // 30 seconds max
-    const startTime = Date.now();
-    
-    // Global timeout
+  const GLOBAL_TIMEOUT = 30000; // 30 seconds max
+  const startTime = Date.now();
+
+  return new Promise(async (resolve, reject) => {
     const timeoutId = setTimeout(() => {
       reject(new Error('Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs.'));
     }, GLOBAL_TIMEOUT);
-    
-    const img = new Image();
-    const reader = new FileReader();
 
-    reader.onload = (e) => {
-      img.src = e.target?.result as string;
-    };
+    try {
+      const loadedImage = await loadImageSource(imageFile);
 
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      
       // Scale down if too large (max 1200px)
       const maxDim = 1200;
-      let width = img.width;
-      let height = img.height;
-      
+      let width = loadedImage.width;
+      let height = loadedImage.height;
+
       if (width > maxDim || height > maxDim) {
         if (width > height) {
           height = Math.round((height * maxDim) / width);
@@ -1075,44 +1163,44 @@ export async function processImage(
           height = maxDim;
         }
       }
-      
-      canvas.width = width;
-      canvas.height = height;
-      ctx.drawImage(img, 0, 0, width, height);
-      
+
+      const { ctx } = canvasFactory.createCanvas(width, height);
+      ctx.drawImage(loadedImage.source, 0, 0, width, height);
+      loadedImage.cleanup?.();
+
       const imageData = ctx.getImageData(0, 0, width, height);
-      
+
       // STEP 1: Quantize colors
       console.log('Step 1: Quantizing colors...');
       const palette = quantizeColors(imageData, numColors);
-      
+
       // STEP 2: Map pixels to palette
       console.log('Step 2: Mapping pixels to palette...');
       const colorMap: number[] = [];
       const quantizedData = new ImageData(width, height);
-      
+
       for (let i = 0; i < imageData.data.length; i += 4) {
         const r = imageData.data[i];
         const g = imageData.data[i + 1];
         const b = imageData.data[i + 2];
-        
+
         let minDist = Infinity;
         let colorIndex = 0;
-        
+
         palette.forEach((hex, idx) => {
           const [pr, pg, pb] = hexToRgb(hex);
           const dist = Math.sqrt(
-            Math.pow(r - pr, 2) + 
-            Math.pow(g - pg, 2) + 
+            Math.pow(r - pr, 2) +
+            Math.pow(g - pg, 2) +
             Math.pow(b - pb, 2)
           );
-          
+
           if (dist < minDist) {
             minDist = dist;
             colorIndex = idx;
           }
         });
-        
+
         colorMap.push(colorIndex);
         const [qr, qg, qb] = hexToRgb(palette[colorIndex]);
         quantizedData.data[i] = qr;
@@ -1120,7 +1208,7 @@ export async function processImage(
         quantizedData.data[i + 2] = qb;
         quantizedData.data[i + 3] = 255;
       }
-      
+
       // STEP 3: Label connected components
       console.log('Step 3: Labeling connected components...');
       const { labels: initialLabels, zones: initialZones } = labelConnectedComponents(
@@ -1128,7 +1216,7 @@ export async function processImage(
         width,
         height
       );
-      
+
       // STEP 4: Merge small zones
       console.log('Step 4: Merging small zones...');
       const { mergedLabels, mergedZones } = mergeSmallZones(
@@ -1139,7 +1227,7 @@ export async function processImage(
         height,
         minRegionSize
       );
-      
+
       // STEP 5: Smooth zones
       console.log('Step 5: Smoothing zones...');
       const smoothedLabels = smoothZones(
@@ -1148,37 +1236,36 @@ export async function processImage(
         height,
         Math.round(smoothness)
       );
-      
+
       // STEP 6: Trace contours
       console.log('Step 6: Tracing contours...');
       const contours = traceContours(smoothedLabels, width, height);
-      
+
       // STEP 7: Generate edge image
       console.log('Step 7: Generating edge image...');
       const contoursData = detectEdges(smoothedLabels, width, height);
-      
+
       // STEP 8: Generate SVG
       console.log('Step 8: Generating SVG...');
       const svg = generateSVG(contours, mergedZones, palette, width, height);
-      
+
       // STEP 9: Create numbered version with optimal positioning
       console.log('Step 9: Creating numbered version...');
       const numberedData = createNumberedVersion(quantizedData, mergedZones, palette, smoothedLabels);
-      
+
       // STEP 10: Create preview version (fusion: image + contours + numbers)
       console.log('Step 10: Creating preview fusion...');
       const previewData = createPreviewFusion(quantizedData, contoursData, numberedData, width, height);
-      
+
       // STEP 11: Generate legend
       console.log('Step 11: Generating legend...');
       const legend = generateLegend(mergedZones, palette, width * height);
-      
+
       const totalTime = Date.now() - startTime;
       console.log(`Processing complete: ${mergedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
-      
-      // Clear timeout
+
       clearTimeout(timeoutId);
-      
+
       resolve({
         contours: contoursData,
         numbered: numberedData,
@@ -1189,18 +1276,9 @@ export async function processImage(
         legend,
         labels: smoothedLabels
       });
-    };
-
-    img.onerror = () => {
+    } catch (error) {
       clearTimeout(timeoutId);
-      reject(new Error('Erreur lors du chargement de l\'image'));
-    };
-
-    reader.onerror = () => {
-      clearTimeout(timeoutId);
-      reject(new Error('Erreur lors de la lecture du fichier'));
-    };
-
-    reader.readAsDataURL(imageFile);
+      reject(error instanceof Error ? error : new Error('Erreur inconnue lors du traitement de l\'image'));
+    }
   });
 }
