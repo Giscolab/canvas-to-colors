@@ -67,6 +67,7 @@ export const ParametersPanel = ({
             step={1}
             value={[numColors]}
             onValueChange={(value) => onNumColorsChange(value[0])}
+            aria-label="Nombre de couleurs"
             className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
           <div className="flex justify-between text-[11px] text-muted-foreground">
@@ -93,6 +94,7 @@ export const ParametersPanel = ({
             step={10}
             value={[minRegionSize]}
             onValueChange={(value) => onMinRegionSizeChange(value[0])}
+            aria-label="Fusion zones"
             className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
           <div className="flex justify-between text-[11px] text-muted-foreground">
@@ -119,6 +121,7 @@ export const ParametersPanel = ({
             step={5}
             value={[smoothness]}
             onValueChange={(value) => onSmoothnessChange(value[0])}
+            aria-label="Douceur des bords"
             className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
           <div className="flex justify-between text-[11px] text-muted-foreground">
