@@ -257,7 +257,7 @@ function labelConnectedComponents(
 // ============= ZONE MERGING =============
 
 /**
- * Merge small zones with their nearest neighbor by color distance
+ * Merge small zones with their nearest neighbor by color distance and compactness
  */
 function mergeSmallZones(
   zones: Zone[],
@@ -270,6 +270,34 @@ function mergeSmallZones(
   const mergedLabels = new Int32Array(labels);
   const zonesToMerge = zones.filter(z => z.area < minRegionSize);
   const keepZones = zones.filter(z => z.area >= minRegionSize);
+
+  // Helper: calculate zone compactness (perimeter^2 / area)
+  const calculateCompactness = (zone: Zone): number => {
+    const pixelSet = new Set(zone.pixels);
+    let perimeter = 0;
+    
+    for (const pixelIdx of zone.pixels) {
+      const x = pixelIdx % width;
+      const y = Math.floor(pixelIdx / width);
+      
+      // Check 4-neighbors
+      const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      for (const [dx, dy] of deltas) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          const nidx = ny * width + nx;
+          if (!pixelSet.has(nidx)) {
+            perimeter++;
+          }
+        } else {
+          perimeter++;
+        }
+      }
+    }
+    
+    return zone.area > 0 ? (perimeter * perimeter) / zone.area : Infinity;
+  };
 
   // Build adjacency for small zones
   for (const smallZone of zonesToMerge) {
@@ -294,9 +322,9 @@ function mergeSmallZones(
       }
     }
 
-    // Find nearest neighbor by color
+    // Find nearest neighbor by color and compactness
     let bestNeighbor = -1;
-    let minDist = Infinity;
+    let minScore = Infinity;
     const smallColor = hexToRgb(palette[smallZone.colorIdx]);
 
     for (const neighborId of neighbors) {
@@ -304,10 +332,14 @@ function mergeSmallZones(
       if (!neighborZone) continue;
       
       const neighborColor = hexToRgb(palette[neighborZone.colorIdx]);
-      const dist = colorDistance(smallColor, neighborColor);
+      const colorDist = colorDistance(smallColor, neighborColor);
+      const compactness = calculateCompactness(neighborZone);
       
-      if (dist < minDist) {
-        minDist = dist;
+      // Combined score: prioritize color similarity, penalize non-compact zones
+      const score = colorDist + compactness * 0.1;
+      
+      if (score < minScore) {
+        minScore = score;
         bestNeighbor = neighborId;
       }
     }
@@ -346,19 +378,29 @@ function mergeSmallZones(
     zone.area++;
   }
 
-  // Recalculate centroids
+  // Recalculate centroids using pole of inaccessibility for better label placement
   const mergedZones = Array.from(zoneMap.values()).map(zone => {
-    let sumX = 0, sumY = 0;
-    for (const pixelIdx of zone.pixels) {
-      sumX += pixelIdx % width;
-      sumY += Math.floor(pixelIdx / width);
-    }
-    return {
-      ...zone,
-      centroid: {
+    // Use pole of inaccessibility for larger zones, centroid for small ones
+    const usePole = zone.area > 50;
+    let centroid: { x: number; y: number };
+    
+    if (usePole) {
+      centroid = findPoleOfInaccessibility(zone.pixels, width, height);
+    } else {
+      let sumX = 0, sumY = 0;
+      for (const pixelIdx of zone.pixels) {
+        sumX += pixelIdx % width;
+        sumY += Math.floor(pixelIdx / width);
+      }
+      centroid = {
         x: Math.round(sumX / zone.area),
         y: Math.round(sumY / zone.area)
-      }
+      };
+    }
+    
+    return {
+      ...zone,
+      centroid
     };
   });
 
@@ -422,6 +464,131 @@ function smoothZones(
   }
   
   return current;
+}
+
+// ============= CONTOUR SIMPLIFICATION =============
+
+/**
+ * Ramer-Douglas-Peucker algorithm for path simplification
+ */
+function simplifyPath(
+  path: Array<{ x: number; y: number }>,
+  epsilon: number = 2.0
+): Array<{ x: number; y: number }> {
+  if (path.length <= 2) return path;
+
+  // Find point with maximum distance from line between first and last
+  let maxDist = 0;
+  let maxIndex = 0;
+  const first = path[0];
+  const last = path[path.length - 1];
+
+  for (let i = 1; i < path.length - 1; i++) {
+    const dist = perpendicularDistance(path[i], first, last);
+    if (dist > maxDist) {
+      maxDist = dist;
+      maxIndex = i;
+    }
+  }
+
+  // If max distance is greater than epsilon, recursively simplify
+  if (maxDist > epsilon) {
+    const left = simplifyPath(path.slice(0, maxIndex + 1), epsilon);
+    const right = simplifyPath(path.slice(maxIndex), epsilon);
+    return left.slice(0, -1).concat(right);
+  }
+
+  // Otherwise, return line between first and last
+  return [first, last];
+}
+
+/**
+ * Calculate perpendicular distance from point to line
+ */
+function perpendicularDistance(
+  point: { x: number; y: number },
+  lineStart: { x: number; y: number },
+  lineEnd: { x: number; y: number }
+): number {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+  const norm = Math.sqrt(dx * dx + dy * dy);
+  
+  if (norm === 0) {
+    return Math.sqrt(
+      Math.pow(point.x - lineStart.x, 2) + 
+      Math.pow(point.y - lineStart.y, 2)
+    );
+  }
+
+  return Math.abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x) / norm;
+}
+
+// ============= LABEL POSITIONING =============
+
+/**
+ * Find pole of inaccessibility (visual center) for better label placement
+ * Better than centroid for irregular shapes
+ */
+function findPoleOfInaccessibility(
+  pixels: number[],
+  width: number,
+  height: number
+): { x: number; y: number } {
+  if (pixels.length === 0) return { x: 0, y: 0 };
+
+  // Build mask for this zone
+  const mask = new Set(pixels);
+  
+  // Get bounding box
+  let minX = width, maxX = 0, minY = height, maxY = 0;
+  for (const pixelIdx of pixels) {
+    const x = pixelIdx % width;
+    const y = Math.floor(pixelIdx / width);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+
+  // Grid search for point with maximum distance to edge
+  let bestX = minX, bestY = minY;
+  let maxMinDist = 0;
+
+  const step = Math.max(1, Math.floor((maxX - minX) / 20));
+  
+  for (let y = minY; y <= maxY; y += step) {
+    for (let x = minX; x <= maxX; x += step) {
+      const idx = y * width + x;
+      if (!mask.has(idx)) continue;
+
+      // Find minimum distance to edge
+      let minDist = Infinity;
+      const searchRadius = Math.min(20, Math.max(maxX - minX, maxY - minY));
+      
+      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          
+          const nidx = ny * width + nx;
+          if (!mask.has(nidx)) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            minDist = Math.min(minDist, dist);
+          }
+        }
+      }
+
+      if (minDist > maxMinDist) {
+        maxMinDist = minDist;
+        bestX = x;
+        bestY = y;
+      }
+    }
+  }
+
+  return { x: bestX, y: bestY };
 }
 
 // ============= CONTOUR TRACING =============
@@ -540,7 +707,9 @@ function traceContours(
       
       // Only add valid contours that didn't hit limits
       if (!limitReached && path.length > 3) {
-        contours.push({ zoneId: label, path });
+        // Simplify path using Ramer-Douglas-Peucker
+        const simplifiedPath = simplifyPath(path, 1.5);
+        contours.push({ zoneId: label, path: simplifiedPath });
       }
     }
   }

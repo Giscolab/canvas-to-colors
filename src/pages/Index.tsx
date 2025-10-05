@@ -4,7 +4,9 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
 import { Canvas } from "@/components/Canvas";
-import { processImage, ProcessedResult } from "@/lib/imageProcessing";
+import { ProcessedResult } from "@/lib/imageProcessing";
+import { processImageWithWorker } from "@/lib/imageProcessingWorker";
+import { resizeForDisplay } from "@/lib/imageNormalization";
 import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
@@ -20,45 +22,18 @@ const Index = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const { width, height } = useWindowSize();
 
-  const resizeImageForDisplay = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 1200;
-          let { width, height } = img;
-          
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d')!;
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          resolve(canvas.toDataURL());
-        };
-        img.src = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleImageSelect = async (file: File) => {
-    setSelectedFile(file);
-    const resizedUrl = await resizeImageForDisplay(file);
-    setSelectedImageUrl(resizedUrl);
-    setProcessedData(null);
-    toast.success("Image chargée avec succès ! 🎨");
+    try {
+      setSelectedFile(file);
+      // Normalize image with EXIF correction and resize
+      const normalizedUrl = await resizeForDisplay(file, 1200);
+      setSelectedImageUrl(normalizedUrl);
+      setProcessedData(null);
+      toast.success("Image chargée avec succès ! 🎨");
+    } catch (error) {
+      console.error("Image normalization error:", error);
+      toast.error("Erreur lors du chargement de l'image");
+    }
   };
 
   const handleProcess = async () => {
@@ -71,7 +46,8 @@ const Index = () => {
     toast.info("Traitement de l'image en cours... ⚡");
 
     try {
-      const result = await processImage(
+      // Process image in Web Worker (non-blocking)
+      const result = await processImageWithWorker(
         selectedFile,
         numColors,
         minRegionSize,
