@@ -298,6 +298,70 @@ function labelConnectedComponents(
 // ============= ZONE MERGING =============
 
 /**
+ * Rebuild zones from a label map.
+ * Optionally uses reference zones to keep consistent color assignments.
+ */
+function buildZonesFromLabels(
+  labels: Int32Array,
+  palette: string[],
+  width: number,
+  height: number,
+  referenceZones: Zone[] = []
+): Zone[] {
+  const zoneMap = new Map<number, Zone>();
+  const labelToColor = new Map<number, number>();
+
+  for (const zone of referenceZones) {
+    labelToColor.set(zone.id, zone.colorIdx);
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    if (label === -1) continue;
+
+    if (!zoneMap.has(label)) {
+      const colorIdx = labelToColor.get(label) ?? (palette.length > 0 ? label % palette.length : 0);
+      zoneMap.set(label, {
+        id: label,
+        colorIdx,
+        area: 0,
+        pixels: [],
+        centroid: { x: 0, y: 0 }
+      });
+    }
+
+    const zone = zoneMap.get(label)!;
+    zone.pixels.push(i);
+    zone.area++;
+  }
+
+  return Array.from(zoneMap.values()).map(zone => {
+    const usePole = zone.area > 50;
+    let centroid: { x: number; y: number };
+
+    if (usePole) {
+      centroid = findPoleOfInaccessibility(zone.pixels, width, height);
+    } else {
+      let sumX = 0;
+      let sumY = 0;
+      for (const pixelIdx of zone.pixels) {
+        sumX += pixelIdx % width;
+        sumY += Math.floor(pixelIdx / width);
+      }
+      centroid = {
+        x: Math.round(sumX / zone.area),
+        y: Math.round(sumY / zone.area)
+      };
+    }
+
+    return {
+      ...zone,
+      centroid
+    };
+  });
+}
+
+/**
  * Merge small zones with their nearest neighbor by color distance and compactness
  */
 function mergeSmallZones(
@@ -393,57 +457,7 @@ function mergeSmallZones(
     }
   }
 
-  // Rebuild zones after merging
-  const zoneMap = new Map<number, Zone>();
-  
-  for (let i = 0; i < mergedLabels.length; i++) {
-    const label = mergedLabels[i];
-    if (label === -1) continue;
-    
-    const x = i % width;
-    const y = Math.floor(i / width);
-    const colorIdx = zones.find(z => z.id === label)?.colorIdx ?? 0;
-    
-    if (!zoneMap.has(label)) {
-      zoneMap.set(label, {
-        id: label,
-        colorIdx,
-        area: 0,
-        pixels: [],
-        centroid: { x: 0, y: 0 }
-      });
-    }
-    
-    const zone = zoneMap.get(label)!;
-    zone.pixels.push(i);
-    zone.area++;
-  }
-
-  // Recalculate centroids using pole of inaccessibility for better label placement
-  const mergedZones = Array.from(zoneMap.values()).map(zone => {
-    // Use pole of inaccessibility for larger zones, centroid for small ones
-    const usePole = zone.area > 50;
-    let centroid: { x: number; y: number };
-    
-    if (usePole) {
-      centroid = findPoleOfInaccessibility(zone.pixels, width, height);
-    } else {
-      let sumX = 0, sumY = 0;
-      for (const pixelIdx of zone.pixels) {
-        sumX += pixelIdx % width;
-        sumY += Math.floor(pixelIdx / width);
-      }
-      centroid = {
-        x: Math.round(sumX / zone.area),
-        y: Math.round(sumY / zone.area)
-      };
-    }
-    
-    return {
-      ...zone,
-      centroid
-    };
-  });
+  const mergedZones = buildZonesFromLabels(mergedLabels, palette, width, height, zones);
 
   return { mergedLabels, mergedZones };
 }
@@ -1237,6 +1251,14 @@ export async function processImage(
         Math.round(smoothness)
       );
 
+      const smoothedZones = buildZonesFromLabels(
+        smoothedLabels,
+        palette,
+        width,
+        height,
+        mergedZones
+      );
+
       // STEP 6: Trace contours
       console.log('Step 6: Tracing contours...');
       const contours = traceContours(smoothedLabels, width, height);
@@ -1247,11 +1269,11 @@ export async function processImage(
 
       // STEP 8: Generate SVG
       console.log('Step 8: Generating SVG...');
-      const svg = generateSVG(contours, mergedZones, palette, width, height);
+      const svg = generateSVG(contours, smoothedZones, palette, width, height);
 
       // STEP 9: Create numbered version with optimal positioning
       console.log('Step 9: Creating numbered version...');
-      const numberedData = createNumberedVersion(quantizedData, mergedZones, palette, smoothedLabels);
+      const numberedData = createNumberedVersion(quantizedData, smoothedZones, palette, smoothedLabels);
 
       // STEP 10: Create preview version (fusion: image + contours + numbers)
       console.log('Step 10: Creating preview fusion...');
@@ -1259,10 +1281,10 @@ export async function processImage(
 
       // STEP 11: Generate legend
       console.log('Step 11: Generating legend...');
-      const legend = generateLegend(mergedZones, palette, width * height);
+      const legend = generateLegend(smoothedZones, palette, width * height);
 
       const totalTime = Date.now() - startTime;
-      console.log(`Processing complete: ${mergedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
+      console.log(`Processing complete: ${smoothedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
 
       clearTimeout(timeoutId);
 
@@ -1271,7 +1293,7 @@ export async function processImage(
         numbered: numberedData,
         colorized: previewData,
         palette,
-        zones: mergedZones,
+        zones: smoothedZones,
         svg,
         legend,
         labels: smoothedLabels
