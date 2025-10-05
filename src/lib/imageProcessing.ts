@@ -1,3 +1,6 @@
+import { isoContours } from 'marchingsquares';
+import polylabel from 'polylabel';
+
 // Image processing utilities for paint-by-numbers conversion
 
 // ============= TYPES =============
@@ -151,7 +154,7 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
     ]);
   }
 
-  // Simple k-means clustering
+  // Simple k-means clustering with K-means++ initialization for stability
   let centroids = initializeCentroids(pixels, numColors);
   
   for (let iter = 0; iter < 10; iter++) {
@@ -178,15 +181,69 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
 }
 
 function initializeCentroids(pixels: number[][], k: number): number[][] {
-  const centroids: number[][] = [];
-  const step = Math.floor(pixels.length / k);
-  
-  for (let i = 0; i < k; i++) {
-    const idx = Math.min(i * step, pixels.length - 1);
-    centroids.push([...pixels[idx]]);
+  if (pixels.length === 0 || k <= 0) {
+    return [];
   }
-  
-  return centroids;
+
+  const centroids: number[][] = [];
+
+  // Pick first centroid uniformly at random
+  const first = pixels[Math.floor(Math.random() * pixels.length)];
+  centroids.push([...first]);
+
+  while (centroids.length < k) {
+    const distances = pixels.map(pixel => {
+      let minDist = Infinity;
+      for (const centroid of centroids) {
+        const dist =
+          Math.pow(pixel[0] - centroid[0], 2) +
+          Math.pow(pixel[1] - centroid[1], 2) +
+          Math.pow(pixel[2] - centroid[2], 2);
+        if (dist < minDist) {
+          minDist = dist;
+        }
+      }
+      return minDist;
+    });
+
+    const totalDistance = distances.reduce((sum, d) => sum + d, 0);
+
+    // If all distances are zero (identical pixels), pick remaining centroids randomly
+    if (!isFinite(totalDistance) || totalDistance === 0) {
+      while (centroids.length < k) {
+        const randomPixel = pixels[Math.floor(Math.random() * pixels.length)];
+        centroids.push([...randomPixel]);
+      }
+      break;
+    }
+
+    let threshold = Math.random() * totalDistance;
+    let candidateIndex = 0;
+    for (let i = 0; i < distances.length; i++) {
+      threshold -= distances[i];
+      if (threshold <= 0) {
+        candidateIndex = i;
+        break;
+      }
+    }
+
+    const candidate = pixels[candidateIndex];
+    const alreadyIncluded = centroids.some(centroid =>
+      centroid[0] === candidate[0] &&
+      centroid[1] === candidate[1] &&
+      centroid[2] === candidate[2]
+    );
+
+    if (!alreadyIncluded) {
+      centroids.push([...candidate]);
+    } else {
+      // If duplicate, pick a random pixel to ensure progress
+      const randomPixel = pixels[Math.floor(Math.random() * pixels.length)];
+      centroids.push([...randomPixel]);
+    }
+  }
+
+  return centroids.slice(0, k);
 }
 
 function findNearestCentroid(pixel: number[], centroids: number[][]): number {
@@ -581,6 +638,95 @@ function perpendicularDistance(
 
 // ============= LABEL POSITIONING =============
 
+function ringArea(ring: Array<[number, number]>): number {
+  let area = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    area += (x1 * y2) - (x2 * y1);
+  }
+  return area / 2;
+}
+
+function ensureRingOrientation(ring: Array<[number, number]>, counterClockwise: boolean): Array<[number, number]> {
+  if (ring.length === 0) return ring;
+  const area = ringArea(ring);
+  const isCounterClockwise = area > 0;
+  if ((counterClockwise && isCounterClockwise) || (!counterClockwise && !isCounterClockwise)) {
+    return ring;
+  }
+  return [...ring].reverse();
+}
+
+function toClosedRing(path: Array<{ x: number; y: number }>): Array<[number, number]> {
+  const ring: Array<[number, number]> = path.map(point => [point.x, point.y]);
+  if (ring.length === 0) return ring;
+  const [fx, fy] = ring[0];
+  const [lx, ly] = ring[ring.length - 1];
+  if (fx !== lx || fy !== ly) {
+    ring.push([fx, fy]);
+  }
+  return ring;
+}
+
+function refineZoneLabelPositions(
+  zones: Zone[],
+  contours: Contour[],
+  width: number,
+  height: number
+): Zone[] {
+  const contourMap = new Map<number, Contour[]>();
+
+  for (const contour of contours) {
+    if (!contourMap.has(contour.zoneId)) {
+      contourMap.set(contour.zoneId, []);
+    }
+    contourMap.get(contour.zoneId)!.push(contour);
+  }
+
+  return zones.map(zone => {
+    const zoneContours = contourMap.get(zone.id);
+    if (!zoneContours || zoneContours.length === 0) {
+      return zone;
+    }
+
+    const rings = zoneContours
+      .map(contour => toClosedRing(contour.path))
+      .filter(ring => ring.length >= 4);
+
+    if (rings.length === 0) {
+      return zone;
+    }
+
+    const sortedRings = rings
+      .map(ring => ({ ring, area: Math.abs(ringArea(ring)) }))
+      .sort((a, b) => b.area - a.area);
+
+    if (sortedRings.length === 0 || sortedRings[0].area === 0) {
+      return zone;
+    }
+
+    const outerRing = ensureRingOrientation(sortedRings[0].ring, true);
+    const holeRings = sortedRings.slice(1).map(entry => ensureRingOrientation(entry.ring, false));
+
+    try {
+      const [px, py] = polylabel([outerRing, ...holeRings], 1.0);
+      const clampedX = Math.min(width - 1, Math.max(0, px));
+      const clampedY = Math.min(height - 1, Math.max(0, py));
+      return {
+        ...zone,
+        centroid: {
+          x: Math.round(clampedX),
+          y: Math.round(clampedY)
+        }
+      };
+    } catch (error) {
+      console.warn(`polylabel failed for zone ${zone.id}:`, error);
+      return zone;
+    }
+  });
+}
+
 /**
  * Find pole of inaccessibility (visual center) for better label placement
  * Better than centroid for irregular shapes
@@ -649,126 +795,73 @@ function findPoleOfInaccessibility(
 // ============= CONTOUR TRACING =============
 
 /**
- * Trace contours using Moore-Neighbor algorithm
+ * Trace contours using Marching Squares polygonization
  */
 function traceContours(
-  labels: Int32Array,
   width: number,
-  height: number
+  height: number,
+  zones: Zone[]
 ): Contour[] {
   const contours: Contour[] = [];
-  const visited = new Set<number>();
-  
-  // Moore-Neighbor directions (8-connectivity)
-  const dirs = [
-    [0, -1], [1, -1], [1, 0], [1, 1],
-    [0, 1], [-1, 1], [-1, 0], [-1, -1]
-  ];
-  
-  const MAX_PATH_LENGTH = 10000; // Strict limit on path length
-  const MAX_ITERATIONS = 50000; // Absolute max iterations per contour
-  const MAX_CONTOURS = 500; // Maximum number of contours to prevent memory issues
-  
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      // Stop if we've reached the maximum number of contours
-      if (contours.length >= MAX_CONTOURS) {
-        console.warn(`Max contours (${MAX_CONTOURS}) reached. Stopping contour tracing.`);
-        return contours;
+
+  for (const zone of zones) {
+    if (zone.pixels.length === 0) continue;
+
+    let minX = width;
+    let maxX = 0;
+    let minY = height;
+    let maxY = 0;
+
+    for (const pixelIdx of zone.pixels) {
+      const x = pixelIdx % width;
+      const y = Math.floor(pixelIdx / width);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    const localWidth = (maxX - minX + 1) + 2; // margin of 1 on each side
+    const localHeight = (maxY - minY + 1) + 2;
+    const grid: number[][] = Array.from({ length: localHeight }, () => new Array(localWidth).fill(0));
+
+    for (const pixelIdx of zone.pixels) {
+      const x = pixelIdx % width;
+      const y = Math.floor(pixelIdx / width);
+      const gx = (x - minX) + 1;
+      const gy = (y - minY) + 1;
+      if (gy >= 0 && gy < localHeight && gx >= 0 && gx < localWidth) {
+        grid[gy][gx] = 1;
       }
-      
-      const idx = y * width + x;
-      const label = labels[idx];
-      
-      if (visited.has(idx)) continue;
-      
-      // Check if this is a boundary pixel
-      let isBoundary = false;
-      for (const [dx, dy] of dirs) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-          isBoundary = true;
-          break;
-        }
-        const nidx = ny * width + nx;
-        if (labels[nidx] !== label) {
-          isBoundary = true;
-          break;
-        }
+    }
+
+    let rawContours: number[][][] = [];
+    try {
+      const result = isoContours(grid, 0.5, { noFrame: true, linearRing: true });
+      if (Array.isArray(result) && Array.isArray(result[0]) && Array.isArray(result[0][0])) {
+        rawContours = result as number[][][];
       }
-      
-      if (!isBoundary) continue;
-      
-      // Trace the contour with strict iteration limits
-      const path: Array<{ x: number; y: number }> = [];
-      let cx = x, cy = y;
-      let dir = 0;
-      let iterations = 0;
-      const startX = x;
-      const startY = y;
-      let limitReached = false;
-      
-      do {
-        iterations++;
-        
-        // Multiple exit conditions to prevent infinite loops
-        if (iterations >= MAX_ITERATIONS) {
-          console.warn(`Max iterations (${MAX_ITERATIONS}) reached for contour at (${x}, ${y}). Skipping.`);
-          limitReached = true;
-          break;
-        }
-        
-        if (path.length >= MAX_PATH_LENGTH) {
-          console.warn(`Max path length (${MAX_PATH_LENGTH}) reached for contour at (${x}, ${y}). Skipping.`);
-          limitReached = true;
-          break;
-        }
-        
-        path.push({ x: cx, y: cy });
-        visited.add(cy * width + cx);
-        
-        // Look for next boundary pixel
-        let found = false;
-        for (let i = 0; i < 8; i++) {
-          const checkDir = (dir + i) % 8;
-          const [dx, dy] = dirs[checkDir];
-          const nx = cx + dx;
-          const ny = cy + dy;
-          
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const nidx = ny * width + nx;
-            if (labels[nidx] === label) {
-              cx = nx;
-              cy = ny;
-              dir = (checkDir + 6) % 8; // Turn left
-              found = true;
-              break;
-            }
-          }
-        }
-        
-        if (!found) {
-          // No next pixel found, stop tracing
-          break;
-        }
-        
-        // Check if we've returned to start (only after at least 4 pixels)
-        if (path.length > 3 && cx === startX && cy === startY) {
-          break;
-        }
-        
-      } while (true);
-      
-      // Only add valid contours that didn't hit limits
-      if (!limitReached && path.length > 3) {
-        // Simplify path using Ramer-Douglas-Peucker
-        const simplifiedPath = simplifyPath(path, 1.5);
-        contours.push({ zoneId: label, path: simplifiedPath });
+    } catch (error) {
+      console.warn(`Marching Squares failed for zone ${zone.id}:`, error);
+      continue;
+    }
+
+    for (const contour of rawContours) {
+      if (!contour || contour.length < 3) continue;
+
+      const path = contour.map(point => {
+        const x = Math.min(width, Math.max(0, point[0] + minX - 1));
+        const y = Math.min(height, Math.max(0, point[1] + minY - 1));
+        return { x, y };
+      });
+
+      const simplifiedPath = simplifyPath(path, 0.75);
+      if (simplifiedPath.length >= 3) {
+        contours.push({ zoneId: zone.id, path: simplifiedPath });
       }
     }
   }
-  
+
   return contours;
 }
 
@@ -1261,30 +1354,34 @@ export async function processImage(
 
       // STEP 6: Trace contours
       console.log('Step 6: Tracing contours...');
-      const contours = traceContours(smoothedLabels, width, height);
+      const contours = traceContours(width, height, smoothedZones);
 
-      // STEP 7: Generate edge image
-      console.log('Step 7: Generating edge image...');
+      // STEP 7: Refine label placement using polylabel
+      console.log('Step 7: Refining label placement...');
+      const refinedZones = refineZoneLabelPositions(smoothedZones, contours, width, height);
+
+      // STEP 8: Generate edge image
+      console.log('Step 8: Generating edge image...');
       const contoursData = detectEdges(smoothedLabels, width, height);
 
-      // STEP 8: Generate SVG
-      console.log('Step 8: Generating SVG...');
-      const svg = generateSVG(contours, smoothedZones, palette, width, height);
+      // STEP 9: Generate SVG
+      console.log('Step 9: Generating SVG...');
+      const svg = generateSVG(contours, refinedZones, palette, width, height);
 
-      // STEP 9: Create numbered version with optimal positioning
-      console.log('Step 9: Creating numbered version...');
-      const numberedData = createNumberedVersion(quantizedData, smoothedZones, palette, smoothedLabels);
+      // STEP 10: Create numbered version with optimal positioning
+      console.log('Step 10: Creating numbered version...');
+      const numberedData = createNumberedVersion(quantizedData, refinedZones, palette, smoothedLabels);
 
-      // STEP 10: Create preview version (fusion: image + contours + numbers)
-      console.log('Step 10: Creating preview fusion...');
+      // STEP 11: Create preview version (fusion: image + contours + numbers)
+      console.log('Step 11: Creating preview fusion...');
       const previewData = createPreviewFusion(quantizedData, contoursData, numberedData, width, height);
 
-      // STEP 11: Generate legend
-      console.log('Step 11: Generating legend...');
-      const legend = generateLegend(smoothedZones, palette, width * height);
+      // STEP 12: Generate legend
+      console.log('Step 12: Generating legend...');
+      const legend = generateLegend(refinedZones, palette, width * height);
 
       const totalTime = Date.now() - startTime;
-      console.log(`Processing complete: ${smoothedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
+      console.log(`Processing complete: ${refinedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
 
       clearTimeout(timeoutId);
 
@@ -1293,7 +1390,7 @@ export async function processImage(
         numbered: numberedData,
         colorized: previewData,
         palette,
-        zones: smoothedZones,
+        zones: refinedZones,
         svg,
         legend,
         labels: smoothedLabels
