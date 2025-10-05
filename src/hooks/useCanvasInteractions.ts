@@ -40,6 +40,8 @@ export function useCanvasInteractions({
   const originalImageDataRef = useRef<ImageData | null>(null);
   const highlightAnimationRef = useRef<number | null>(null);
   const zonePathsRef = useRef<Map<number, Path2D>>(new Map());
+  const initialScaleRef = useRef<number>(1);
+  const initialOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Création de la map inverse zonesByColor pour un accès rapide
   const zonesByColor = useMemo(() => {
@@ -179,6 +181,48 @@ export function useCanvasInteractions({
   useEffect(() => {
     originalImageDataRef.current = originalImageData;
   }, [originalImageData]);
+
+  // Initialize canvas with correct scale and offset to display at 100%
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !originalImageData) return;
+
+    const container = canvas.parentElement;
+    if (!container) return;
+
+    // Set canvas dimensions to image dimensions
+    canvas.width = originalImageData.width;
+    canvas.height = originalImageData.height;
+
+    // Draw the image
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      ctx.putImageData(originalImageData, 0, 0);
+    }
+
+    // Calculate scale to fit image within container (never upscale)
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const scaleX = containerWidth / canvas.width;
+    const scaleY = containerHeight / canvas.height;
+    const calculatedScale = Math.min(scaleX, scaleY, 1);
+
+    // Calculate offset to center image
+    const scaledWidth = canvas.width * calculatedScale;
+    const scaledHeight = canvas.height * calculatedScale;
+    const calculatedOffset = {
+      x: (containerWidth - scaledWidth) / 2,
+      y: (containerHeight - scaledHeight) / 2
+    };
+
+    // Store initial values
+    initialScaleRef.current = calculatedScale;
+    initialOffsetRef.current = calculatedOffset;
+
+    // Apply initial transform
+    setScale(calculatedScale);
+    setOffset(calculatedOffset);
+  }, [canvasRef, originalImageData]);
 
   // Précalculer les chemins quand les zones ou les labels changent
   useEffect(() => {
@@ -363,8 +407,8 @@ export function useCanvasInteractions({
     highlightMode,
     zonesByColor,
     resetTransform: () => {
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
+      setScale(initialScaleRef.current);
+      setOffset(initialOffsetRef.current);
     },
     selectByColor,
     selectByZone,

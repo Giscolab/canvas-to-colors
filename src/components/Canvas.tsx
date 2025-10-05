@@ -30,75 +30,39 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorizedCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const contoursContainerRef = useRef<HTMLDivElement>(null);
-  const numberedContainerRef = useRef<HTMLDivElement>(null);
-  const colorizedContainerRef = useRef<HTMLDivElement>(null);
-
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
-  const resizeCanvasToContainer = useCallback(
-    (canvas: HTMLCanvasElement | null, imageData: ImageData | null, container: HTMLDivElement | null) => {
-      if (!canvas || !imageData || !container) return;
-
-      canvas.width = imageData.width;
-      canvas.height = imageData.height;
-      canvas.style.width = "100%";
-      canvas.style.height = "100%";
-
-      container.style.width = "100%";
-      container.style.height = "100%";
-      container.style.overflow = "hidden";
-      container.style.display = "flex";
-      container.style.justifyContent = "center";
-      container.style.alignItems = "center";
-
+  // Draw canvases once when data is available
+  useEffect(() => {
+    if (processedData?.contours && contoursCanvasRef.current) {
+      const canvas = contoursCanvasRef.current;
+      canvas.width = processedData.contours.width;
+      canvas.height = processedData.contours.height;
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (ctx) ctx.putImageData(imageData, 0, 0);
-    },
-    []
-  );
-
-  const getActiveContainer = useCallback(() => {
-    switch (activeTab) {
-      case "contours": return contoursContainerRef.current;
-      case "numbered": return numberedContainerRef.current;
-      case "colorized": return colorizedContainerRef.current;
-      default: return null;
+      if (ctx) ctx.putImageData(processedData.contours, 0, 0);
     }
-  }, [activeTab]);
+  }, [processedData?.contours]);
 
   useEffect(() => {
-    const updateDimensions = () => {
-      const container = getActiveContainer();
-      if (container) {
-        setContainerDimensions({
-          width: container.clientWidth,
-          height: container.clientHeight
-        });
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener("resize", updateDimensions);
-    return () => window.removeEventListener("resize", updateDimensions);
-  }, [activeTab, isFullscreen, getActiveContainer]);
+    if (processedData?.numbered && numberedCanvasRef.current) {
+      const canvas = numberedCanvasRef.current;
+      canvas.width = processedData.numbered.width;
+      canvas.height = processedData.numbered.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (ctx) ctx.putImageData(processedData.numbered, 0, 0);
+    }
+  }, [processedData?.numbered]);
 
   useEffect(() => {
-    if (processedData?.contours && contoursCanvasRef.current)
-      resizeCanvasToContainer(contoursCanvasRef.current, processedData.contours, contoursContainerRef.current);
-  }, [processedData?.contours, activeTab, containerDimensions, resizeCanvasToContainer]);
-
-  useEffect(() => {
-    if (processedData?.numbered && numberedCanvasRef.current)
-      resizeCanvasToContainer(numberedCanvasRef.current, processedData.numbered, numberedContainerRef.current);
-  }, [processedData?.numbered, activeTab, containerDimensions, resizeCanvasToContainer]);
-
-  useEffect(() => {
-    if (processedData?.colorized && colorizedCanvasRef.current)
-      resizeCanvasToContainer(colorizedCanvasRef.current, processedData.colorized, colorizedContainerRef.current);
-  }, [processedData?.colorized, activeTab, containerDimensions, resizeCanvasToContainer]);
+    if (processedData?.colorized && colorizedCanvasRef.current) {
+      const canvas = colorizedCanvasRef.current;
+      canvas.width = processedData.colorized.width;
+      canvas.height = processedData.colorized.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (ctx) ctx.putImageData(processedData.colorized, 0, 0);
+    }
+  }, [processedData?.colorized]);
 
   const contoursInteractions = useCanvasInteractions({
     canvasRef: contoursCanvasRef,
@@ -193,7 +157,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="contours" className="mt-3">
-            <div ref={contoursContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
+            <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.contours ? (
                 <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
@@ -203,7 +167,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="numbered" className="mt-3">
-            <div ref={numberedContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
+            <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.numbered ? (
                 <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
@@ -213,7 +177,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           </TabsContent>
 
           <TabsContent value="colorized" className="mt-3">
-            <div ref={colorizedContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
+            <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.colorized ? (
                 <canvas ref={colorizedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
