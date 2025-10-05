@@ -79,9 +79,9 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
             <Upload className="h-8 w-8 text-primary" />
           </div>
           <div className="text-center space-y-2">
-            <h3 className="font-semibold text-foreground text-lg">
+            <h2 className="font-semibold text-foreground text-lg">
               {isDragging ? 'Déposez votre image ici !' : 'Importer une image'}
-            </h3>
+            </h2>
             <p className="text-sm text-muted-foreground">
               Glissez-déposez ou cliquez pour choisir
             </p>
