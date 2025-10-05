@@ -35,27 +35,28 @@ export const ParametersPanel = ({
   const quality = getQualityLabel();
 
   return (
-    <Card className="p-6 space-y-6 glass hover-lift">
+    <Card className="p-4 space-y-4 rounded-lg border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg flex items-center gap-2">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Wand2 className="h-5 w-5 text-primary" />
+        <h3 className="font-semibold text-base flex items-center gap-2">
+          <div className="p-1.5 rounded-md bg-primary/10">
+            <Wand2 className="h-4 w-4 text-primary" />
           </div>
           Paramètres de génération
         </h3>
-        <Badge className={`${quality.color} text-white`}>
+        <Badge className={`${quality.color} text-white text-xs px-2 py-0.5`}>
           {quality.label}
         </Badge>
       </div>
 
-      <div className="space-y-6">
-        <div className="space-y-3">
+      <div className="space-y-4">
+        {/* --- Nombre de couleurs --- */}
+        <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <Label htmlFor="colors" className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-primary" />
+            <Label htmlFor="colors" className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
               Nombre de couleurs
             </Label>
-            <span className="text-lg font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+            <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {numColors}
             </span>
           </div>
@@ -66,21 +67,22 @@ export const ParametersPanel = ({
             step={1}
             value={[numColors]}
             onValueChange={(value) => onNumColorsChange(value[0])}
-            className="w-full [&_.relative]:h-2 [&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-4 [&_[role=slider]]:shadow-lg hover:[&_[role=slider]]:scale-110 transition-transform"
+            className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-[11px] text-muted-foreground">
             <span>5 (Simple)</span>
             <span>40 (Complexe)</span>
           </div>
         </div>
 
-        <div className="space-y-3">
+        {/* --- Fusion zones --- */}
+        <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <Label htmlFor="region" className="flex items-center gap-2 text-base">
-              <Layers className="h-4 w-4 text-primary" />
+            <Label htmlFor="region" className="flex items-center gap-2 text-sm">
+              <Layers className="h-3.5 w-3.5 text-primary" />
               Fusion zones
             </Label>
-            <span className="text-lg font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+            <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {minRegionSize} px
             </span>
           </div>
@@ -91,21 +93,22 @@ export const ParametersPanel = ({
             step={10}
             value={[minRegionSize]}
             onValueChange={(value) => onMinRegionSizeChange(value[0])}
-            className="w-full [&_.relative]:h-2 [&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-4 [&_[role=slider]]:shadow-lg hover:[&_[role=slider]]:scale-110 transition-transform"
+            className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-[11px] text-muted-foreground">
             <span>10 (Précis)</span>
             <span>500 (Simplifié)</span>
           </div>
         </div>
 
-        <div className="space-y-3">
+        {/* --- Douceur des bords --- */}
+        <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <Label htmlFor="smoothness" className="flex items-center gap-2 text-base">
-              <Gauge className="h-4 w-4 text-primary" />
+            <Label htmlFor="smoothness" className="flex items-center gap-2 text-sm">
+              <Gauge className="h-3.5 w-3.5 text-primary" />
               Douceur des bords
             </Label>
-            <span className="text-lg font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+            <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {smoothness}%
             </span>
           </div>
@@ -116,24 +119,24 @@ export const ParametersPanel = ({
             step={5}
             value={[smoothness]}
             onValueChange={(value) => onSmoothnessChange(value[0])}
-            className="w-full [&_.relative]:h-2 [&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-4 [&_[role=slider]]:shadow-lg hover:[&_[role=slider]]:scale-110 transition-transform"
+            className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
           />
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-[11px] text-muted-foreground">
             <span>0 (Net)</span>
             <span>100 (Doux)</span>
           </div>
         </div>
       </div>
 
-      <Button 
-        onClick={onProcess} 
+      <Button
+        onClick={onProcess}
         disabled={isProcessing}
-        className="w-full bg-gradient-to-r from-accent via-accent/90 to-accent/80 hover:opacity-90 text-accent-foreground font-semibold shadow-lg hover:shadow-xl transition-all hover:scale-105 animate-glow-pulse"
-        size="lg"
+        className="w-full bg-gradient-to-r from-accent via-accent/90 to-accent/80 text-accent-foreground font-semibold shadow-md"
+        size="sm"
       >
         {isProcessing ? (
           <>
-            <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent" />
+            <div className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-accent-foreground border-t-transparent" />
             Traitement en cours...
           </>
         ) : (

@@ -1,7 +1,7 @@
+import { useRef, useState, useEffect } from "react";
 import { Upload, Image as ImageIcon, Check, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useRef, useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface ImageUploadProps {
@@ -14,6 +14,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
   const [isDragging, setIsDragging] = useState(false);
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
 
+  // Analyse automatique de la taille de l’image
   useEffect(() => {
     if (selectedImage) {
       const img = new Image();
@@ -32,20 +33,18 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && (file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/jpg")) {
+    if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
       onImageSelect(file);
     }
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleClick = () => fileInputRef.current?.click();
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && (file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/jpg")) {
+    if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
       onImageSelect(file);
     }
   };
@@ -55,14 +54,12 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     setIsDragging(true);
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+  const handleDragLeave = () => setIsDragging(false);
 
   return (
     <Card 
-      className={`p-6 border-2 border-dashed glass hover-lift transition-all duration-300 ${
-        isDragging ? 'border-primary shadow-2xl scale-105 animate-glow-pulse' : 'border-border hover:border-primary'
+      className={`p-6 border-2 border-dashed glass transition-all duration-300 ${
+        isDragging ? 'border-primary shadow-2xl scale-[1.02]' : 'border-border hover:border-primary'
       }`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -78,27 +75,23 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       
       {!selectedImage ? (
         <div className="flex flex-col items-center justify-center py-8 space-y-4">
-          <div className={`p-4 rounded-full bg-primary/10 transition-all duration-300 ${
-            isDragging ? 'scale-125 animate-glow-pulse' : ''
-          }`}>
-            <Upload className={`h-8 w-8 text-primary transition-transform ${
-              isDragging ? 'animate-bounce' : ''
-            }`} />
+          <div className={`p-4 rounded-full bg-primary/10 transition-all ${isDragging ? 'scale-125' : ''}`}>
+            <Upload className="h-8 w-8 text-primary" />
           </div>
           <div className="text-center space-y-2">
             <h3 className="font-semibold text-foreground text-lg">
-              {isDragging ? 'Déposez votre image ici !' : 'Uploadez votre image'}
+              {isDragging ? 'Déposez votre image ici !' : 'Importer une image'}
             </h3>
             <p className="text-sm text-muted-foreground">
               Glissez-déposez ou cliquez pour choisir
             </p>
             <Badge variant="secondary" className="mt-2">
-              PNG, JPG ou JPEG (max 4000×4000)
+              PNG, JPG ou JPEG • Format conseillé : A4 (HD 1920×1080)
             </Badge>
           </div>
           <Button 
             onClick={handleClick} 
-            className="bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-all hover:scale-105 shadow-lg hover:shadow-xl"
+            className="bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 transition-all shadow-md"
           >
             <Upload className="mr-2 h-4 w-4" />
             Choisir une image
@@ -106,13 +99,13 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary shadow-lg group">
+          <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary shadow-md">
             <img 
               src={selectedImage} 
               alt="Preview" 
-              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-contain"
             />
-            <div className="absolute top-3 right-3 bg-green-500 text-white p-2 rounded-full shadow-lg animate-scale-in">
+            <div className="absolute top-3 right-3 bg-green-500 text-white p-2 rounded-full shadow-md">
               <Check className="h-4 w-4" />
             </div>
           </div>
@@ -137,10 +130,10 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
           <Button 
             onClick={handleClick} 
             variant="outline" 
-            className="w-full hover-lift hover:border-primary"
+            className="w-full hover:border-primary"
           >
             <ImageIcon className="mr-2 h-4 w-4" />
-            Changer l'image
+            Changer d'image
           </Button>
         </div>
       )}

@@ -3,10 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Download,
-  Image as ImageIcon,
   FileCode,
-  Grid3x3,
-  X,
   ZoomIn,
   Maximize2,
   RefreshCw
@@ -33,50 +30,36 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorizedCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Refs distincts pour chaque conteneur
   const contoursContainerRef = useRef<HTMLDivElement>(null);
   const numberedContainerRef = useRef<HTMLDivElement>(null);
   const colorizedContainerRef = useRef<HTMLDivElement>(null);
 
-  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
-// Redimensionner le canvas pour occuper 100% du conteneur visible
-const resizeCanvasToContainer = useCallback(
-  (
-    canvas: HTMLCanvasElement | null,
-    imageData: ImageData | null,
-    container: HTMLDivElement | null
-  ) => {
-    if (!canvas || !imageData || !container) return;
+  const resizeCanvasToContainer = useCallback(
+    (canvas: HTMLCanvasElement | null, imageData: ImageData | null, container: HTMLDivElement | null) => {
+      if (!canvas || !imageData || !container) return;
 
-    // Taille interne = image réelle (pour la qualité)
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
+      canvas.width = imageData.width;
+      canvas.height = imageData.height;
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
 
-    // Taille d’affichage = 100% du conteneur
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
+      container.style.width = "100%";
+      container.style.height = "100%";
+      container.style.overflow = "hidden";
+      container.style.display = "flex";
+      container.style.justifyContent = "center";
+      container.style.alignItems = "center";
 
-    // Le conteneur prend toute la place disponible
-    container.style.width = "100%";
-    container.style.height = "100%";
-    container.style.overflow = "hidden";
-    container.style.display = "flex";
-    container.style.justifyContent = "center";
-    container.style.alignItems = "center";
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (ctx) ctx.putImageData(imageData, 0, 0);
+    },
+    []
+  );
 
-    // Rendu du contenu
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (ctx) ctx.putImageData(imageData, 0, 0);
-  },
-  []
-);
-
-
-  // Déterminer le conteneur actif
   const getActiveContainer = useCallback(() => {
     switch (activeTab) {
       case "contours": return contoursContainerRef.current;
@@ -86,7 +69,6 @@ const resizeCanvasToContainer = useCallback(
     }
   }, [activeTab]);
 
-  // Gérer le redimensionnement
   useEffect(() => {
     const updateDimensions = () => {
       const container = getActiveContainer();
@@ -103,7 +85,6 @@ const resizeCanvasToContainer = useCallback(
     return () => window.removeEventListener("resize", updateDimensions);
   }, [activeTab, isFullscreen, getActiveContainer]);
 
-  // Redessiner selon l’onglet actif
   useEffect(() => {
     if (processedData?.contours && contoursCanvasRef.current)
       resizeCanvasToContainer(contoursCanvasRef.current, processedData.contours, contoursContainerRef.current);
@@ -124,7 +105,6 @@ const resizeCanvasToContainer = useCallback(
     originalImageData: processedData?.contours || null,
     zones: processedData?.zones || [],
     labels: processedData?.labels,
-    onZoneSelect: setSelectedZone
   });
 
   const numberedInteractions = useCanvasInteractions({
@@ -132,7 +112,6 @@ const resizeCanvasToContainer = useCallback(
     originalImageData: processedData?.numbered || null,
     zones: processedData?.zones || [],
     labels: processedData?.labels,
-    onZoneSelect: setSelectedZone
   });
 
   const colorizedInteractions = useCanvasInteractions({
@@ -140,7 +119,6 @@ const resizeCanvasToContainer = useCallback(
     originalImageData: processedData?.colorized || null,
     zones: processedData?.zones || [],
     labels: processedData?.labels,
-    onZoneSelect: setSelectedZone
   });
 
   const getActiveInteractions = () => {
@@ -156,19 +134,17 @@ const resizeCanvasToContainer = useCallback(
   const zonesCount = processedData?.zones?.length || 0;
 
   return (
-    <Card className={`p-6 flex-1 relative glass hover-lift ${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
-      <div className="space-y-4">
-        {/* HEADER */}
+    <Card className={`p-4 flex-1 relative border bg-card text-card-foreground shadow-sm ${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
+      <div className="space-y-3">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h3 className="font-semibold text-lg">Zone de travail</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-base">Zone de travail</h3>
             {processedData && zonesCount > 0 && (
-              <Badge variant="secondary" className="animate-pulse">
-                {zonesCount} zones
-              </Badge>
+              <Badge variant="secondary">{zonesCount} zones</Badge>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {activeInteractions && activeTab !== "original" && (
               <>
                 <Button variant="outline" size="sm" onClick={() => activeInteractions.resetTransform()}>
@@ -188,60 +164,60 @@ const resizeCanvasToContainer = useCallback(
           </div>
         </div>
 
-        {/* INFOS */}
+        {/* Zoom info */}
         {activeInteractions && activeTab !== "original" && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ZoomIn className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ZoomIn className="h-3.5 w-3.5" />
             <span>Zoom: {Math.round(activeInteractions.scale * 100)}%</span>
-            <span className="text-xs ml-2">• Molette pour zoomer • Glisser pour déplacer</span>
+            <span className="ml-1">• Molette = zoom • Glisser = déplacer</span>
           </div>
         )}
 
-        {/* CONTENEURS DES TABS */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 glass">
+          <TabsList className="grid w-full grid-cols-4 rounded-md border bg-muted/50 text-xs">
             <TabsTrigger value="original">Original</TabsTrigger>
             <TabsTrigger value="contours" disabled={!processedData}>Contours</TabsTrigger>
             <TabsTrigger value="numbered" disabled={!processedData}>Numéroté</TabsTrigger>
             <TabsTrigger value="colorized" disabled={!processedData}>Aperçu</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="original" className="mt-4">
-            <div className="canvas-container bg-secondary rounded-xl shadow-inner">
+          <TabsContent value="original" className="mt-3">
+            <div className="canvas-container bg-secondary rounded-md shadow-inner">
               {originalImage ? (
                 <img src={originalImage} alt="Original" />
               ) : (
-                <div className="text-muted-foreground p-8">Aucune image chargée</div>
+                <div className="text-muted-foreground p-6 text-sm">Aucune image chargée</div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="contours" className="mt-4">
-            <div ref={contoursContainerRef} className="canvas-container bg-white rounded-xl shadow-inner">
+          <TabsContent value="contours" className="mt-3">
+            <div ref={contoursContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.contours ? (
                 <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
-                <div className="text-muted-foreground p-8">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="numbered" className="mt-4">
-            <div ref={numberedContainerRef} className="canvas-container bg-white rounded-xl shadow-inner">
+          <TabsContent value="numbered" className="mt-3">
+            <div ref={numberedContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.numbered ? (
                 <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
-                <div className="text-muted-foreground p-8">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="colorized" className="mt-4">
-            <div ref={colorizedContainerRef} className="canvas-container bg-white rounded-xl shadow-inner">
+          <TabsContent value="colorized" className="mt-3">
+            <div ref={colorizedContainerRef} className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.colorized ? (
                 <canvas ref={colorizedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
               ) : (
-                <div className="text-muted-foreground p-8">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
               )}
             </div>
           </TabsContent>
