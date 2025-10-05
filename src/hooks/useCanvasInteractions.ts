@@ -182,46 +182,20 @@ export function useCanvasInteractions({
     originalImageDataRef.current = originalImageData;
   }, [originalImageData]);
 
-  // Initialize canvas with correct scale and offset to display at 100%
+  // Initialize canvas dimensions and draw image at native resolution
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !originalImageData) return;
-
-    const container = canvas.parentElement;
-    if (!container) return;
 
     // Set canvas dimensions to image dimensions
     canvas.width = originalImageData.width;
     canvas.height = originalImageData.height;
 
-    // Draw the image
+    // Draw the image at native resolution
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx) {
       ctx.putImageData(originalImageData, 0, 0);
     }
-
-    // Calculate scale to fit image within container (never upscale)
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    const scaleX = containerWidth / canvas.width;
-    const scaleY = containerHeight / canvas.height;
-    const calculatedScale = Math.min(scaleX, scaleY, 1);
-
-    // Calculate offset to center image
-    const scaledWidth = canvas.width * calculatedScale;
-    const scaledHeight = canvas.height * calculatedScale;
-    const calculatedOffset = {
-      x: (containerWidth - scaledWidth) / 2,
-      y: (containerHeight - scaledHeight) / 2
-    };
-
-    // Store initial values
-    initialScaleRef.current = calculatedScale;
-    initialOffsetRef.current = calculatedOffset;
-
-    // Apply initial transform
-    setScale(calculatedScale);
-    setOffset(calculatedOffset);
   }, [canvasRef, originalImageData]);
 
   // Précalculer les chemins quand les zones ou les labels changent
