@@ -180,6 +180,10 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
   return centroids.map(c => rgbToHex(c[0], c[1], c[2]));
 }
 
+/**
+ * Optimized K-Means++ initialization
+ * Squared distances for better spread
+ */
 function initializeCentroids(pixels: number[][], k: number): number[][] {
   if (pixels.length === 0 || k <= 0) {
     return [];
@@ -192,7 +196,12 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
   centroids.push([...first]);
 
   while (centroids.length < k) {
-    const distances = pixels.map(pixel => {
+    const distances = new Float32Array(pixels.length);
+    let totalDistance = 0;
+    
+    // Calculate squared distance to nearest centroid
+    for (let i = 0; i < pixels.length; i++) {
+      const pixel = pixels[i];
       let minDist = Infinity;
       for (const centroid of centroids) {
         const dist =
@@ -203,10 +212,9 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
           minDist = dist;
         }
       }
-      return minDist;
-    });
-
-    const totalDistance = distances.reduce((sum, d) => sum + d, 0);
+      distances[i] = minDist;
+      totalDistance += minDist;
+    }
 
     // If all distances are zero (identical pixels), pick remaining centroids randomly
     if (!isFinite(totalDistance) || totalDistance === 0) {
@@ -217,6 +225,7 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
       break;
     }
 
+    // Weighted random selection
     let threshold = Math.random() * totalDistance;
     let candidateIndex = 0;
     for (let i = 0; i < distances.length; i++) {
@@ -269,7 +278,8 @@ function findNearestCentroid(pixel: number[], centroids: number[][]): number {
 // ============= CONNECTED COMPONENTS LABELING =============
 
 /**
- * Label connected components using flood-fill (8-neighbors)
+ * Optimized label connected components using flood-fill (8-neighbors)
+ * Uses pre-allocated typed arrays for better performance
  */
 function labelConnectedComponents(
   colorMap: number[],
@@ -279,7 +289,11 @@ function labelConnectedComponents(
   const labels = new Int32Array(width * height).fill(-1);
   const zones: Zone[] = [];
   let currentLabel = 0;
-  const MAX_STACK_SIZE = 500000; // Limit stack size to prevent memory issues
+  
+  // Pre-allocate stack buffers to avoid constant reallocation
+  const MAX_STACK_SIZE = Math.min(width * height, 500000);
+  const stackX = new Int32Array(MAX_STACK_SIZE);
+  const stackY = new Int32Array(MAX_STACK_SIZE);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -290,22 +304,22 @@ function labelConnectedComponents(
         const pixels: number[] = [];
         let sumX = 0;
         let sumY = 0;
-
-        // Flood fill with strict limits
-        const stack: Array<[number, number]> = [[x, y]];
-        let iterations = 0;
-        const MAX_ITERATIONS = 1000000; // 1M iterations max per zone
         
-        while (stack.length > 0 && iterations < MAX_ITERATIONS) {
+        // Optimized iterative flood fill
+        let stackPtr = 0;
+        stackX[stackPtr] = x;
+        stackY[stackPtr] = y;
+        stackPtr++;
+        
+        let iterations = 0;
+        const MAX_ITERATIONS = 1000000;
+        
+        while (stackPtr > 0 && iterations < MAX_ITERATIONS) {
           iterations++;
           
-          // Prevent stack overflow
-          if (stack.length > MAX_STACK_SIZE) {
-            console.warn(`Stack size limit reached for zone at (${x}, ${y})`);
-            break;
-          }
-          
-          const [cx, cy] = stack.pop()!;
+          stackPtr--;
+          const cx = stackX[stackPtr];
+          const cy = stackY[stackPtr];
           const cidx = cy * width + cx;
           
           if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
@@ -317,15 +331,52 @@ function labelConnectedComponents(
           sumX += cx;
           sumY += cy;
           
-          // 8-neighbors
-          stack.push([cx - 1, cy]);
-          stack.push([cx + 1, cy]);
-          stack.push([cx, cy - 1]);
-          stack.push([cx, cy + 1]);
-          stack.push([cx - 1, cy - 1]);
-          stack.push([cx + 1, cy - 1]);
-          stack.push([cx - 1, cy + 1]);
-          stack.push([cx + 1, cy + 1]);
+          // Add 8-neighbors (check bounds before adding)
+          if (stackPtr + 8 < MAX_STACK_SIZE) {
+            if (cx > 0) {
+              stackX[stackPtr] = cx - 1;
+              stackY[stackPtr] = cy;
+              stackPtr++;
+            }
+            if (cx < width - 1) {
+              stackX[stackPtr] = cx + 1;
+              stackY[stackPtr] = cy;
+              stackPtr++;
+            }
+            if (cy > 0) {
+              stackX[stackPtr] = cx;
+              stackY[stackPtr] = cy - 1;
+              stackPtr++;
+            }
+            if (cy < height - 1) {
+              stackX[stackPtr] = cx;
+              stackY[stackPtr] = cy + 1;
+              stackPtr++;
+            }
+            if (cx > 0 && cy > 0) {
+              stackX[stackPtr] = cx - 1;
+              stackY[stackPtr] = cy - 1;
+              stackPtr++;
+            }
+            if (cx < width - 1 && cy > 0) {
+              stackX[stackPtr] = cx + 1;
+              stackY[stackPtr] = cy - 1;
+              stackPtr++;
+            }
+            if (cx > 0 && cy < height - 1) {
+              stackX[stackPtr] = cx - 1;
+              stackY[stackPtr] = cy + 1;
+              stackPtr++;
+            }
+            if (cx < width - 1 && cy < height - 1) {
+              stackX[stackPtr] = cx + 1;
+              stackY[stackPtr] = cy + 1;
+              stackPtr++;
+            }
+          } else {
+            console.warn(`Stack size limit reached for zone at (${x}, ${y})`);
+            break;
+          }
         }
 
         if (iterations >= MAX_ITERATIONS) {
@@ -581,7 +632,8 @@ function smoothZones(
 // ============= CONTOUR SIMPLIFICATION =============
 
 /**
- * Ramer-Douglas-Peucker algorithm for path simplification
+ * Optimized Ramer-Douglas-Peucker algorithm for path simplification
+ * Uses iterative approach to avoid deep recursion
  */
 function simplifyPath(
   path: Array<{ x: number; y: number }>,
@@ -589,29 +641,40 @@ function simplifyPath(
 ): Array<{ x: number; y: number }> {
   if (path.length <= 2) return path;
 
-  // Find point with maximum distance from line between first and last
-  let maxDist = 0;
-  let maxIndex = 0;
-  const first = path[0];
-  const last = path[path.length - 1];
+  // Use iterative approach with a stack to avoid recursion depth issues
+  const keepIndices = new Set<number>([0, path.length - 1]);
+  const stack: Array<[number, number]> = [[0, path.length - 1]];
 
-  for (let i = 1; i < path.length - 1; i++) {
-    const dist = perpendicularDistance(path[i], first, last);
-    if (dist > maxDist) {
-      maxDist = dist;
-      maxIndex = i;
+  while (stack.length > 0) {
+    const [start, end] = stack.pop()!;
+    if (end - start <= 1) continue;
+
+    // Find point with maximum distance from line segment
+    let maxDist = 0;
+    let maxIndex = start;
+    const first = path[start];
+    const last = path[end];
+
+    for (let i = start + 1; i < end; i++) {
+      const dist = perpendicularDistance(path[i], first, last);
+      if (dist > maxDist) {
+        maxDist = dist;
+        maxIndex = i;
+      }
+    }
+
+    // If max distance exceeds epsilon, keep this point and process segments
+    if (maxDist > epsilon) {
+      keepIndices.add(maxIndex);
+      // Process left and right segments
+      stack.push([start, maxIndex]);
+      stack.push([maxIndex, end]);
     }
   }
 
-  // If max distance is greater than epsilon, recursively simplify
-  if (maxDist > epsilon) {
-    const left = simplifyPath(path.slice(0, maxIndex + 1), epsilon);
-    const right = simplifyPath(path.slice(maxIndex), epsilon);
-    return left.slice(0, -1).concat(right);
-  }
-
-  // Otherwise, return line between first and last
-  return [first, last];
+  // Build simplified path from kept indices
+  const sortedIndices = Array.from(keepIndices).sort((a, b) => a - b);
+  return sortedIndices.map(i => path[i]);
 }
 
 /**
