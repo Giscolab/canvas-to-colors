@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      image_jobs: {
+        Row: {
+          created_at: string
+          height: number
+          id: string
+          image_name: string
+          image_size: number
+          min_region_size: number
+          num_colors: number
+          palette: Json | null
+          processing_time_ms: number | null
+          smoothness: number
+          user_id: string | null
+          width: number
+          zones_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          height: number
+          id?: string
+          image_name: string
+          image_size: number
+          min_region_size: number
+          num_colors: number
+          palette?: Json | null
+          processing_time_ms?: number | null
+          smoothness: number
+          user_id?: string | null
+          width: number
+          zones_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          height?: number
+          id?: string
+          image_name?: string
+          image_size?: number
+          min_region_size?: number
+          num_colors?: number
+          palette?: Json | null
+          processing_time_ms?: number | null
+          smoothness?: number
+          user_id?: string | null
+          width?: number
+          zones_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

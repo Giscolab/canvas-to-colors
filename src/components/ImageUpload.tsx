@@ -34,6 +34,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setActualFile(file);
       onImageSelect(file);
     }
   };
@@ -45,6 +46,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setActualFile(file);
       onImageSelect(file);
     }
   };
