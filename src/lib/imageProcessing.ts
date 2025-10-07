@@ -677,17 +677,45 @@ function smoothZones(
 // ============= CONTOUR SIMPLIFICATION =============
 
 /**
- * Improved path simplification using simplify-js library
- * Much faster and more reliable than custom RDP implementation
+ * Calculate polygon area using shoelace formula
+ */
+function calculatePolygonArea(path: Array<{ x: number; y: number }>): number {
+  if (path.length < 3) return 0;
+  
+  let area = 0;
+  for (let i = 0; i < path.length; i++) {
+    const j = (i + 1) % path.length;
+    area += path[i].x * path[j].y;
+    area -= path[j].x * path[i].y;
+  }
+  return Math.abs(area / 2);
+}
+
+/**
+ * Adaptive path simplification based on polygon area
+ * Small polygons get lower tolerance (more detail preserved)
+ * Large polygons get higher tolerance (more simplification)
  */
 function simplifyPath(
   path: Array<{ x: number; y: number }>,
-  tolerance: number = 0.75
+  baseTolerance?: number
 ): Array<{ x: number; y: number }> {
   if (path.length <= 2) return path;
   
+  // Calculate area to determine adaptive tolerance
+  const area = calculatePolygonArea(path);
+  
+  // Adaptive tolerance: smaller zones get more precision
+  // Formula: min(2.0, max(0.2, sqrt(area) * 0.015))
+  const adaptiveTolerance = baseTolerance !== undefined 
+    ? baseTolerance 
+    : Math.min(2.0, Math.max(0.2, Math.sqrt(area) * 0.015));
+  
   // Use simplify-js with high quality mode for better results
-  return simplify(path, tolerance, true);
+  const simplified = simplify(path, adaptiveTolerance, true);
+  
+  // Ensure we have at least 3 points for a valid polygon
+  return simplified.length >= 3 ? simplified : path;
 }
 
 // ============= POLYGON MERGING =============
@@ -763,7 +791,7 @@ function mergeAdjacentPolygons(
           if (ring.length < 4) continue;
           
           const path = ring.slice(0, -1).map(([x, y]) => ({ x, y })); // Remove closing point
-          const simplifiedPath = simplifyPath(path, 1.0); // Extra simplification after merge
+          const simplifiedPath = simplifyPath(path); // Adaptive simplification
           
           if (simplifiedPath.length >= 3) {
             // Use the first zone ID from the group
@@ -1004,7 +1032,7 @@ function traceContours(
         return { x, y };
       });
 
-      const simplifiedPath = simplifyPath(path, 0.75);
+      const simplifiedPath = simplifyPath(path); // Adaptive simplification based on area
       if (simplifiedPath.length >= 3) {
         contours.push({ zoneId: zone.id, path: simplifiedPath });
       }
