@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { Upload, Image as ImageIcon, Check, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,28 +12,74 @@ interface ImageUploadProps {
 export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [fileDetails, setFileDetails] = useState<{ bytes?: number; label: string } | null>(null);
 
-  // Analyse automatique de la taille de l’image
-  useEffect(() => {
-    if (selectedImage) {
-      const img = new Image();
-      img.onload = () => {
-        const sizeKB = Math.round(img.src.length / 1024);
-        const sizeMB = (sizeKB / 1024).toFixed(2);
-        setImageInfo({
-          width: img.width,
-          height: img.height,
-          size: sizeKB > 1024 ? `${sizeMB} MB` : `${sizeKB} KB`
-        });
-      };
-      img.src = selectedImage;
+  const formatFileSize = useCallback((bytes: number) => {
+    const sizeInKB = bytes / 1024;
+    if (sizeInKB < 1024) {
+      return `${Math.round(sizeInKB)} KB`;
     }
-  }, [selectedImage]);
+    const sizeInMB = sizeInKB / 1024;
+    return `${sizeInMB.toFixed(2)} MB`;
+  }, []);
+
+  const ensureFallbackFileSize = useCallback(
+    (dataUrl: string) => {
+      setFileDetails((current) => {
+        if (current?.bytes || !dataUrl.startsWith("data:")) {
+          return current;
+        }
+
+        const base64 = dataUrl.split(",")[1];
+        if (!base64) {
+          return current;
+        }
+
+        const padding = base64.match(/=+$/)?.[0].length ?? 0;
+        const approximateBytes = Math.floor(base64.length * 0.75) - padding;
+        if (approximateBytes <= 0) {
+          return current;
+        }
+
+        const label = formatFileSize(approximateBytes);
+        if (current?.label === label) {
+          return current;
+        }
+
+        return { label };
+      });
+    },
+    [formatFileSize]
+  );
+
+  // Analyse automatique des dimensions de l’image
+  useEffect(() => {
+    if (!selectedImage) {
+      setImageDimensions(null);
+      setFileDetails(null);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      setImageDimensions({
+        width: img.width,
+        height: img.height
+      });
+      ensureFallbackFileSize(selectedImage);
+    };
+    img.src = selectedImage;
+
+    return () => {
+      img.onload = null;
+    };
+  }, [ensureFallbackFileSize, selectedImage]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setFileDetails({ bytes: file.size, label: formatFileSize(file.size) });
       onImageSelect(file);
     }
   };
@@ -45,6 +91,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setFileDetails({ bytes: file.size, label: formatFileSize(file.size) });
       onImageSelect(file);
     }
   };
@@ -110,15 +157,19 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
             </div>
           </div>
           
-          {imageInfo && (
+          {(imageDimensions || fileDetails?.label) && (
             <div className="flex gap-2 justify-center flex-wrap">
-              <Badge variant="outline" className="gap-1">
-                📐 {imageInfo.width} × {imageInfo.height}
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                💾 {imageInfo.size}
-              </Badge>
-              {(imageInfo.width > 4000 || imageInfo.height > 4000) && (
+              {imageDimensions && (
+                <Badge variant="outline" className="gap-1">
+                  📐 {imageDimensions.width} × {imageDimensions.height}
+                </Badge>
+              )}
+              {fileDetails?.label && (
+                <Badge variant="outline" className="gap-1">
+                  💾 {fileDetails.label}
+                </Badge>
+              )}
+              {imageDimensions && (imageDimensions.width > 4000 || imageDimensions.height > 4000) && (
                 <Badge variant="destructive" className="gap-1">
                   <FileWarning className="h-3 w-3" />
                   Image trop grande
