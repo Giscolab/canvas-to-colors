@@ -12,14 +12,15 @@ interface ImageUploadProps {
 export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [actualFile, setActualFile] = useState<File | null>(null);
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
 
-  // Analyse automatique de la taille de l’image
+  // Analyse automatique de la taille de l'image avec file.size réel
   useEffect(() => {
-    if (selectedImage) {
+    if (selectedImage && actualFile) {
       const img = new Image();
       img.onload = () => {
-        const sizeKB = Math.round(img.src.length / 1024);
+        const sizeKB = Math.round(actualFile.size / 1024);
         const sizeMB = (sizeKB / 1024).toFixed(2);
         setImageInfo({
           width: img.width,
@@ -29,7 +30,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       };
       img.src = selectedImage;
     }
-  }, [selectedImage]);
+  }, [selectedImage, actualFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

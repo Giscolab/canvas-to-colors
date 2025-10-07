@@ -10,6 +10,8 @@ import { resizeForDisplay } from "@/lib/imageNormalization";
 import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
+import { ProcessingProgress } from "@/components/ProcessingProgress";
+import { useImageHistory } from "@/hooks/useImageHistory";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -20,7 +22,10 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedData, setProcessedData] = useState<ProcessedResult | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [processingStage, setProcessingStage] = useState("");
+  const [processingProgress, setProcessingProgress] = useState(0);
   const { width, height } = useWindowSize();
+  const { saveJob } = useImageHistory();
 
   const handleImageSelect = async (file: File) => {
     try {
@@ -43,27 +48,57 @@ const Index = () => {
     }
 
     setIsProcessing(true);
+    setProcessingProgress(0);
+    setProcessingStage("Initialisation...");
     toast.info("Traitement de l'image en cours... ⚡");
 
+    const startTime = Date.now();
+
     try {
-      // Process image in Web Worker (non-blocking)
+      // Process image in Web Worker with progress updates
       const result = await processImageWithWorker(
         selectedFile,
         numColors,
         minRegionSize,
-        smoothness
+        smoothness,
+        (stage, progress) => {
+          setProcessingStage(stage);
+          setProcessingProgress(progress);
+        }
       );
+      
+      const processingTime = Date.now() - startTime;
       
       setProcessedData(result);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 5000);
       toast.success("🎉 Modèle généré avec succès !");
+      
+      // Save to history
+      const img = new Image();
+      img.src = selectedImageUrl!;
+      await img.decode();
+      
+      await saveJob({
+        image_name: selectedFile.name,
+        image_size: selectedFile.size,
+        width: img.width,
+        height: img.height,
+        num_colors: numColors,
+        min_region_size: minRegionSize,
+        smoothness: smoothness,
+        processing_time_ms: processingTime,
+        zones_count: result.zones.length,
+        palette: result.palette
+      });
     } catch (error) {
       console.error("Processing error:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
       toast.error(errorMessage);
     } finally {
       setIsProcessing(false);
+      setProcessingProgress(0);
+      setProcessingStage("");
     }
   };
 
@@ -132,6 +167,12 @@ const Index = () => {
       )}
       
       <Header />
+      
+      <ProcessingProgress
+        stage={processingStage}
+        progress={processingProgress}
+        isVisible={isProcessing}
+      />
       
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-[380px_1fr] gap-6">

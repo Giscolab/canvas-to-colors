@@ -8,13 +8,14 @@ export class ImageProcessingWorker {
   private worker: Worker | null = null;
 
   /**
-   * Process image using Web Worker
+   * Process image using Web Worker with progress updates
    */
   async processImage(
     imageFile: File,
     numColors: number,
     minRegionSize: number,
-    smoothness: number
+    smoothness: number,
+    onProgress?: (stage: string, progress: number) => void
   ): Promise<ProcessedResult> {
     return new Promise((resolve, reject) => {
       // Create worker
@@ -30,6 +31,8 @@ export class ImageProcessingWorker {
         if (type === 'success') {
           resolve(payload as ProcessedResult);
           this.terminate();
+        } else if (type === 'progress' && onProgress) {
+          onProgress(payload.stage, payload.progress);
         } else if (type === 'error') {
           reject(new Error(error || 'Processing failed'));
           this.terminate();
@@ -83,8 +86,9 @@ export async function processImageWithWorker(
   imageFile: File,
   numColors: number,
   minRegionSize: number,
-  smoothness: number
+  smoothness: number,
+  onProgress?: (stage: string, progress: number) => void
 ): Promise<ProcessedResult> {
   const worker = getImageProcessingWorker();
-  return worker.processImage(imageFile, numColors, minRegionSize, smoothness);
+  return worker.processImage(imageFile, numColors, minRegionSize, smoothness, onProgress);
 }

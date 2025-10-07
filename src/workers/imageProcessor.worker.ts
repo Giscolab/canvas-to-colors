@@ -28,8 +28,23 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     try {
       const { imageFile, numColors, minRegionSize, smoothness } = payload;
       
-      // Process image
-      const result = await processImage(imageFile, numColors, minRegionSize, smoothness);
+      // Send progress updates
+      const progressCallback = (stage: string, percent: number) => {
+        const progressResponse: WorkerResponse = {
+          type: 'progress',
+          payload: { stage, progress: percent }
+        };
+        self.postMessage(progressResponse);
+      };
+      
+      // Process image with progress callback
+      const result = await processImage(
+        imageFile, 
+        numColors, 
+        minRegionSize, 
+        smoothness,
+        progressCallback
+      );
       
       // Send success response
       const response: WorkerResponse = {

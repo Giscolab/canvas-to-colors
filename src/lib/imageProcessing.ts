@@ -3,6 +3,7 @@ import polylabel from 'polylabel';
 import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
 import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } from './colorUtils';
+import { LRUCache } from './lruCache';
 
 // Image processing utilities for paint-by-numbers conversion
 // Enhanced with ΔE2000 perceptual color distance, adaptive simplification, and parametric caching
@@ -118,9 +119,10 @@ interface CacheEntry {
   timestamp: number;
 }
 
-const processingCache = new Map<string, CacheEntry>();
-const MAX_CACHE_SIZE = 10;
-const CACHE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+/**
+ * LRU cache with proper ordering
+ */
+const resultCache = new LRUCache<ProcessedResult>(50, 5 * 60 * 1000);
 
 /**
  * Generate cache key from parameters
@@ -152,33 +154,18 @@ async function hashImageData(imageData: ImageData): Promise<string> {
  * Get cached result if available
  */
 function getCachedResult(key: string): ProcessedResult | null {
-  const entry = processingCache.get(key);
-  if (!entry) return null;
-  
-  // Check expiry
-  if (Date.now() - entry.timestamp > CACHE_EXPIRY_MS) {
-    processingCache.delete(key);
-    return null;
+  const cached = resultCache.get(key);
+  if (cached) {
+    console.log('✨ Cache hit! Returning cached result.');
   }
-  
-  console.log('✨ Cache hit! Returning cached result.');
-  return entry.result;
+  return cached;
 }
 
 /**
  * Store result in cache
  */
 function setCachedResult(key: string, result: ProcessedResult): void {
-  // Implement LRU eviction
-  if (processingCache.size >= MAX_CACHE_SIZE) {
-    const oldestKey = Array.from(processingCache.keys())[0];
-    processingCache.delete(oldestKey);
-  }
-  
-  processingCache.set(key, {
-    result,
-    timestamp: Date.now()
-  });
+  resultCache.set(key, result);
   console.log('💾 Result cached for future use.');
 }
 
@@ -300,16 +287,19 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
   return centroids.slice(0, k);
 }
 
+/**
+ * Find nearest centroid using ΔE2000 perceptual distance
+ * More accurate than Euclidean distance in RGB space
+ */
 function findNearestCentroid(pixel: number[], centroids: number[][]): number {
   let minDist = Infinity;
   let nearest = 0;
   
+  const pixelRgb: [number, number, number] = [pixel[0], pixel[1], pixel[2]];
+  
   centroids.forEach((centroid, i) => {
-    const dist = Math.sqrt(
-      Math.pow(pixel[0] - centroid[0], 2) +
-      Math.pow(pixel[1] - centroid[1], 2) +
-      Math.pow(pixel[2] - centroid[2], 2)
-    );
+    const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
+    const dist = perceptualDistance(pixelRgb, centroidRgb);
     
     if (dist < minDist) {
       minDist = dist;
@@ -516,6 +506,7 @@ function buildZonesFromLabels(
 
 /**
  * Merge small zones with their nearest neighbor by color distance and compactness
+ * Optimized with zone maps for faster lookups
  */
 function mergeSmallZones(
   zones: Zone[],
@@ -527,7 +518,12 @@ function mergeSmallZones(
 ): { mergedLabels: Int32Array; mergedZones: Zone[] } {
   const mergedLabels = new Int32Array(labels);
   const zonesToMerge = zones.filter(z => z.area < minRegionSize);
-  const keepZones = zones.filter(z => z.area >= minRegionSize);
+  
+  // Build zone map for O(1) lookups instead of O(n) find()
+  const zoneMap = new Map<number, Zone>();
+  for (const zone of zones) {
+    zoneMap.set(zone.id, zone);
+  }
 
   // Helper: calculate zone compactness (perimeter^2 / area)
   const calculateCompactness = (zone: Zone): number => {
@@ -580,13 +576,13 @@ function mergeSmallZones(
       }
     }
 
-    // Find nearest neighbor by color and compactness
+    // Find nearest neighbor by color and compactness using zoneMap
     let bestNeighbor = -1;
     let minScore = Infinity;
     const smallColor = hexToRgb(palette[smallZone.colorIdx]);
 
     for (const neighborId of neighbors) {
-      const neighborZone = zones.find(z => z.id === neighborId);
+      const neighborZone = zoneMap.get(neighborId);
       if (!neighborZone) continue;
       
       const neighborColor = hexToRgb(palette[neighborZone.colorIdx]);
@@ -611,7 +607,6 @@ function mergeSmallZones(
   }
 
   const mergedZones = buildZonesFromLabels(mergedLabels, palette, width, height, zones);
-
   return { mergedLabels, mergedZones };
 }
 
@@ -1420,7 +1415,8 @@ export async function processImage(
   imageFile: File,
   numColors: number,
   minRegionSize: number,
-  smoothness: number
+  smoothness: number,
+  onProgress?: (stage: string, progress: number) => void
 ): Promise<ProcessedResult> {
   const GLOBAL_TIMEOUT = 30000; // 30 seconds max
   const startTime = Date.now();
