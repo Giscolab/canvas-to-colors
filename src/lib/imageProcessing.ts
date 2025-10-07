@@ -2,8 +2,10 @@ import { isoContours } from 'marchingsquares';
 import polylabel from 'polylabel';
 import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
+import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } from './colorUtils';
 
 // Image processing utilities for paint-by-numbers conversion
+// Enhanced with ΔE2000 perceptual color distance, adaptive simplification, and parametric caching
 
 // ============= TYPES =============
 
@@ -30,6 +32,7 @@ export interface ProcessedResult {
   svg: string;
   legend: LegendEntry[];
   labels?: Int32Array;
+  colorZoneMapping?: Map<number, number[]>; // colorIdx -> zoneIds[]
 }
 
 interface Contour {
@@ -81,10 +84,7 @@ const canvasFactory = createCanvasFactory();
 // ============= COLOR UTILITIES =============
 
 function rgbToHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b].map(x => {
-    const hex = Math.round(x).toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  }).join('');
+  return rgbToHexColor(Math.round(r), Math.round(g), Math.round(b));
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -97,46 +97,89 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 /**
- * Convert RGB to Lab color space for perceptual distance
+ * Calculate perceptual color distance using ΔE2000
+ * More accurate than simple Euclidean or Lab distance
  */
-function rgbToLab(r: number, g: number, b: number): [number, number, number] {
-  // Normalize RGB values
-  r = r / 255;
-  g = g / 255;
-  b = b / 255;
+function colorDistance(rgb1: [number, number, number], rgb2: [number, number, number]): number {
+  return perceptualDistance(rgb1, rgb2);
+}
 
-  // Convert to XYZ
-  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
-  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
-  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+// ============= PARAMETRIC CACHE =============
 
-  let x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
-  let y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.00000;
-  let z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
+interface CacheKey {
+  imageHash: string;
+  numColors: number;
+  minRegionSize: number;
+  smoothness: number;
+}
 
-  x = x > 0.008856 ? Math.pow(x, 1/3) : (7.787 * x) + 16/116;
-  y = y > 0.008856 ? Math.pow(y, 1/3) : (7.787 * y) + 16/116;
-  z = z > 0.008856 ? Math.pow(z, 1/3) : (7.787 * z) + 16/116;
+interface CacheEntry {
+  result: ProcessedResult;
+  timestamp: number;
+}
 
-  return [
-    (116 * y) - 16,
-    500 * (x - y),
-    200 * (y - z)
-  ];
+const processingCache = new Map<string, CacheEntry>();
+const MAX_CACHE_SIZE = 10;
+const CACHE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Generate cache key from parameters
+ */
+function generateCacheKey(params: CacheKey): string {
+  return `${params.imageHash}_${params.numColors}_${params.minRegionSize}_${params.smoothness}`;
 }
 
 /**
- * Calculate perceptual color distance in Lab space
+ * Hash image data for cache key
  */
-function colorDistance(rgb1: [number, number, number], rgb2: [number, number, number]): number {
-  const lab1 = rgbToLab(rgb1[0], rgb1[1], rgb1[2]);
-  const lab2 = rgbToLab(rgb2[0], rgb2[1], rgb2[2]);
+async function hashImageData(imageData: ImageData): Promise<string> {
+  // Use first 1000 pixels for fast hash
+  const sample = imageData.data.slice(0, 4000);
+  const str = Array.from(sample).join(',');
   
-  return Math.sqrt(
-    Math.pow(lab1[0] - lab2[0], 2) +
-    Math.pow(lab1[1] - lab2[1], 2) +
-    Math.pow(lab1[2] - lab2[2], 2)
-  );
+  // Simple but fast hash
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  return `${hash}_${imageData.width}_${imageData.height}`;
+}
+
+/**
+ * Get cached result if available
+ */
+function getCachedResult(key: string): ProcessedResult | null {
+  const entry = processingCache.get(key);
+  if (!entry) return null;
+  
+  // Check expiry
+  if (Date.now() - entry.timestamp > CACHE_EXPIRY_MS) {
+    processingCache.delete(key);
+    return null;
+  }
+  
+  console.log('✨ Cache hit! Returning cached result.');
+  return entry.result;
+}
+
+/**
+ * Store result in cache
+ */
+function setCachedResult(key: string, result: ProcessedResult): void {
+  // Implement LRU eviction
+  if (processingCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = Array.from(processingCache.keys())[0];
+    processingCache.delete(oldestKey);
+  }
+  
+  processingCache.set(key, {
+    result,
+    timestamp: Date.now()
+  });
+  console.log('💾 Result cached for future use.');
 }
 
 // ============= K-MEANS QUANTIZATION =============
@@ -1491,12 +1534,21 @@ export async function processImage(
       console.log('Step 12: Generating legend...');
       const legend = generateLegend(refinedZones, palette, width * height);
 
-  const totalTime = Date.now() - startTime;
-  console.log(`Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`);
+      // STEP 13: Build color->zone mapping
+      const colorZoneMapping = new Map<number, number[]>();
+      refinedZones.forEach(zone => {
+        if (!colorZoneMapping.has(zone.colorIdx)) {
+          colorZoneMapping.set(zone.colorIdx, []);
+        }
+        colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
+      });
+
+      const totalTime = Date.now() - startTime;
+      console.log(`Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`);
 
       clearTimeout(timeoutId);
 
-      resolve({
+      const result: ProcessedResult = {
         contours: contoursData,
         numbered: numberedData,
         colorized: previewData,
@@ -1504,8 +1556,14 @@ export async function processImage(
         zones: refinedZones,
         svg,
         legend,
-        labels: smoothedLabels
-      });
+        labels: smoothedLabels,
+        colorZoneMapping
+      };
+
+      // Cache the result
+      setCachedResult(cacheKey, result);
+
+      resolve(result);
     } catch (error) {
       clearTimeout(timeoutId);
       reject(error instanceof Error ? error : new Error('Erreur inconnue lors du traitement de l\'image'));
