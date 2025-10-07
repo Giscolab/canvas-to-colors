@@ -1427,6 +1427,7 @@ export async function processImage(
     }, GLOBAL_TIMEOUT);
 
     try {
+      onProgress?.("Chargement de l'image...", 5);
       const loadedImage = await loadImageSource(imageFile);
 
       // Scale down if too large (max 1200px)
@@ -1451,6 +1452,7 @@ export async function processImage(
       const imageData = ctx.getImageData(0, 0, width, height);
 
       // Check cache before processing
+      onProgress?.("Vérification du cache...", 10);
       const imageHash = await hashImageData(imageData);
       const cacheKey = generateCacheKey({ imageHash, numColors, minRegionSize, smoothness });
       
@@ -1458,14 +1460,17 @@ export async function processImage(
       if (cached) {
         clearTimeout(timeoutId);
         console.log('✨ Returning cached result');
+        onProgress?.("Résultat en cache trouvé!", 100);
         return resolve(cached);
       }
 
       // STEP 1: Quantize colors
+      onProgress?.("Quantification des couleurs (K-means++)...", 15);
       console.log('Step 1: Quantizing colors...');
       const palette = quantizeColors(imageData, numColors);
 
       // STEP 2: Map pixels to palette
+      onProgress?.("Mapping des pixels...", 25);
       console.log('Step 2: Mapping pixels to palette...');
       const colorMap: number[] = [];
       const quantizedData = new ImageData(width, height);
@@ -1501,6 +1506,7 @@ export async function processImage(
       }
 
       // STEP 3: Label connected components
+      onProgress?.("Segmentation des zones...", 40);
       console.log('Step 3: Labeling connected components...');
       const { labels: initialLabels, zones: initialZones } = labelConnectedComponents(
         colorMap,
@@ -1509,6 +1515,7 @@ export async function processImage(
       );
 
       // STEP 4: Merge small zones
+      onProgress?.("Fusion des petites zones...", 50);
       console.log('Step 4: Merging small zones...');
       const { mergedLabels, mergedZones } = mergeSmallZones(
         initialZones,
@@ -1520,6 +1527,7 @@ export async function processImage(
       );
 
       // STEP 5: Smooth zones
+      onProgress?.("Lissage des bords...", 60);
       console.log('Step 5: Smoothing zones...');
       const smoothedLabels = smoothZones(
         mergedLabels,
@@ -1537,35 +1545,43 @@ export async function processImage(
       );
 
   // STEP 6: Trace contours
+  onProgress?.("Traçage des contours...", 70);
   console.log('Step 6: Tracing contours...');
   const contours = traceContours(width, height, smoothedZones);
   
   // STEP 6.5: Merge adjacent polygons of same color (new optimization)
+  onProgress?.("Fusion topologique (Martinez)...", 75);
   console.log('Step 6.5: Merging adjacent polygons...');
   const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
   console.log(`Polygon merging: ${contours.length} -> ${mergedContours.length} contours`);
 
   // STEP 7: Refine label placement using polylabel
+  onProgress?.("Placement des numéros...", 80);
   console.log('Step 7: Refining label placement...');
   const refinedZones = refineZoneLabelPositions(smoothedZones, mergedContours, width, height);
 
       // STEP 8: Generate edge image
+      onProgress?.("Détection des contours...", 85);
       console.log('Step 8: Generating edge image...');
       const contoursData = detectEdges(smoothedLabels, width, height);
 
   // STEP 9: Generate SVG
+  onProgress?.("Génération SVG...", 90);
   console.log('Step 9: Generating SVG...');
   const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
 
       // STEP 10: Create numbered version with optimal positioning
+      onProgress?.("Version numérotée...", 93);
       console.log('Step 10: Creating numbered version...');
       const numberedData = createNumberedVersion(quantizedData, refinedZones, palette, smoothedLabels);
 
       // STEP 11: Create preview version (fusion: image + contours + numbers)
+      onProgress?.("Fusion des aperçus...", 96);
       console.log('Step 11: Creating preview fusion...');
       const previewData = createPreviewFusion(quantizedData, contoursData, numberedData, width, height);
 
       // STEP 12: Generate legend
+      onProgress?.("Génération de la légende...", 98);
       console.log('Step 12: Generating legend...');
       const legend = generateLegend(refinedZones, palette, width * height);
 
@@ -1596,8 +1612,10 @@ export async function processImage(
       };
 
       // Cache the result
+      onProgress?.("Mise en cache...", 99);
       setCachedResult(cacheKey, result);
 
+      onProgress?.("Terminé!", 100);
       resolve(result);
     } catch (error) {
       clearTimeout(timeoutId);
