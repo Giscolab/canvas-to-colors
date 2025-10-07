@@ -12,28 +12,44 @@ interface ImageUploadProps {
 export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [fileSizeLabel, setFileSizeLabel] = useState<string | null>(null);
 
-  // Analyse automatique de la taille de l’image
+  // Analyse automatique des dimensions de l’image
   useEffect(() => {
-    if (selectedImage) {
-      const img = new Image();
-      img.onload = () => {
-        const sizeKB = Math.round(img.src.length / 1024);
-        const sizeMB = (sizeKB / 1024).toFixed(2);
-        setImageInfo({
-          width: img.width,
-          height: img.height,
-          size: sizeKB > 1024 ? `${sizeMB} MB` : `${sizeKB} KB`
-        });
-      };
-      img.src = selectedImage;
+    if (!selectedImage) {
+      setImageDimensions(null);
+      setFileSizeLabel(null);
+      return;
     }
+
+    const img = new Image();
+    img.onload = () => {
+      setImageDimensions({
+        width: img.width,
+        height: img.height
+      });
+    };
+    img.src = selectedImage;
+
+    return () => {
+      img.onload = null;
+    };
   }, [selectedImage]);
+
+  const formatFileSize = (bytes: number) => {
+    const sizeInKB = bytes / 1024;
+    if (sizeInKB < 1024) {
+      return `${Math.round(sizeInKB)} KB`;
+    }
+    const sizeInMB = sizeInKB / 1024;
+    return `${sizeInMB.toFixed(2)} MB`;
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setFileSizeLabel(formatFileSize(file.size));
       onImageSelect(file);
     }
   };
@@ -45,6 +61,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      setFileSizeLabel(formatFileSize(file.size));
       onImageSelect(file);
     }
   };
@@ -110,15 +127,19 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
             </div>
           </div>
           
-          {imageInfo && (
+          {(imageDimensions || fileSizeLabel) && (
             <div className="flex gap-2 justify-center flex-wrap">
-              <Badge variant="outline" className="gap-1">
-                📐 {imageInfo.width} × {imageInfo.height}
-              </Badge>
-              <Badge variant="outline" className="gap-1">
-                💾 {imageInfo.size}
-              </Badge>
-              {(imageInfo.width > 4000 || imageInfo.height > 4000) && (
+              {imageDimensions && (
+                <Badge variant="outline" className="gap-1">
+                  📐 {imageDimensions.width} × {imageDimensions.height}
+                </Badge>
+              )}
+              {fileSizeLabel && (
+                <Badge variant="outline" className="gap-1">
+                  💾 {fileSizeLabel}
+                </Badge>
+              )}
+              {imageDimensions && (imageDimensions.width > 4000 || imageDimensions.height > 4000) && (
                 <Badge variant="destructive" className="gap-1">
                   <FileWarning className="h-3 w-3" />
                   Image trop grande
