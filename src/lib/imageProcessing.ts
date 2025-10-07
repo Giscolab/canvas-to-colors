@@ -1,5 +1,7 @@
 import { isoContours } from 'marchingsquares';
 import polylabel from 'polylabel';
+import { union } from 'martinez-polygon-clipping';
+import simplify from 'simplify-js';
 
 // Image processing utilities for paint-by-numbers conversion
 
@@ -632,71 +634,112 @@ function smoothZones(
 // ============= CONTOUR SIMPLIFICATION =============
 
 /**
- * Optimized Ramer-Douglas-Peucker algorithm for path simplification
- * Uses iterative approach to avoid deep recursion
+ * Improved path simplification using simplify-js library
+ * Much faster and more reliable than custom RDP implementation
  */
 function simplifyPath(
   path: Array<{ x: number; y: number }>,
-  epsilon: number = 2.0
+  tolerance: number = 0.75
 ): Array<{ x: number; y: number }> {
   if (path.length <= 2) return path;
-
-  // Use iterative approach with a stack to avoid recursion depth issues
-  const keepIndices = new Set<number>([0, path.length - 1]);
-  const stack: Array<[number, number]> = [[0, path.length - 1]];
-
-  while (stack.length > 0) {
-    const [start, end] = stack.pop()!;
-    if (end - start <= 1) continue;
-
-    // Find point with maximum distance from line segment
-    let maxDist = 0;
-    let maxIndex = start;
-    const first = path[start];
-    const last = path[end];
-
-    for (let i = start + 1; i < end; i++) {
-      const dist = perpendicularDistance(path[i], first, last);
-      if (dist > maxDist) {
-        maxDist = dist;
-        maxIndex = i;
-      }
-    }
-
-    // If max distance exceeds epsilon, keep this point and process segments
-    if (maxDist > epsilon) {
-      keepIndices.add(maxIndex);
-      // Process left and right segments
-      stack.push([start, maxIndex]);
-      stack.push([maxIndex, end]);
-    }
-  }
-
-  // Build simplified path from kept indices
-  const sortedIndices = Array.from(keepIndices).sort((a, b) => a - b);
-  return sortedIndices.map(i => path[i]);
+  
+  // Use simplify-js with high quality mode for better results
+  return simplify(path, tolerance, true);
 }
 
-/**
- * Calculate perpendicular distance from point to line
- */
-function perpendicularDistance(
-  point: { x: number; y: number },
-  lineStart: { x: number; y: number },
-  lineEnd: { x: number; y: number }
-): number {
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-  const norm = Math.sqrt(dx * dx + dy * dy);
-  
-  if (norm === 0) {
-    return Math.sqrt(
-      Math.pow(point.x - lineStart.x, 2) + 
-      Math.pow(point.y - lineStart.y, 2)
-    );
-  }
+// ============= POLYGON MERGING =============
 
-  return Math.abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x) / norm;
+/**
+ * Merge adjacent polygons of the same color using martinez-polygon-clipping
+ * This reduces the number of polygons and simplifies the output
+ */
+function mergeAdjacentPolygons(
+  contours: Contour[],
+  zones: Zone[]
+): Contour[] {
+  // Group contours by color
+  const colorGroups = new Map<number, Contour[]>();
+  
+  for (const contour of contours) {
+    const zone = zones.find(z => z.id === contour.zoneId);
+    if (!zone) continue;
+    
+    const colorIdx = zone.colorIdx;
+    if (!colorGroups.has(colorIdx)) {
+      colorGroups.set(colorIdx, []);
+    }
+    colorGroups.get(colorIdx)!.push(contour);
+  }
+  
+  const mergedContours: Contour[] = [];
+  
+  // Merge polygons within each color group
+  for (const [colorIdx, groupContours] of colorGroups) {
+    if (groupContours.length === 0) continue;
+    
+    // Skip merging if only one contour or too many contours (performance)
+    if (groupContours.length === 1 || groupContours.length > 100) {
+      mergedContours.push(...groupContours);
+      continue;
+    }
+    
+    try {
+      // Convert contours to martinez polygon format
+      let mergedPolygon: Array<Array<[number, number]>> | null = null;
+      
+      for (const contour of groupContours) {
+        const ring: Array<[number, number]> = contour.path.map(p => [p.x, p.y]);
+        
+        // Close the ring if not already closed
+        if (ring.length > 0) {
+          const [fx, fy] = ring[0];
+          const [lx, ly] = ring[ring.length - 1];
+          if (fx !== lx || fy !== ly) {
+            ring.push([fx, fy]);
+          }
+        }
+        
+        if (ring.length < 4) continue; // Need at least 3 points + closing point
+        
+        const polygon: Array<Array<[number, number]>> = [ring];
+        
+        if (mergedPolygon === null) {
+          mergedPolygon = polygon;
+        } else {
+          // Union with previous merged polygon
+          const result = union(mergedPolygon, polygon);
+          if (result && result.length > 0) {
+            mergedPolygon = result[0]; // Take first polygon from multipolygon result
+          }
+        }
+      }
+      
+      // Convert merged polygon back to contours
+      if (mergedPolygon && mergedPolygon.length > 0) {
+        for (const ring of mergedPolygon) {
+          if (ring.length < 4) continue;
+          
+          const path = ring.slice(0, -1).map(([x, y]) => ({ x, y })); // Remove closing point
+          const simplifiedPath = simplifyPath(path, 1.0); // Extra simplification after merge
+          
+          if (simplifiedPath.length >= 3) {
+            // Use the first zone ID from the group
+            const zoneId = groupContours[0].zoneId;
+            mergedContours.push({ zoneId, path: simplifiedPath });
+          }
+        }
+      } else {
+        // Fallback: keep original contours if merge failed
+        mergedContours.push(...groupContours);
+      }
+    } catch (error) {
+      console.warn(`Polygon merge failed for color ${colorIdx}:`, error);
+      // Fallback: keep original contours
+      mergedContours.push(...groupContours);
+    }
+  }
+  
+  return mergedContours;
 }
 
 // ============= LABEL POSITIONING =============
@@ -1415,21 +1458,26 @@ export async function processImage(
         mergedZones
       );
 
-      // STEP 6: Trace contours
-      console.log('Step 6: Tracing contours...');
-      const contours = traceContours(width, height, smoothedZones);
+  // STEP 6: Trace contours
+  console.log('Step 6: Tracing contours...');
+  const contours = traceContours(width, height, smoothedZones);
+  
+  // STEP 6.5: Merge adjacent polygons of same color (new optimization)
+  console.log('Step 6.5: Merging adjacent polygons...');
+  const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
+  console.log(`Polygon merging: ${contours.length} -> ${mergedContours.length} contours`);
 
-      // STEP 7: Refine label placement using polylabel
-      console.log('Step 7: Refining label placement...');
-      const refinedZones = refineZoneLabelPositions(smoothedZones, contours, width, height);
+  // STEP 7: Refine label placement using polylabel
+  console.log('Step 7: Refining label placement...');
+  const refinedZones = refineZoneLabelPositions(smoothedZones, mergedContours, width, height);
 
       // STEP 8: Generate edge image
       console.log('Step 8: Generating edge image...');
       const contoursData = detectEdges(smoothedLabels, width, height);
 
-      // STEP 9: Generate SVG
-      console.log('Step 9: Generating SVG...');
-      const svg = generateSVG(contours, refinedZones, palette, width, height);
+  // STEP 9: Generate SVG
+  console.log('Step 9: Generating SVG...');
+  const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
 
       // STEP 10: Create numbered version with optimal positioning
       console.log('Step 10: Creating numbered version...');
@@ -1443,8 +1491,8 @@ export async function processImage(
       console.log('Step 12: Generating legend...');
       const legend = generateLegend(refinedZones, palette, width * height);
 
-      const totalTime = Date.now() - startTime;
-      console.log(`Processing complete: ${refinedZones.length} zones, ${contours.length} contours in ${totalTime}ms`);
+  const totalTime = Date.now() - startTime;
+  console.log(`Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`);
 
       clearTimeout(timeoutId);
 
