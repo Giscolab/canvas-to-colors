@@ -1426,6 +1426,17 @@ export async function processImage(
 
       const imageData = ctx.getImageData(0, 0, width, height);
 
+      // Check cache before processing
+      const imageHash = await hashImageData(imageData);
+      const cacheKey = generateCacheKey({ imageHash, numColors, minRegionSize, smoothness });
+      
+      const cached = getCachedResult(cacheKey);
+      if (cached) {
+        clearTimeout(timeoutId);
+        console.log('✨ Returning cached result');
+        return resolve(cached);
+      }
+
       // STEP 1: Quantize colors
       console.log('Step 1: Quantizing colors...');
       const palette = quantizeColors(imageData, numColors);
