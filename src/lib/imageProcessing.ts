@@ -172,7 +172,8 @@ function setCachedResult(key: string, result: ProcessedResult): void {
 // ============= K-MEANS QUANTIZATION =============
 
 /**
- * Simple k-means color quantization
+ * K-means color quantization with Lab palette caching
+ * Uses ΔE2000 perceptual distance for accurate clustering
  */
 export function quantizeColors(imageData: ImageData, numColors: number): string[] {
   const pixels: number[][] = [];
@@ -186,15 +187,18 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
     ]);
   }
 
-  // Simple k-means clustering with K-means++ initialization for stability
+  // K-means clustering with K-means++ initialization
   let centroids = initializeCentroids(pixels, numColors);
   
   for (let iter = 0; iter < 10; iter++) {
     const clusters: number[][][] = Array(numColors).fill(null).map(() => []);
     
-    // Assign pixels to nearest centroid
+    // Pre-convert centroids to Lab once per iteration
+    const labCentroids = centroids.map(c => rgbToLab(c[0], c[1], c[2]));
+    
+    // Assign pixels to nearest centroid using pre-calculated Lab
     pixels.forEach(pixel => {
-      const nearest = findNearestCentroid(pixel, centroids);
+      const nearest = findNearestCentroid(pixel, centroids, labCentroids);
       clusters[nearest].push(pixel);
     });
     
@@ -213,8 +217,8 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
 }
 
 /**
- * Optimized K-Means++ initialization
- * Squared distances for better spread
+ * Optimized K-Means++ initialization using ΔE2000
+ * Squared perceptual distances for better spread
  */
 function initializeCentroids(pixels: number[][], k: number): number[][] {
   if (pixels.length === 0 || k <= 0) {
@@ -231,21 +235,24 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
     const distances = new Float32Array(pixels.length);
     let totalDistance = 0;
     
-    // Calculate squared distance to nearest centroid
+    // Calculate squared perceptual distance to nearest centroid
     for (let i = 0; i < pixels.length; i++) {
       const pixel = pixels[i];
+      const pixelRgb: [number, number, number] = [pixel[0], pixel[1], pixel[2]];
+      const pixelLab = rgbToLab(pixelRgb[0], pixelRgb[1], pixelRgb[2]);
+      
       let minDist = Infinity;
       for (const centroid of centroids) {
-        const dist =
-          Math.pow(pixel[0] - centroid[0], 2) +
-          Math.pow(pixel[1] - centroid[1], 2) +
-          Math.pow(pixel[2] - centroid[2], 2);
+        const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
+        const centroidLab = rgbToLab(centroidRgb[0], centroidRgb[1], centroidRgb[2]);
+        const dist = deltaE2000(pixelLab, centroidLab);
         if (dist < minDist) {
           minDist = dist;
         }
       }
-      distances[i] = minDist;
-      totalDistance += minDist;
+      // Square the distance for K-means++ weighting
+      distances[i] = minDist * minDist;
+      totalDistance += distances[i];
     }
 
     // If all distances are zero (identical pixels), pick remaining centroids randomly
@@ -290,22 +297,42 @@ function initializeCentroids(pixels: number[][], k: number): number[][] {
 /**
  * Find nearest centroid using ΔE2000 perceptual distance
  * More accurate than Euclidean distance in RGB space
+ * @param pixel - RGB pixel values
+ * @param centroids - Array of RGB centroids
+ * @param labCentroids - Optional pre-calculated Lab centroids for performance
  */
-function findNearestCentroid(pixel: number[], centroids: number[][]): number {
+function findNearestCentroid(
+  pixel: number[], 
+  centroids: number[][],
+  labCentroids?: [number, number, number][]
+): number {
   let minDist = Infinity;
   let nearest = 0;
   
   const pixelRgb: [number, number, number] = [pixel[0], pixel[1], pixel[2]];
+  const pixelLab = rgbToLab(pixelRgb[0], pixelRgb[1], pixelRgb[2]);
   
-  centroids.forEach((centroid, i) => {
-    const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
-    const dist = perceptualDistance(pixelRgb, centroidRgb);
-    
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = i;
-    }
-  });
+  if (labCentroids) {
+    // Use pre-calculated Lab centroids (much faster)
+    labCentroids.forEach((centroidLab, i) => {
+      const dist = deltaE2000(pixelLab, centroidLab);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = i;
+      }
+    });
+  } else {
+    // Fallback: calculate Lab on-the-fly
+    centroids.forEach((centroid, i) => {
+      const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
+      const dist = perceptualDistance(pixelRgb, centroidRgb);
+      
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = i;
+      }
+    });
+  }
   
   return nearest;
 }

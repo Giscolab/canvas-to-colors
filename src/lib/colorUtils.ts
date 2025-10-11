@@ -1,12 +1,52 @@
 /**
  * Utilities for color space conversion and perceptual color distance
  * Implements Lab color space and ΔE2000 (CIEDE2000) for accurate color comparison
+ * Enhanced with input validation, caching, and angle normalization
  */
+
+import { LRUCache } from './lruCache';
+
+// ============= ANGLE CONVERSION HELPERS =============
+
+const DEG_TO_RAD = Math.PI / 180;
+const RAD_TO_DEG = 180 / Math.PI;
+
+function toRadians(degrees: number): number {
+  return degrees * DEG_TO_RAD;
+}
+
+function toDegrees(radians: number): number {
+  return radians * RAD_TO_DEG;
+}
+
+// ============= RGB VALIDATION =============
+
+/**
+ * Clamp RGB values to valid range [0-255]
+ */
+function clampRgb(value: number): number {
+  return Math.min(255, Math.max(0, Math.round(value)));
+}
+
+// ============= LAB CACHE =============
+
+/**
+ * LRU cache for RGB to Lab conversions
+ * Reduces redundant calculations for frequently accessed colors
+ */
+const labCache = new LRUCache<[number, number, number]>(1000, 10 * 60 * 1000);
+
+// ============= COLOR SPACE CONVERSION =============
 
 /**
  * Convert RGB to XYZ color space (D65 illuminant)
+ * Input values are automatically clamped to [0-255]
  */
 function rgbToXyz(r: number, g: number, b: number): [number, number, number] {
+  // Clamp and validate inputs
+  r = clampRgb(r);
+  g = clampRgb(g);
+  b = clampRgb(b);
   // Normalize to 0-1
   let rNorm = r / 255;
   let gNorm = g / 255;
@@ -56,18 +96,38 @@ function xyzToLab(x: number, y: number, z: number): [number, number, number] {
 }
 
 /**
- * Convert RGB to Lab color space
+ * Convert RGB to Lab color space with caching
+ * @param r - Red component (0-255, will be clamped)
+ * @param g - Green component (0-255, will be clamped)
+ * @param b - Blue component (0-255, will be clamped)
  * @returns [L, a, b] where L is 0-100, a and b are typically -128 to 127
+ * @example
+ * const lab = rgbToLab(255, 0, 0); // Pure red
+ * console.log(lab); // [53.24, 80.09, 67.20]
  */
 export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  // Clamp inputs first to ensure cache key consistency
+  r = clampRgb(r);
+  g = clampRgb(g);
+  b = clampRgb(b);
+  
+  // Check cache
+  const key = `${r},${g},${b}`;
+  const cached = labCache.get(key);
+  if (cached) return cached;
+  
+  // Calculate and cache
   const [x, y, z] = rgbToXyz(r, g, b);
-  return xyzToLab(x, y, z);
+  const lab = xyzToLab(x, y, z);
+  labCache.set(key, lab);
+  
+  return lab;
 }
 
 /**
  * Calculate ΔE2000 (CIEDE2000) color difference
  * More accurate perceptual color distance than Euclidean distance
- * @returns Distance value (0 = identical, >2.3 = noticeable difference)
+ * @returns Distance value (0 = identical, capped at 100 max)
  */
 export function deltaE2000(
   lab1: [number, number, number],
@@ -92,19 +152,17 @@ export function deltaE2000(
   const Cp1 = Math.sqrt(ap1 * ap1 + b1 * b1);
   const Cp2 = Math.sqrt(ap2 * ap2 + b2 * b2);
 
-  // Calculate h'
+  // Calculate h' (in degrees)
   let hp1 = 0;
   if (b1 !== 0 || ap1 !== 0) {
-    hp1 = Math.atan2(b1, ap1);
-    if (hp1 < 0) hp1 += 2 * Math.PI;
-    hp1 = (hp1 * 180) / Math.PI;
+    hp1 = toDegrees(Math.atan2(b1, ap1));
+    if (hp1 < 0) hp1 += 360;
   }
 
   let hp2 = 0;
   if (b2 !== 0 || ap2 !== 0) {
-    hp2 = Math.atan2(b2, ap2);
-    if (hp2 < 0) hp2 += 2 * Math.PI;
-    hp2 = (hp2 * 180) / Math.PI;
+    hp2 = toDegrees(Math.atan2(b2, ap2));
+    if (hp2 < 0) hp2 += 360;
   }
 
   // Calculate ΔL', ΔC', ΔH'
@@ -119,7 +177,7 @@ export function deltaE2000(
     else if (dhp < -180) dhp += 360;
   }
 
-  const dH = 2 * Math.sqrt(Cp1Cp2) * Math.sin((dhp * Math.PI) / 360);
+  const dH = 2 * Math.sqrt(Cp1Cp2) * Math.sin(toRadians(dhp) / 2);
 
   // Calculate CIEDE2000
   const Lp = (L1 + L2) / 2;
@@ -136,17 +194,17 @@ export function deltaE2000(
 
   const T =
     1 -
-    0.17 * Math.cos(((hp - 30) * Math.PI) / 180) +
-    0.24 * Math.cos((2 * hp * Math.PI) / 180) +
-    0.32 * Math.cos(((3 * hp + 6) * Math.PI) / 180) -
-    0.20 * Math.cos(((4 * hp - 63) * Math.PI) / 180);
+    0.17 * Math.cos(toRadians(hp - 30)) +
+    0.24 * Math.cos(toRadians(2 * hp)) +
+    0.32 * Math.cos(toRadians(3 * hp + 6)) -
+    0.20 * Math.cos(toRadians(4 * hp - 63));
 
   const dTheta = 30 * Math.exp(-Math.pow((hp - 275) / 25, 2));
   const RC = 2 * Math.sqrt(Math.pow(Cp, 7) / (Math.pow(Cp, 7) + Math.pow(25, 7)));
   const SL = 1 + (0.015 * Math.pow(Lp - 50, 2)) / Math.sqrt(20 + Math.pow(Lp - 50, 2));
   const SC = 1 + 0.045 * Cp;
   const SH = 1 + 0.015 * Cp * T;
-  const RT = -Math.sin((2 * dTheta * Math.PI) / 180) * RC;
+  const RT = -Math.sin(toRadians(2 * dTheta)) * RC;
 
   const kL = 1.0;
   const kC = 1.0;
@@ -159,7 +217,8 @@ export function deltaE2000(
       RT * (dC / (kC * SC)) * (dH / (kH * SH))
   );
 
-  return deltaE;
+  // Cap at 100 to prevent extreme values
+  return Math.min(100, deltaE);
 }
 
 /**
