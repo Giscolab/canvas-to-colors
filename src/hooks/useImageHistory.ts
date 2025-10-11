@@ -71,12 +71,25 @@ export function useImageHistory() {
       const from = (page - 1) * limit;
       const to = from + limit - 1;
 
-      const { data, error } = await supabase
+      // Get current user for explicit filtering
+      const { data: { user } } = await supabase.auth.getUser();
+
+      let query = supabase
         .from('image_jobs')
         .select('*')
         .order('created_at', { ascending: false })
-        .range(from, to)
-        .returns<ImageJobRow[]>();
+        .range(from, to);
+
+      // ✅ Explicit client-side filtering for security
+      if (user) {
+        // Authenticated users: only their own jobs
+        query = query.eq('user_id', user.id);
+      } else {
+        // Anonymous users: only unowned jobs
+        query = query.is('user_id', null);
+      }
+
+      const { data, error } = await query.returns<ImageJobRow[]>();
 
       if (error) throw error;
       return data || [];
