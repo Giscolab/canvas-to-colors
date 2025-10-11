@@ -122,7 +122,7 @@ interface CacheEntry {
 /**
  * LRU cache with proper ordering
  */
-const resultCache = new LRUCache<ProcessedResult>(50, 5 * 60 * 1000);
+const resultCache = new LRUCache<ProcessedResult>(10, 5 * 60 * 1000, false); // Reduced to 10 for heavy objects
 
 /**
  * Generate cache key from parameters
@@ -158,7 +158,7 @@ async function hashImageData(imageData: ImageData): Promise<string> {
 function getCachedResult(key: string): ProcessedResult | null {
   const cached = resultCache.get(key);
   if (cached) {
-    console.log('✨ Cache hit! Returning cached result.');
+    console.log('✨ Cache hit! Returning cached result. Stats:', resultCache.getStats());
   }
   return cached;
 }
@@ -168,7 +168,7 @@ function getCachedResult(key: string): ProcessedResult | null {
  */
 function setCachedResult(key: string, result: ProcessedResult): void {
   resultCache.set(key, result);
-  console.log('💾 Result cached for future use.');
+  console.log('💾 Result cached for future use. Stats:', resultCache.getStats());
 }
 
 // ============= K-MEANS QUANTIZATION =============

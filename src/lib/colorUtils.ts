@@ -31,10 +31,10 @@ function clampRgb(value: number): number {
 // ============= LAB CACHE =============
 
 /**
- * LRU cache for RGB to Lab conversions
- * Reduces redundant calculations for frequently accessed colors
+ * Optimized Lab cache for RGB to Lab conversions
+ * Reduced size (500) for better memory management with heavy processing
  */
-const labCache = new LRUCache<[number, number, number]>(1000, 10 * 60 * 1000);
+const labCache = new LRUCache<[number, number, number]>(500, 10 * 60 * 1000);
 
 // ============= COLOR SPACE CONVERSION =============
 
