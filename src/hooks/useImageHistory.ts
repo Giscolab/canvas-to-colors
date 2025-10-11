@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
+
+type ImageJobRow = Database['public']['Tables']['image_jobs']['Row'];
 
 interface ImageJobData {
   image_name: string;
@@ -17,11 +20,15 @@ interface ImageJobData {
 export function useImageHistory() {
   const { toast } = useToast();
 
-  const saveJob = async (data: ImageJobData) => {
+  const saveJob = async (data: ImageJobData): Promise<boolean> => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { error } = await supabase
         .from('image_jobs')
         .insert({
+          user_id: user?.id,
           image_name: data.image_name,
           image_size: data.image_size,
           width: data.width,
@@ -35,19 +42,35 @@ export function useImageHistory() {
         });
 
       if (error) throw error;
+
+      toast({
+        title: "Sauvegardé ✅",
+        description: "L'image a été ajoutée à votre historique.",
+      });
+
+      return true;
     } catch (error) {
       console.error('Error saving job history:', error);
-      // Silent fail - don't block user experience
+      toast({
+        title: "Erreur",
+        description: "Impossible d'enregistrer le traitement.",
+        variant: "destructive",
+      });
+      return false;
     }
   };
 
-  const getRecentJobs = async (limit = 10) => {
+  const getRecentJobs = async (page = 1, limit = 10): Promise<ImageJobRow[]> => {
     try {
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+
       const { data, error } = await supabase
         .from('image_jobs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .range(from, to)
+        .returns<ImageJobRow[]>();
 
       if (error) throw error;
       return data || [];
