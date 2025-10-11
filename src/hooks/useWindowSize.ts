@@ -1,23 +1,43 @@
 import { useState, useEffect } from 'react';
 
-export const useWindowSize = () => {
-  const [windowSize, setWindowSize] = useState({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
-  });
+export interface WindowSize {
+  width: number;
+  height: number;
+}
+
+export const useWindowSize = (): WindowSize | undefined => {
+  const [windowSize, setWindowSize] = useState<WindowSize | undefined>(
+    typeof window !== 'undefined'
+      ? { width: window.innerWidth, height: window.innerHeight }
+      : undefined
+  );
 
   useEffect(() => {
+    let rafId: number;
+    
     const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
+      // Utiliser requestAnimationFrame pour limiter les updates
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        setWindowSize({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        });
       });
     };
 
+    // Écouter resize et orientationchange pour mobile
     window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    
+    // Définir la taille initiale
     handleResize();
 
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   return windowSize;

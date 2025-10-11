@@ -24,7 +24,9 @@ const Index = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
-  const { width, height } = useWindowSize();
+  const windowSize = useWindowSize();
+  const width = windowSize?.width ?? 0;
+  const height = windowSize?.height ?? 0;
   const { saveJob } = useImageHistory();
 
   const handleImageSelect = async (file: File) => {
