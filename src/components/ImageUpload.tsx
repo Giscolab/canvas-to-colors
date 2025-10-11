@@ -3,6 +3,8 @@ import { Upload, Image as ImageIcon, Check, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { IMAGE_PROCESSING } from "@/config/constants";
+import { useToast } from "@/hooks/use-toast";
 
 interface ImageUploadProps {
   onImageSelect: (file: File) => void;
@@ -14,6 +16,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
   const [isDragging, setIsDragging] = useState(false);
   const [actualFile, setActualFile] = useState<File | null>(null);
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
+  const { toast } = useToast();
 
   // Analyse automatique de la taille de l'image avec file.size réel
   useEffect(() => {
@@ -29,15 +32,38 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
         });
       };
       img.src = selectedImage;
+      
+      // Nettoyage pour éviter les fuites mémoire
+      return () => {
+        img.onload = null;
+      };
     }
   }, [selectedImage, actualFile]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
-      setActualFile(file);
-      onImageSelect(file);
+    if (!file) return;
+    
+    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      toast({
+        title: "Format invalide",
+        description: "Veuillez sélectionner une image PNG, JPG ou JPEG.",
+        variant: "destructive",
+      });
+      return;
     }
+    
+    if (file.size > IMAGE_PROCESSING.MAX_FILE_SIZE_BYTES) {
+      toast({
+        title: "Image trop volumineuse",
+        description: `La taille maximale est de ${IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setActualFile(file);
+    onImageSelect(file);
   };
 
   const handleClick = () => fileInputRef.current?.click();
@@ -46,10 +72,28 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file && ["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
-      setActualFile(file);
-      onImageSelect(file);
+    if (!file) return;
+    
+    if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+      toast({
+        title: "Format invalide",
+        description: "Veuillez sélectionner une image PNG, JPG ou JPEG.",
+        variant: "destructive",
+      });
+      return;
     }
+    
+    if (file.size > IMAGE_PROCESSING.MAX_FILE_SIZE_BYTES) {
+      toast({
+        title: "Image trop volumineuse",
+        description: `La taille maximale est de ${IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setActualFile(file);
+    onImageSelect(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -78,7 +122,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       
       {!selectedImage ? (
         <div className="flex flex-col items-center justify-center py-8 space-y-4">
-          <div className={`p-4 rounded-full bg-primary/10 transition-all ${isDragging ? 'scale-125' : ''}`}>
+          <div className={`p-4 rounded-full bg-primary/10 transition-all ${isDragging ? 'scale-125 animate-pulse' : ''}`}>
             <Upload className="h-8 w-8 text-primary" />
           </div>
           <div className="text-center space-y-2">
@@ -89,7 +133,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               Glissez-déposez ou cliquez pour choisir
             </p>
             <Badge variant="secondary" className="mt-2">
-              PNG, JPG ou JPEG • Format conseillé : A4 (HD 1920×1080)
+              PNG, JPG ou JPEG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB • Format conseillé : HD 1920×1080
             </Badge>
           </div>
           <Button 
@@ -108,7 +152,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               alt="Preview" 
               className="w-full h-full object-contain"
             />
-            <div className="absolute top-3 right-3 bg-green-500 text-white p-2 rounded-full shadow-md">
+            <div className="absolute top-3 right-3 bg-green-500 text-white p-2 rounded-full shadow-md animate-scale-in">
               <Check className="h-4 w-4" />
             </div>
           </div>
