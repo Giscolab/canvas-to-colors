@@ -40,6 +40,7 @@ export function useCanvasInteractions({
   const originalImageDataRef = useRef<ImageData | null>(null);
   const highlightAnimationRef = useRef<number | null>(null);
   const zonePathsRef = useRef<Map<number, Path2D>>(new Map());
+  const imageBitmapRef = useRef<ImageBitmap | null>(null);
   const initialScaleRef = useRef<number>(1);
   const initialOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -54,6 +55,7 @@ export function useCanvasInteractions({
   }, [zones]);
 
   // Précalculer les chemins pour chaque zone pour optimiser le rendu
+  // Optimisé : parcours unique de tous les pixels
   const precomputeZonePaths = useCallback(() => {
     if (!labels || !originalImageDataRef.current) return;
     
@@ -61,32 +63,36 @@ export function useCanvasInteractions({
     const height = originalImageDataRef.current.height;
     const newPaths = new Map<number, Path2D>();
     
+    // Initialiser tous les chemins
     zones.forEach(zone => {
-      const path = new Path2D();
-      let started = false;
-      
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          if (labels[idx] === zone.id) {
-            if (!started) {
-              path.moveTo(x, y);
-              started = true;
-            } else {
-              path.lineTo(x, y);
-            }
+      newPaths.set(zone.id, new Path2D());
+    });
+    
+    // Parcours unique optimisé : chaque pixel visité une seule fois
+    const firstPixel = new Map<number, boolean>();
+    for (let idx = 0; idx < labels.length; idx++) {
+      const zoneId = labels[idx];
+      if (zoneId >= 0) {
+        const path = newPaths.get(zoneId);
+        if (path) {
+          const x = idx % width;
+          const y = Math.floor(idx / width);
+          
+          if (!firstPixel.has(zoneId)) {
+            path.moveTo(x, y);
+            firstPixel.set(zoneId, true);
+          } else {
+            path.lineTo(x, y);
           }
         }
       }
-      
-      if (started) {
-        path.closePath();
-        newPaths.set(zone.id, path);
-      }
-    });
+    }
+    
+    // Fermer tous les chemins
+    newPaths.forEach(path => path.closePath());
     
     zonePathsRef.current = newPaths;
-  }, [zones, labels]);
+  }, [zones, labels, originalImageData]);
 
   // Animation de surbrillance progressive
   const startHighlightAnimation = useCallback(() => {
@@ -128,17 +134,22 @@ export function useCanvasInteractions({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Create a temporary canvas to hold the ImageData
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = originalImageDataRef.current.width;
-    tempCanvas.height = originalImageDataRef.current.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return;
-    tempCtx.putImageData(originalImageDataRef.current, 0, 0);
-    
-    // Apply current scale and offset
-    ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
-    ctx.drawImage(tempCanvas, 0, 0);
+    // Utiliser ImageBitmap pour un rendu beaucoup plus rapide
+    if (imageBitmapRef.current) {
+      ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
+      ctx.drawImage(imageBitmapRef.current, 0, 0);
+    } else {
+      // Fallback si le bitmap n'est pas encore créé
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = originalImageDataRef.current.width;
+      tempCanvas.height = originalImageDataRef.current.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return;
+      tempCtx.putImageData(originalImageDataRef.current, 0, 0);
+      
+      ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
+      ctx.drawImage(tempCanvas, 0, 0);
+    }
 
     // Déterminer les zones à surligner selon le mode de sélection
     const zonesToHighlight = selectedColorIdx !== null
@@ -177,12 +188,30 @@ export function useCanvasInteractions({
     }
   }, [canvasRef, scale, offset, selectedZoneId, selectedColorIdx, zonesByColor, zones, highlightProgress]);
 
-  // Update ref and trigger redraw when originalImageData changes
+  // Update ref and create ImageBitmap when originalImageData changes
   useEffect(() => {
     originalImageDataRef.current = originalImageData;
-  }, [originalImageData]);
+    
+    if (originalImageData) {
+      // Créer un ImageBitmap pour des performances optimales
+      createImageBitmap(originalImageData).then(bitmap => {
+        imageBitmapRef.current = bitmap;
+        redraw();
+      }).catch(err => {
+        console.error('Error creating ImageBitmap:', err);
+      });
+    }
+    
+    // Cleanup previous bitmap
+    return () => {
+      if (imageBitmapRef.current) {
+        imageBitmapRef.current.close();
+        imageBitmapRef.current = null;
+      }
+    };
+  }, [originalImageData, redraw]);
 
-  // Initialize canvas dimensions and draw image at native resolution
+  // Initialize canvas dimensions and scale/offset refs
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !originalImageData) return;
@@ -190,6 +219,10 @@ export function useCanvasInteractions({
     // Set canvas dimensions to image dimensions
     canvas.width = originalImageData.width;
     canvas.height = originalImageData.height;
+
+    // Initialiser les valeurs par défaut de scale et offset
+    initialScaleRef.current = 1;
+    initialOffsetRef.current = { x: 0, y: 0 };
 
     // Draw the image at native resolution
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -352,6 +385,15 @@ export function useCanvasInteractions({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Nettoyer les listeners avant de les ajouter (évite les doublons en dev mode)
+    canvas.removeEventListener('wheel', handleWheel);
+    canvas.removeEventListener('mousedown', handleMouseDown);
+    canvas.removeEventListener('click', handleClick);
+    window.removeEventListener('mousemove', handleMouseMove);
+    window.removeEventListener('mouseup', handleMouseUp);
+    window.removeEventListener('keydown', handleKeyDown);
+
+    // Ajouter les listeners
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('click', handleClick);
