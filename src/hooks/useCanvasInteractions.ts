@@ -4,7 +4,7 @@ export interface Zone {
   id: number;
   colorIdx: number;
   area: number;
-  pixels: number[];
+  pixels: Uint32Array;
   centroid: { x: number; y: number };
   hex?: string;
   percent?: number;

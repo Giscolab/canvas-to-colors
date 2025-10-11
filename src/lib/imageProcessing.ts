@@ -14,7 +14,7 @@ export interface Zone {
   id: number;
   colorIdx: number;
   area: number;
-  pixels: number[];
+  pixels: Uint32Array;
   centroid: { x: number; y: number };
 }
 
@@ -365,7 +365,7 @@ function labelConnectedComponents(
       
       if (labels[idx] === -1) {
         const colorIdx = colorMap[idx];
-        const pixels: number[] = [];
+        const pixels: number[] = []; // Temporary array, converted to Uint32Array later
         let sumX = 0;
         let sumY = 0;
         
@@ -457,7 +457,7 @@ function labelConnectedComponents(
             id: currentLabel,
             colorIdx,
             area: pixels.length,
-            pixels,
+            pixels: new Uint32Array(pixels), // Convert to Uint32Array for memory efficiency
             centroid: {
               x: Math.round(sumX / pixels.length),
               y: Math.round(sumY / pixels.length)
@@ -502,13 +502,13 @@ function buildZonesFromLabels(
         id: label,
         colorIdx,
         area: 0,
-        pixels: [],
+        pixels: [] as any, // Temporary array, converted to Uint32Array later
         centroid: { x: 0, y: 0 }
       });
     }
 
     const zone = zoneMap.get(label)!;
-    zone.pixels.push(i);
+    (zone.pixels as any).push(i);
     zone.area++;
   }
 
@@ -516,12 +516,15 @@ function buildZonesFromLabels(
     const usePole = zone.area > 50;
     let centroid: { x: number; y: number };
 
+    // Convert pixels array to Uint32Array for memory efficiency
+    const pixelsArray = new Uint32Array(zone.pixels as any);
+
     if (usePole) {
-      centroid = findPoleOfInaccessibility(zone.pixels, width, height);
+      centroid = findPoleOfInaccessibility(pixelsArray, width, height);
     } else {
       let sumX = 0;
       let sumY = 0;
-      for (const pixelIdx of zone.pixels) {
+      for (const pixelIdx of pixelsArray) {
         sumX += pixelIdx % width;
         sumY += Math.floor(pixelIdx / width);
       }
@@ -533,6 +536,7 @@ function buildZonesFromLabels(
 
     return {
       ...zone,
+      pixels: pixelsArray,
       centroid
     };
   });
@@ -947,7 +951,7 @@ function refineZoneLabelPositions(
  * Better than centroid for irregular shapes
  */
 function findPoleOfInaccessibility(
-  pixels: number[],
+  pixels: Uint32Array,
   width: number,
   height: number
 ): { x: number; y: number } {
@@ -1087,6 +1091,23 @@ function traceContours(
 // ============= SVG GENERATION =============
 
 /**
+ * Generate fallback SVG for images that are too complex
+ */
+function generateFallbackSVG(
+  width: number,
+  height: number,
+  contourCount: number
+): string {
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
+  svg += `  <g id="zones">\n`;
+  svg += `    <rect width="${width}" height="${height}" fill="#f0f0f0" />\n`;
+  svg += `    <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="20">Image trop complexe (${contourCount} zones)</text>\n`;
+  svg += `  </g>\n`;
+  svg += `</svg>`;
+  return svg;
+}
+
+/**
  * Generate SVG from contours
  */
 function generateSVG(
@@ -1104,14 +1125,7 @@ function generateSVG(
   
   if (contours.length > MAX_CONTOURS_FOR_SVG) {
     console.warn(`Too many contours (${contours.length}, avg complexity: ${avgContourComplexity.toFixed(1)}). Generating simplified SVG.`);
-    // Return a basic SVG with colored rectangles for each zone instead
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
-    svg += `  <g id="zones">\n`;
-    svg += `    <rect width="${width}" height="${height}" fill="#f0f0f0" />\n`;
-    svg += `    <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="20">Image trop complexe (${contours.length} zones)</text>\n`;
-    svg += `  </g>\n`;
-    svg += `</svg>`;
-    return svg;
+    return generateFallbackSVG(width, height, contours.length);
   }
   
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
