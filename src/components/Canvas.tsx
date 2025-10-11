@@ -23,9 +23,10 @@ interface CanvasProps {
   } | null;
   onExportPNG: () => void;
   onExportJSON: () => void;
+  onZonesByColorReady?: (zonesByColor: Map<number, Zone[]>) => void;
 }
 
-export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON }: CanvasProps) => {
+export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON, onZonesByColorReady }: CanvasProps) => {
   const contoursCanvasRef = useRef<HTMLCanvasElement>(null);
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
   const colorizedCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,6 +85,13 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
     zones: processedData?.zones || [],
     labels: processedData?.labels,
   });
+
+  // Expose zonesByColor to parent when available
+  useEffect(() => {
+    if (onZonesByColorReady && colorizedInteractions.zonesByColor.size > 0) {
+      onZonesByColorReady(colorizedInteractions.zonesByColor);
+    }
+  }, [colorizedInteractions.zonesByColor, onZonesByColorReady]);
 
   const getActiveInteractions = () => {
     switch (activeTab) {

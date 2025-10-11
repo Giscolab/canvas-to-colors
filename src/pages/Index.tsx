@@ -3,6 +3,8 @@ import { Header } from "@/components/Header";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
+import { PalettePanel } from "@/components/PalettePanel";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { Canvas } from "@/components/Canvas";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -12,6 +14,9 @@ import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { useImageHistory } from "@/hooks/useImageHistory";
+import { useExport } from "@/hooks/useExport";
+import { Zone } from "@/hooks/useCanvasInteractions";
+import { IMAGE_PROCESSING, UI } from "@/config/constants";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -28,14 +33,19 @@ const Index = () => {
   const width = windowSize?.width ?? 0;
   const height = windowSize?.height ?? 0;
   const { saveJob } = useImageHistory();
+  const { exportPNG, exportJSON } = useExport();
+  const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
+  const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
 
   const handleImageSelect = async (file: File) => {
     try {
       setSelectedFile(file);
       // Normalize image with EXIF correction and resize
-      const normalizedUrl = await resizeForDisplay(file, 1200);
+      const normalizedUrl = await resizeForDisplay(file, IMAGE_PROCESSING.MAX_DISPLAY_WIDTH);
       setSelectedImageUrl(normalizedUrl);
       setProcessedData(null);
+      setZonesByColor(new Map());
+      setSelectedColorIdx(null);
       toast.success("Image chargée avec succès ! 🎨");
     } catch (error) {
       console.error("Image normalization error:", error);
@@ -73,7 +83,7 @@ const Index = () => {
       
       setProcessedData(result);
       setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 5000);
+      setTimeout(() => setShowConfetti(false), UI.CONFETTI_DURATION_MS);
       toast.success("🎉 Modèle généré avec succès !");
       
       // Save to history
@@ -104,57 +114,9 @@ const Index = () => {
     }
   };
 
-  const handleExportPNG = () => {
-    if (!processedData?.numbered) {
-      toast.error("Aucune donnée à exporter");
-      return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = processedData.numbered.width;
-    canvas.height = processedData.numbered.height;
-    const ctx = canvas.getContext('2d')!;
-    ctx.putImageData(processedData.numbered, 0, 0);
-    
-    canvas.toBlob((blob) => {
-      if (blob) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'paint-by-numbers.png';
-        a.click();
-        toast.success("✅ Export PNG réussi !");
-      }
-    });
-  };
-
-  const handleExportJSON = () => {
-    if (!processedData) {
-      toast.error("Aucune donnée à exporter");
-      return;
-    }
-
-    const exportData = {
-      palette: processedData.palette,
-      zones: processedData.zones,
-      metadata: {
-        numColors,
-        minRegionSize,
-        smoothness,
-        exportDate: new Date().toISOString()
-      }
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: 'application/json'
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'paint-by-numbers-data.json';
-    a.click();
-    toast.success("✅ Export JSON réussi !");
-  };
+  const handleExportPNG = () => exportPNG(processedData);
+  
+  const handleExportJSON = () => exportJSON(processedData, { numColors, minRegionSize, smoothness });
 
   return (
     <div className="min-h-screen">
@@ -163,8 +125,8 @@ const Index = () => {
           width={width}
           height={height}
           recycle={false}
-          numberOfPieces={500}
-          gravity={0.3}
+          numberOfPieces={UI.CONFETTI_PIECES}
+          gravity={UI.CONFETTI_GRAVITY}
         />
       )}
       
@@ -199,6 +161,16 @@ const Index = () => {
             {processedData && (
               <ColorPalette colors={processedData.palette} />
             )}
+
+            {processedData && zonesByColor.size > 0 && (
+              <PalettePanel
+                zonesByColor={zonesByColor}
+                selectedColorIdx={selectedColorIdx}
+                onColorSelect={setSelectedColorIdx}
+              />
+            )}
+
+            <HistoryPanel />
           </div>
 
           {/* Main Canvas Area */}
@@ -207,6 +179,7 @@ const Index = () => {
             processedData={processedData}
             onExportPNG={handleExportPNG}
             onExportJSON={handleExportJSON}
+            onZonesByColorReady={setZonesByColor}
           />
         </div>
       </main>

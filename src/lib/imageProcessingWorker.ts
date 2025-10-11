@@ -3,13 +3,35 @@
  */
 
 import { ProcessedResult } from './imageProcessing';
+import { IMAGE_PROCESSING } from '@/config/constants';
 
-const WORKER_TIMEOUT = 35000; // 35 seconds (slightly longer than internal timeout)
+const WORKER_TIMEOUT = IMAGE_PROCESSING.WORKER_TIMEOUT_MS;
+const WORKER_IDLE_TIMEOUT = IMAGE_PROCESSING.WORKER_IDLE_TIMEOUT_MS;
 const VALID_MESSAGE_TYPES = ['success', 'progress', 'error', 'done'];
+
+/**
+ * Validate image file before processing
+ */
+function validateImageFile(imageFile: File): void {
+  // Check file size
+  if (imageFile.size > IMAGE_PROCESSING.MAX_FILE_SIZE_BYTES) {
+    throw new Error(
+      `Image trop volumineuse : ${(imageFile.size / (1024 * 1024)).toFixed(1)} MB. ` +
+      `Maximum autorisé : ${IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB`
+    );
+  }
+
+  // Check file type
+  if (!imageFile.type.startsWith('image/')) {
+    throw new Error('Le fichier doit être une image');
+  }
+}
 
 export class ImageProcessingWorker {
   private worker: Worker | null = null;
   private isActive: boolean = false;
+  private idleTimeoutId: number | null = null;
+  private lastResult: ProcessedResult | null = null;
 
   /**
    * Process image using Web Worker with progress updates
@@ -22,9 +44,18 @@ export class ImageProcessingWorker {
     smoothness: number,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ProcessedResult> {
+    // Validate image file first
+    validateImageFile(imageFile);
+
     // Check Worker support
     if (typeof Worker === 'undefined') {
       throw new Error('Web Worker non supporté dans cet environnement');
+    }
+
+    // Clear idle timeout when processing starts
+    if (this.idleTimeoutId !== null) {
+      clearTimeout(this.idleTimeoutId);
+      this.idleTimeoutId = null;
     }
 
     return new Promise((resolve, reject) => {
@@ -38,6 +69,8 @@ export class ImageProcessingWorker {
           clearTimeout(timeoutId);
           timeoutId = null;
         }
+        // Start idle timeout after processing completes
+        this.startIdleTimeout();
       };
 
       try {
@@ -120,17 +153,36 @@ export class ImageProcessingWorker {
     });
   }
 
-  private lastResult: ProcessedResult | null = null;
+  /**
+   * Start idle timeout to terminate worker after inactivity
+   */
+  private startIdleTimeout(): void {
+    if (this.idleTimeoutId !== null) {
+      clearTimeout(this.idleTimeoutId);
+    }
+    
+    this.idleTimeoutId = setTimeout(() => {
+      console.log('Worker idle timeout - terminating...');
+      this.terminate();
+    }, WORKER_IDLE_TIMEOUT) as unknown as number;
+  }
 
   /**
    * Terminate worker and cleanup resources
    */
   terminate(): void {
     this.isActive = false;
+    
+    if (this.idleTimeoutId !== null) {
+      clearTimeout(this.idleTimeoutId);
+      this.idleTimeoutId = null;
+    }
+    
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;
     }
+    
     this.lastResult = null;
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { processImage } from '@/lib/imageProcessing';
+import { IMAGE_PROCESSING } from '@/config/constants';
 
 interface WorkerMessage {
   type: 'process';
@@ -40,6 +41,14 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     // Validate payload
     if (!imageFile || !numColors || minRegionSize === undefined || smoothness === undefined) {
       throw new Error('Invalid payload: missing required parameters');
+    }
+    
+    // Additional size validation
+    if (imageFile.size > IMAGE_PROCESSING.MAX_FILE_SIZE_BYTES) {
+      throw new Error(
+        `Image trop volumineuse : ${(imageFile.size / (1024 * 1024)).toFixed(1)} MB. ` +
+        `Maximum : ${IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB`
+      );
     }
     
     // Send progress updates
