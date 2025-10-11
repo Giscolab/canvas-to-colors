@@ -132,22 +132,24 @@ function generateCacheKey(params: CacheKey): string {
 }
 
 /**
- * Hash image data for cache key
+ * Hash image data for cache key using stable CRC32-like algorithm
  */
 async function hashImageData(imageData: ImageData): Promise<string> {
   // Use first 1000 pixels for fast hash
   const sample = imageData.data.slice(0, 4000);
-  const str = Array.from(sample).join(',');
   
-  // Simple but fast hash
+  // CRC32-like stable hash
   let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+  for (let i = 0; i < sample.length; i++) {
+    hash = ((hash << 5) - hash) + sample[i];
     hash = hash & hash; // Convert to 32bit integer
   }
   
-  return `${hash}_${imageData.width}_${imageData.height}`;
+  // Add dimensions to ensure uniqueness
+  const dimensionHash = ((imageData.width << 16) | imageData.height) >>> 0;
+  const finalHash = (hash ^ dimensionHash) >>> 0;
+  
+  return `${finalHash.toString(36)}_${imageData.width}_${imageData.height}`;
 }
 
 /**
@@ -340,8 +342,8 @@ function findNearestCentroid(
 // ============= CONNECTED COMPONENTS LABELING =============
 
 /**
- * Optimized label connected components using flood-fill (8-neighbors)
- * Uses pre-allocated typed arrays for better performance
+ * Optimized label connected components using BFS queue (8-neighbors)
+ * More stable than stack-based flood-fill, prevents overflow on large zones
  */
 function labelConnectedComponents(
   colorMap: number[],
@@ -352,10 +354,10 @@ function labelConnectedComponents(
   const zones: Zone[] = [];
   let currentLabel = 0;
   
-  // Pre-allocate stack buffers to avoid constant reallocation
-  const MAX_STACK_SIZE = Math.min(width * height, 500000);
-  const stackX = new Int32Array(MAX_STACK_SIZE);
-  const stackY = new Int32Array(MAX_STACK_SIZE);
+  // Use BFS queue instead of stack for better memory stability
+  const MAX_QUEUE_SIZE = Math.min(width * height, 1000000);
+  const queueX = new Int32Array(MAX_QUEUE_SIZE);
+  const queueY = new Int32Array(MAX_QUEUE_SIZE);
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -367,21 +369,24 @@ function labelConnectedComponents(
         let sumX = 0;
         let sumY = 0;
         
-        // Optimized iterative flood fill
-        let stackPtr = 0;
-        stackX[stackPtr] = x;
-        stackY[stackPtr] = y;
-        stackPtr++;
+        // BFS queue-based flood fill
+        let queueHead = 0;
+        let queueTail = 0;
+        
+        queueX[queueTail] = x;
+        queueY[queueTail] = y;
+        queueTail++;
         
         let iterations = 0;
-        const MAX_ITERATIONS = 1000000;
+        const MAX_ITERATIONS = 2000000;
         
-        while (stackPtr > 0 && iterations < MAX_ITERATIONS) {
+        while (queueHead < queueTail && iterations < MAX_ITERATIONS) {
           iterations++;
           
-          stackPtr--;
-          const cx = stackX[stackPtr];
-          const cy = stackY[stackPtr];
+          const cx = queueX[queueHead];
+          const cy = queueY[queueHead];
+          queueHead++;
+          
           const cidx = cy * width + cx;
           
           if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
@@ -393,50 +398,52 @@ function labelConnectedComponents(
           sumX += cx;
           sumY += cy;
           
-          // Add 8-neighbors (check bounds before adding)
-          if (stackPtr + 8 < MAX_STACK_SIZE) {
-            if (cx > 0) {
-              stackX[stackPtr] = cx - 1;
-              stackY[stackPtr] = cy;
-              stackPtr++;
+          // Add 8-neighbors to queue (check bounds and queue capacity)
+          if (queueTail + 8 < MAX_QUEUE_SIZE) {
+            // 4-connected neighbors
+            if (cx > 0 && labels[cy * width + (cx - 1)] === -1 && colorMap[cy * width + (cx - 1)] === colorIdx) {
+              queueX[queueTail] = cx - 1;
+              queueY[queueTail] = cy;
+              queueTail++;
             }
-            if (cx < width - 1) {
-              stackX[stackPtr] = cx + 1;
-              stackY[stackPtr] = cy;
-              stackPtr++;
+            if (cx < width - 1 && labels[cy * width + (cx + 1)] === -1 && colorMap[cy * width + (cx + 1)] === colorIdx) {
+              queueX[queueTail] = cx + 1;
+              queueY[queueTail] = cy;
+              queueTail++;
             }
-            if (cy > 0) {
-              stackX[stackPtr] = cx;
-              stackY[stackPtr] = cy - 1;
-              stackPtr++;
+            if (cy > 0 && labels[(cy - 1) * width + cx] === -1 && colorMap[(cy - 1) * width + cx] === colorIdx) {
+              queueX[queueTail] = cx;
+              queueY[queueTail] = cy - 1;
+              queueTail++;
             }
-            if (cy < height - 1) {
-              stackX[stackPtr] = cx;
-              stackY[stackPtr] = cy + 1;
-              stackPtr++;
+            if (cy < height - 1 && labels[(cy + 1) * width + cx] === -1 && colorMap[(cy + 1) * width + cx] === colorIdx) {
+              queueX[queueTail] = cx;
+              queueY[queueTail] = cy + 1;
+              queueTail++;
             }
-            if (cx > 0 && cy > 0) {
-              stackX[stackPtr] = cx - 1;
-              stackY[stackPtr] = cy - 1;
-              stackPtr++;
+            // Diagonal neighbors
+            if (cx > 0 && cy > 0 && labels[(cy - 1) * width + (cx - 1)] === -1 && colorMap[(cy - 1) * width + (cx - 1)] === colorIdx) {
+              queueX[queueTail] = cx - 1;
+              queueY[queueTail] = cy - 1;
+              queueTail++;
             }
-            if (cx < width - 1 && cy > 0) {
-              stackX[stackPtr] = cx + 1;
-              stackY[stackPtr] = cy - 1;
-              stackPtr++;
+            if (cx < width - 1 && cy > 0 && labels[(cy - 1) * width + (cx + 1)] === -1 && colorMap[(cy - 1) * width + (cx + 1)] === colorIdx) {
+              queueX[queueTail] = cx + 1;
+              queueY[queueTail] = cy - 1;
+              queueTail++;
             }
-            if (cx > 0 && cy < height - 1) {
-              stackX[stackPtr] = cx - 1;
-              stackY[stackPtr] = cy + 1;
-              stackPtr++;
+            if (cx > 0 && cy < height - 1 && labels[(cy + 1) * width + (cx - 1)] === -1 && colorMap[(cy + 1) * width + (cx - 1)] === colorIdx) {
+              queueX[queueTail] = cx - 1;
+              queueY[queueTail] = cy + 1;
+              queueTail++;
             }
-            if (cx < width - 1 && cy < height - 1) {
-              stackX[stackPtr] = cx + 1;
-              stackY[stackPtr] = cy + 1;
-              stackPtr++;
+            if (cx < width - 1 && cy < height - 1 && labels[(cy + 1) * width + (cx + 1)] === -1 && colorMap[(cy + 1) * width + (cx + 1)] === colorIdx) {
+              queueX[queueTail] = cx + 1;
+              queueY[queueTail] = cy + 1;
+              queueTail++;
             }
           } else {
-            console.warn(`Stack size limit reached for zone at (${x}, ${y})`);
+            console.warn(`Queue capacity reached for zone at (${x}, ${y}). Zone may be incomplete.`);
             break;
           }
         }
@@ -580,6 +587,10 @@ function mergeSmallZones(
     return zone.area > 0 ? (perimeter * perimeter) / zone.area : Infinity;
   };
 
+  // Pre-calculate and normalize compactness for all zones to merge
+  const compactnessValues = zonesToMerge.map(z => calculateCompactness(z));
+  const maxCompactness = Math.max(...compactnessValues, 1);
+
   // Build adjacency for small zones
   for (const smallZone of zonesToMerge) {
     const neighbors = new Set<number>();
@@ -603,7 +614,7 @@ function mergeSmallZones(
       }
     }
 
-    // Find nearest neighbor by color and compactness using zoneMap
+    // Find nearest neighbor by color and normalized compactness using zoneMap
     let bestNeighbor = -1;
     let minScore = Infinity;
     const smallColor = hexToRgb(palette[smallZone.colorIdx]);
@@ -616,8 +627,11 @@ function mergeSmallZones(
       const colorDist = colorDistance(smallColor, neighborColor);
       const compactness = calculateCompactness(neighborZone);
       
-      // Combined score: prioritize color similarity, penalize non-compact zones
-      const score = colorDist + compactness * 0.1;
+      // Normalize compactness to [0-1] range for stable weighting
+      const normalizedCompactness = maxCompactness > 0 ? compactness / maxCompactness : 0;
+      
+      // Combined score: prioritize color similarity (80%), penalize non-compact zones (20%)
+      const score = colorDist * 0.8 + normalizedCompactness * 20;
       
       if (score < minScore) {
         minScore = score;
@@ -640,8 +654,8 @@ function mergeSmallZones(
 // ============= MORPHOLOGICAL SMOOTHING =============
 
 /**
- * Apply morphological operations for edge smoothing
- * Uses a larger neighborhood (range=4) for more aggressive smoothing inspired by pbnify
+ * Apply morphological operations for edge smoothing with adaptive range
+ * Uses adaptive neighborhood size based on image dimensions for better performance
  */
 function smoothZones(
   labels: Int32Array,
@@ -651,16 +665,18 @@ function smoothZones(
 ): Int32Array {
   let current = new Int32Array(labels);
   
+  // Adaptive range based on image size (smaller images = smaller range)
+  const imageSize = width * height;
+  const range = imageSize < 250000 ? 2 : (imageSize < 500000 ? 3 : 4);
+  
   for (let iter = 0; iter < iterations; iter++) {
     const next = new Int32Array(current);
-    
-    const range = 4; // Larger range for more aggressive smoothing (from pbnify)
     
     for (let y = range; y < height - range; y++) {
       for (let x = range; x < width - range; x++) {
         const idx = y * width + x;
         
-        // Count neighbor labels in larger vicinity
+        // Count neighbor labels in adaptive vicinity
         const counts = new Map<number, number>();
         let maxCount = 0;
         
@@ -1054,6 +1070,10 @@ function traceContours(
         return { x, y };
       });
 
+      // Filter out micro-contours (parasitic noise)
+      const area = calculatePolygonArea(path);
+      if (area < 10) continue;
+
       const simplifiedPath = simplifyPath(path); // Adaptive simplification based on area
       if (simplifiedPath.length >= 3) {
         contours.push({ zoneId: zone.id, path: simplifiedPath });
@@ -1076,15 +1096,19 @@ function generateSVG(
   width: number,
   height: number
 ): string {
-  // Safety check: if too many contours, return a simplified SVG
-  const MAX_CONTOURS_FOR_SVG = 1000;
+  // Dynamic SVG limit based on average contour complexity
+  const avgContourComplexity = contours.length > 0 
+    ? contours.reduce((sum, c) => sum + c.path.length, 0) / contours.length 
+    : 10;
+  const MAX_CONTOURS_FOR_SVG = Math.floor(Math.min(2000, 50000 / Math.max(1, avgContourComplexity)));
+  
   if (contours.length > MAX_CONTOURS_FOR_SVG) {
-    console.warn(`Too many contours (${contours.length}). Generating simplified SVG.`);
+    console.warn(`Too many contours (${contours.length}, avg complexity: ${avgContourComplexity.toFixed(1)}). Generating simplified SVG.`);
     // Return a basic SVG with colored rectangles for each zone instead
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">\n`;
     svg += `  <g id="zones">\n`;
     svg += `    <rect width="${width}" height="${height}" fill="#f0f0f0" />\n`;
-    svg += `    <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="20">Too many zones detected</text>\n`;
+    svg += `    <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="20">Image trop complexe (${contours.length} zones)</text>\n`;
     svg += `  </g>\n`;
     svg += `</svg>`;
     return svg;
@@ -1229,13 +1253,13 @@ function createNumberedVersion(
     // Use optimal position
     const position = findBestLabelPosition(zone, labels, width, height);
     
-    // White background for number
+    // Semi-transparent white background for better visibility on all colors
     const padding = fontSize * 0.4;
     const textMetrics = ctx.measureText(number.toString());
     const bgWidth = textMetrics.width + padding * 2;
     const bgHeight = fontSize + padding;
     
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.fillRect(
       position.x - bgWidth / 2, 
       position.y - bgHeight / 2, 
@@ -1496,11 +1520,17 @@ export async function processImage(
       console.log('Step 1: Quantizing colors...');
       const palette = quantizeColors(imageData, numColors);
 
-      // STEP 2: Map pixels to palette
-      onProgress?.("Mapping des pixels...", 25);
-      console.log('Step 2: Mapping pixels to palette...');
+      // STEP 2: Map pixels to palette using ΔE2000 perceptual distance
+      onProgress?.("Mapping des pixels (ΔE2000)...", 25);
+      console.log('Step 2: Mapping pixels to palette with perceptual distance...');
       const colorMap: number[] = [];
       const quantizedData = new ImageData(width, height);
+
+      // Pre-convert palette to Lab for performance
+      const paletteLabCache = palette.map(hex => {
+        const [r, g, b] = hexToRgb(hex);
+        return rgbToLab(r, g, b);
+      });
 
       for (let i = 0; i < imageData.data.length; i += 4) {
         const r = imageData.data[i];
@@ -1510,13 +1540,11 @@ export async function processImage(
         let minDist = Infinity;
         let colorIndex = 0;
 
-        palette.forEach((hex, idx) => {
-          const [pr, pg, pb] = hexToRgb(hex);
-          const dist = Math.sqrt(
-            Math.pow(r - pr, 2) +
-            Math.pow(g - pg, 2) +
-            Math.pow(b - pb, 2)
-          );
+        const pixelLab = rgbToLab(r, g, b);
+
+        // Use pre-calculated Lab palette for ΔE2000 distance
+        paletteLabCache.forEach((paletteLabColor, idx) => {
+          const dist = deltaE2000(pixelLab, paletteLabColor);
 
           if (dist < minDist) {
             minDist = dist;
@@ -1637,6 +1665,11 @@ export async function processImage(
         labels: smoothedLabels,
         colorZoneMapping
       };
+
+      // Validate result integrity before caching
+      if (refinedZones.length === 0 || palette.length === 0 || mergedContours.length === 0) {
+        throw new Error('Résultat de traitement invalide : zones, palette ou contours vides');
+      }
 
       // Cache the result
       onProgress?.("Mise en cache...", 99);
