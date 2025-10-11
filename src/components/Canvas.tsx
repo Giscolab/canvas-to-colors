@@ -34,36 +34,24 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Draw canvases once when data is available
+  // Draw all canvases once when data is available (optimized single loop)
   useEffect(() => {
-    if (processedData?.contours && contoursCanvasRef.current) {
-      const canvas = contoursCanvasRef.current;
-      canvas.width = processedData.contours.width;
-      canvas.height = processedData.contours.height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (ctx) ctx.putImageData(processedData.contours, 0, 0);
-    }
-  }, [processedData?.contours]);
+    if (!processedData) return;
 
-  useEffect(() => {
-    if (processedData?.numbered && numberedCanvasRef.current) {
-      const canvas = numberedCanvasRef.current;
-      canvas.width = processedData.numbered.width;
-      canvas.height = processedData.numbered.height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (ctx) ctx.putImageData(processedData.numbered, 0, 0);
-    }
-  }, [processedData?.numbered]);
-
-  useEffect(() => {
-    if (processedData?.colorized && colorizedCanvasRef.current) {
-      const canvas = colorizedCanvasRef.current;
-      canvas.width = processedData.colorized.width;
-      canvas.height = processedData.colorized.height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-      if (ctx) ctx.putImageData(processedData.colorized, 0, 0);
-    }
-  }, [processedData?.colorized]);
+    [
+      { data: processedData.contours, ref: contoursCanvasRef },
+      { data: processedData.numbered, ref: numberedCanvasRef },
+      { data: processedData.colorized, ref: colorizedCanvasRef }
+    ].forEach(({ data, ref }) => {
+      if (data && ref.current) {
+        const canvas = ref.current;
+        canvas.width = data.width;
+        canvas.height = data.height;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (ctx) ctx.putImageData(data, 0, 0);
+      }
+    });
+  }, [processedData]);
 
   const contoursInteractions = useCanvasInteractions({
     canvasRef: contoursCanvasRef,
@@ -86,24 +74,33 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
     labels: processedData?.labels,
   });
 
-  // Expose zonesByColor to parent when available
+  // Expose zonesByColor to parent when available (debounced for performance)
   useEffect(() => {
     if (onZonesByColorReady && colorizedInteractions.zonesByColor.size > 0) {
-      onZonesByColorReady(colorizedInteractions.zonesByColor);
+      const timeout = setTimeout(() => {
+        onZonesByColorReady(colorizedInteractions.zonesByColor);
+      }, 150);
+      return () => clearTimeout(timeout);
     }
   }, [colorizedInteractions.zonesByColor, onZonesByColorReady]);
 
-  const getActiveInteractions = () => {
-    switch (activeTab) {
-      case "contours": return contoursInteractions;
-      case "numbered": return numberedInteractions;
-      case "colorized": return colorizedInteractions;
-      default: return null;
-    }
+  // Centralized interactions mapping (more efficient than switch)
+  const interactions = {
+    contours: contoursInteractions,
+    numbered: numberedInteractions,
+    colorized: colorizedInteractions
   };
 
-  const activeInteractions = getActiveInteractions();
+  const activeInteractions = activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
   const zonesCount = processedData?.zones?.length || 0;
+
+  // Freeze document scroll when in fullscreen mode
+  useEffect(() => {
+    document.body.style.overflow = isFullscreen ? "hidden" : "auto";
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [isFullscreen]);
 
   return (
     <Card className={`p-4 flex-1 relative border bg-card text-card-foreground shadow-sm ${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
@@ -154,7 +151,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             <TabsTrigger value="colorized" disabled={!processedData}>Aperçu</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="original" className="mt-3">
+          <TabsContent value="original" className="mt-3 transition-opacity duration-300 ease-in-out">
             <div className="canvas-container bg-secondary rounded-md shadow-inner">
               {originalImage ? (
                 <img src={originalImage} alt="Original" />
@@ -164,7 +161,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             </div>
           </TabsContent>
 
-          <TabsContent value="contours" className="mt-3">
+          <TabsContent value="contours" className="mt-3 transition-opacity duration-300 ease-in-out">
             <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.contours ? (
                 <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
@@ -174,7 +171,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             </div>
           </TabsContent>
 
-          <TabsContent value="numbered" className="mt-3">
+          <TabsContent value="numbered" className="mt-3 transition-opacity duration-300 ease-in-out">
             <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.numbered ? (
                 <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
@@ -184,7 +181,7 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
             </div>
           </TabsContent>
 
-          <TabsContent value="colorized" className="mt-3">
+          <TabsContent value="colorized" className="mt-3 transition-opacity duration-300 ease-in-out">
             <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.colorized ? (
                 <canvas ref={colorizedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
