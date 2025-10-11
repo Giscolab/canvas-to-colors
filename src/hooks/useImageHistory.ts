@@ -25,10 +25,16 @@ export function useImageHistory() {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Si pas d'utilisateur connecté, on ne sauvegarde pas
+      if (!user) {
+        console.log('No user logged in, skipping job save');
+        return false;
+      }
+
       const { error } = await supabase
         .from('image_jobs')
         .insert({
-          user_id: user?.id,
+          user_id: user.id, // Toujours lié à l'utilisateur connecté
           image_name: data.image_name,
           image_size: data.image_size,
           width: data.width,

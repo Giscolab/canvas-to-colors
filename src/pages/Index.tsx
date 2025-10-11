@@ -5,6 +5,7 @@ import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
+import { AuthPanel } from "@/components/AuthPanel";
 import { Canvas } from "@/components/Canvas";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -15,6 +16,7 @@ import { useWindowSize } from "@/hooks/useWindowSize";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { useImageHistory } from "@/hooks/useImageHistory";
 import { useExport } from "@/hooks/useExport";
+import { useAuth } from "@/hooks/useAuth";
 import { Zone } from "@/hooks/useCanvasInteractions";
 import { IMAGE_PROCESSING, UI } from "@/config/constants";
 
@@ -34,6 +36,7 @@ const Index = () => {
   const height = windowSize?.height ?? 0;
   const { saveJob } = useImageHistory();
   const { exportPNG, exportJSON } = useExport();
+  const { user } = useAuth();
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
 
@@ -170,7 +173,9 @@ const Index = () => {
               />
             )}
 
-            <HistoryPanel />
+            {user && <HistoryPanel />}
+            
+            <AuthPanel />
           </div>
 
           {/* Main Canvas Area */}
