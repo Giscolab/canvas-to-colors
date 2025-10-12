@@ -300,6 +300,21 @@ export async function analyzeImageColors(
     recommendedMinRegionSize = 200;
   }
 
+  // === 6.5️⃣ Détection du mode de traitement ===
+  let mode: 'vector' | 'photo' = 'photo';
+  if (
+    uniqueCount < 300 &&
+    complexityScore < 25 &&
+    dominantColors.length <= 10
+  ) {
+    mode = 'vector';
+  }
+
+  if (mode === 'vector') {
+    recommendedNumColors = Math.min(recommendedNumColors, 12);
+    recommendedMinRegionSize = Math.max(20, recommendedMinRegionSize);
+  }
+
   // === 7️⃣ Tri et pondération des couleurs dominantes ===
   const totalCount = Array.from(colorCounts.values()).reduce((acc, val) => acc + val, 0);
   const sortedColors = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
