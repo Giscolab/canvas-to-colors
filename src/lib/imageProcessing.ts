@@ -34,9 +34,11 @@ export interface ProgressEvent {
 export interface ColorAnalysis {
   uniqueColorsCount: number;
   dominantColors: string[]; // Top 10 couleurs
+  dominantWeights: number[]; // Proportion de chaque couleur dominante
   complexityScore: number; // 0-100
   recommendedNumColors: number;
   recommendedMinRegionSize: number;
+  quantStep?: number;
 }
 
 export interface ProcessedResult {
@@ -212,95 +214,108 @@ export async function analyzeImageColors(
   onProgress?: (progress: number) => void
 ): Promise<ColorAnalysis> {
   const loadedImage = await loadImageSource(imageSource);
-  
-  // Scale down if too large (max 1200px for analysis)
+
+  // === 1️⃣ Mise à l'échelle (max 1200px) ===
   const maxDim = 1200;
-  let width = loadedImage.width;
-  let height = loadedImage.height;
+  let { width, height } = loadedImage;
 
   if (width > maxDim || height > maxDim) {
-    if (width > height) {
-      height = Math.round((height * maxDim) / width);
-      width = maxDim;
-    } else {
-      width = Math.round((width * maxDim) / height);
-      height = maxDim;
-    }
+    const ratio = Math.min(maxDim / width, maxDim / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
   }
 
   const { ctx } = canvasFactory.createCanvas(width, height);
   ctx.drawImage(loadedImage.source, 0, 0, width, height);
   const imageData = ctx.getImageData(0, 0, width, height);
-  
   loadedImage.cleanup?.();
-  
-  // Sample intelligently (no need to analyze all pixels)
-  const sampleRate = Math.max(1, Math.floor(imageData.width * imageData.height / 100000));
-  const colorSet = new Set<string>();
+
+  // === 2️⃣ Premier passage rapide pour estimer la complexité brute ===
+  const totalPixels = imageData.width * imageData.height;
+  const roughSampleRate = Math.max(1, Math.floor(totalPixels / 100000));
+  const roughColors = new Set<string>();
+
+  for (let i = 0; i < imageData.data.length; i += 4 * roughSampleRate) {
+    const hex = rgbToHex(
+      imageData.data[i],
+      imageData.data[i + 1],
+      imageData.data[i + 2]
+    );
+    roughColors.add(hex);
+  }
+  const roughUniqueCount = roughColors.size;
+
+  // === 3️⃣ Détermination adaptative du pas de quantification ===
+  let quantStep: number;
+  if (roughUniqueCount < 50) quantStep = 2;
+  else if (roughUniqueCount < 500) quantStep = 4;
+  else quantStep = 8;
+
+  // === 4️⃣ Échantillonnage et comptage précis avec quantStep ===
   const colorCounts = new Map<string, number>();
-  
+  const colorSet = new Set<string>();
+  const sampleRate = Math.max(1, Math.floor(totalPixels / 80000));
+
   for (let i = 0; i < imageData.data.length; i += 4 * sampleRate) {
-    const r = quantizeChannel(imageData.data[i]);
-    const g = quantizeChannel(imageData.data[i + 1]);
-    const b = quantizeChannel(imageData.data[i + 2]);
+    const r = quantizeChannel(imageData.data[i], quantStep);
+    const g = quantizeChannel(imageData.data[i + 1], quantStep);
+    const b = quantizeChannel(imageData.data[i + 2], quantStep);
     const hex = rgbToHex(r, g, b);
-    
+
     colorSet.add(hex);
     colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
-    
-    if (i % 10000 === 0 && onProgress) {
-      onProgress((i / imageData.data.length) * 100);
+
+    if (i % 20000 === 0 && onProgress) {
+      onProgress((i / imageData.data.length) * 80);
     }
   }
-  
-  // Calculate complexity (simplified entropy)
-  const totalPixels = imageData.data.length / 4;
+
+  // === 5️⃣ Calcul d'entropie (complexité visuelle) ===
   const entropy = Array.from(colorCounts.values())
     .map(count => {
       const p = count / totalPixels;
-      return -p * Math.log2(p);
+      return p === 0 ? 0 : -p * Math.log2(p);
     })
     .reduce((sum, val) => sum + val, 0);
-  
+
   const complexityScore = Math.min(100, Math.round(entropy * 10));
-  
-  // Smart recommendations
+
+  // === 6️⃣ Recommandations intelligentes ===
   const uniqueCount = colorSet.size;
   let recommendedNumColors: number;
   let recommendedMinRegionSize: number;
-  
   if (uniqueCount < 16) {
-    // Simple image (logo, line art)
     recommendedNumColors = Math.max(8, uniqueCount);
     recommendedMinRegionSize = 20;
   } else if (uniqueCount < 100) {
-    // Medium image (colored illustration)
     recommendedNumColors = 16;
     recommendedMinRegionSize = 50;
   } else if (uniqueCount < 1000) {
-    // Complex image (detailed drawing)
     recommendedNumColors = 24;
     recommendedMinRegionSize = 100;
   } else {
-    // Very complex image (realistic photo)
     recommendedNumColors = 32;
     recommendedMinRegionSize = 200;
   }
-  
-  // Top 10 dominant colors
-  const dominantColors = Array.from(colorCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([hex]) => hex);
-  
+
+  // === 7️⃣ Tri et pondération des couleurs dominantes ===
+  const totalCount = Array.from(colorCounts.values()).reduce((acc, val) => acc + val, 0);
+  const sortedColors = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
+  const dominantColors = sortedColors.slice(0, 10).map(([hex]) => hex);
+  const dominantWeights = sortedColors.slice(0, 10).map(([_, count]) => (totalCount ? count / totalCount : 0));
+
   if (onProgress) onProgress(100);
-  
+
+  console.log(`🧠 Analyse auto :\n  • Couleurs uniques (après quantification ${quantStep}) : ${uniqueCount}\n  • Complexité visuelle : ${complexityScore}/100\n  • Palette recommandée : ${recommendedNumColors} couleurs\n  • Taille min. région : ${recommendedMinRegionSize}px\n  `);
+
   return {
     uniqueColorsCount: uniqueCount,
     dominantColors,
+    dominantWeights,
     complexityScore,
     recommendedNumColors,
-    recommendedMinRegionSize
+    recommendedMinRegionSize,
+    quantStep,
   };
 }
 

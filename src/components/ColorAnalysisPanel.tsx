@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ColorAnalysis } from "@/lib/imageProcessing";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, Tooltip, XAxis, YAxis, Cell } from "recharts";
 
 interface ColorAnalysisPanelProps {
   analysis: ColorAnalysis | null;
@@ -19,7 +19,9 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
         </CardHeader>
         <CardContent>
           <Progress value={50} className="h-2" />
-          <p className="text-xs text-muted-foreground mt-2">Analyse des couleurs en cours...</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Détection des couleurs et évaluation de la complexité...
+          </p>
         </CardContent>
       </Card>
     );
@@ -35,57 +37,50 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
 
   const complexity = getComplexityLabel(analysis.complexityScore);
 
-  // Convertir les couleurs dominantes en données pour le graphe
-  const colorData = analysis.dominantColors.map((hex, i) => ({
-    color: hex,
+  const chartData = analysis.dominantColors.map((color, i) => ({
     name: `#${i + 1}`,
-    value: (analysis.dominantWeights?.[i] ?? 1) * 100 || 10,
+    value: Math.round((analysis.dominantWeights[i] ?? 0) * 100),
+    color,
   }));
 
   return (
-    <Card className="shadow-lg border-border/40">
+    <Card className="shadow-md">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          📊 Analyse de l'image
-        </CardTitle>
+        <CardTitle className="text-lg">📊 Analyse de l'image</CardTitle>
       </CardHeader>
-
       <CardContent className="space-y-5">
-        {/* === Couleurs uniques === */}
         <div>
           <Label className="text-sm text-muted-foreground">Couleurs uniques détectées</Label>
-          <p className="text-2xl font-bold text-foreground">{analysis.uniqueColorsCount}</p>
+          <p className="text-2xl font-bold">{analysis.uniqueColorsCount}</p>
         </div>
 
-        {/* === Complexité visuelle === */}
         <div>
           <Label className="text-sm text-muted-foreground">Complexité visuelle</Label>
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex justify-between items-center mt-1">
             <Badge className={complexity.color}>{complexity.label}</Badge>
             <span className="text-sm text-muted-foreground">{analysis.complexityScore}/100</span>
           </div>
-          <Progress
-            value={analysis.complexityScore}
-            className="h-2 mt-2 bg-muted"
-          />
+          <Progress value={analysis.complexityScore} className="h-2 mt-2" />
         </div>
 
-        {/* === Recommandations === */}
         <div>
           <Label className="text-sm text-muted-foreground">Recommandations</Label>
-          <ul className="text-sm mt-2 space-y-1 text-foreground">
-            <li>🎨 Nombre de couleurs recommandé : <strong>{analysis.recommendedNumColors}</strong></li>
-            <li>🧩 Taille min. de région : <strong>{analysis.recommendedMinRegionSize}px</strong></li>
-            {analysis.quantStep && (
-              <li>🧠 Pas de quantification : <strong>{analysis.quantStep}</strong></li>
-            )}
+          <ul className="text-sm space-y-1 mt-2">
+            <li>
+              🎨 Nombre de couleurs : <strong>{analysis.recommendedNumColors}</strong>
+            </li>
+            <li>
+              🧩 Taille min. région : <strong>{analysis.recommendedMinRegionSize}px</strong>
+            </li>
+            <li>
+              🧠 Niveau de quantification : <strong>{analysis.quantStep ?? "—"}</strong>
+            </li>
           </ul>
         </div>
 
-        {/* === Couleurs dominantes === */}
         <div>
           <Label className="text-sm text-muted-foreground">Couleurs dominantes</Label>
-          <div className="flex gap-1 flex-wrap mt-2">
+          <div className="flex flex-wrap gap-2 mt-2">
             {analysis.dominantColors.map(hex => (
               <div
                 key={hex}
@@ -97,32 +92,21 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
           </div>
         </div>
 
-        {/* === Histogramme des couleurs === */}
-        {colorData.length > 1 && (
+        {chartData.length > 1 && (
           <div className="mt-4">
-            <Label className="text-sm text-muted-foreground mb-1 block">Distribution des couleurs</Label>
-            <div className="h-40">
+            <Label className="text-sm text-muted-foreground">Répartition des couleurs (%)</Label>
+            <div className="h-40 mt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={colorData}>
+                <BarChart data={chartData}>
                   <XAxis dataKey="name" hide />
                   <YAxis hide />
                   <Tooltip
-                    formatter={(v: number, _: string, d: any) => [
-                      `${v.toFixed(1)}%`,
-                      d.payload.color,
-                    ]}
+                    formatter={(v: number, _: string, d: any) => [`${v.toFixed(1)}%`, d.payload.color]}
                     contentStyle={{ fontSize: "0.75rem" }}
                   />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {colorData.map((entry, index) => (
-                      <rect
-                        key={index}
-                        x={index * 40}
-                        y={100 - entry.value}
-                        width="20"
-                        height={entry.value}
-                        fill={entry.color}
-                      />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${entry.name}`} fill={entry.color} />
                     ))}
                   </Bar>
                 </BarChart>
