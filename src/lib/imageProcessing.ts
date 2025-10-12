@@ -374,8 +374,8 @@ function consolidateColorMap(
     }
   }
   
-  // Remap colorMap indices
-  const consolidatedColorMap = colorMap.map(oldIndex => mergeMap.get(oldIndex)!);
+  // Remap colorMap indices (with fallback protection against stack overflow)
+  const consolidatedColorMap = colorMap.map(oldIndex => mergeMap.get(oldIndex) ?? 0);
   
   return { consolidatedPalette, consolidatedColorMap };
 }
@@ -423,10 +423,11 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
     const labCentroids = centroids.map(c => rgbToLab(c[0], c[1], c[2]));
     
     // Assign pixels to nearest centroid using pre-calculated Lab
-    pixels.forEach(pixel => {
-      const nearest = findNearestCentroid(pixel, centroids, labCentroids);
-      clusters[nearest].push(pixel);
-    });
+    // Use for loop instead of forEach to prevent potential stack overflow
+    for (let i = 0; i < pixels.length; i++) {
+      const nearest = findNearestCentroid(pixels[i], centroids, labCentroids);
+      clusters[nearest].push(pixels[i]);
+    }
     
     // Update centroids and track maximum shift
     let maxShift = 0;
@@ -559,24 +560,26 @@ function findNearestCentroid(
   
   if (labCentroids) {
     // Use pre-calculated Lab centroids (much faster)
-    labCentroids.forEach((centroidLab, i) => {
-      const dist = deltaE2000(pixelLab, centroidLab);
+    // Use for loop to prevent stack overflow on large arrays
+    for (let i = 0; i < labCentroids.length; i++) {
+      const dist = deltaE2000(pixelLab, labCentroids[i]);
       if (dist < minDist) {
         minDist = dist;
         nearest = i;
       }
-    });
+    }
   } else {
     // Fallback: calculate Lab on-the-fly
-    centroids.forEach((centroid, i) => {
-      const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
+    // Use for loop to prevent stack overflow
+    for (let i = 0; i < centroids.length; i++) {
+      const centroidRgb: [number, number, number] = [centroids[i][0], centroids[i][1], centroids[i][2]];
       const dist = perceptualDistance(pixelRgb, centroidRgb);
       
       if (dist < minDist) {
         minDist = dist;
         nearest = i;
       }
-    });
+    }
   }
   
   return nearest;
@@ -1855,13 +1858,14 @@ export async function processImage(
           let colorIndex = 0;
   
           const pixelLab = rgbToLab(r, g, b);
-          paletteLabCache.forEach((paletteLabColor, idx) => {
-            const dist = deltaE2000(pixelLab, paletteLabColor);
+          // Use for loop instead of forEach to prevent stack overflow
+          for (let idx = 0; idx < paletteLabCache.length; idx++) {
+            const dist = deltaE2000(pixelLab, paletteLabCache[idx]);
             if (dist < minDist) {
               minDist = dist;
               colorIndex = idx;
             }
-          });
+          }
   
           colorMap.push(colorIndex);
           const [qr, qg, qb] = hexToRgb(palette[colorIndex]);
