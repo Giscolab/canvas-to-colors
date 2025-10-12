@@ -375,7 +375,12 @@ function consolidateColorMap(
   }
   
   // Remap colorMap indices (with fallback protection against stack overflow)
-  const consolidatedColorMap = colorMap.map(oldIndex => mergeMap.get(oldIndex) ?? 0);
+  const consolidatedColorMap: number[] = new Array(colorMap.length);
+  for (let i = 0; i < colorMap.length; i++) {
+    const mappedIndex = mergeMap.get(colorMap[i]);
+    consolidatedColorMap[i] =
+      typeof mappedIndex === "number" && mappedIndex >= 0 ? mappedIndex : 0;
+  }
   
   return { consolidatedPalette, consolidatedColorMap };
 }
@@ -1925,13 +1930,26 @@ export async function processImage(
         colorMap.splice(0, colorMap.length, ...consolidatedColorMap);
         
         // Update quantizedData with consolidated colors
-        for (let i = 0; i < consolidatedColorMap.length; i++) {
+        const pixelCount = Math.min(
+          consolidatedColorMap.length,
+          width * height
+        );
+        for (let i = 0; i < pixelCount; i++) {
           const colorIndex = consolidatedColorMap[i];
+          if (
+            typeof colorIndex !== "number" ||
+            colorIndex < 0 ||
+            colorIndex >= consolidatedPalette.length
+          ) {
+            continue;
+          }
+
           const [qr, qg, qb] = hexToRgb(consolidatedPalette[colorIndex]);
-          quantizedData.data[i * 4] = qr;
-          quantizedData.data[i * 4 + 1] = qg;
-          quantizedData.data[i * 4 + 2] = qb;
-          quantizedData.data[i * 4 + 3] = 255;
+          const base = i * 4;
+          quantizedData.data[base] = qr;
+          quantizedData.data[base + 1] = qg;
+          quantizedData.data[base + 2] = qb;
+          quantizedData.data[base + 3] = 255;
         }
   
         // === STEP 3: Connected components ===
