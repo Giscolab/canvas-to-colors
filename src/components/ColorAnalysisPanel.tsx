@@ -31,6 +31,19 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
     return () => mediaQuery.removeEventListener("change", listener);
   }, []);
 
+  const chartData = useMemo(() => {
+    if (!analysis) return [];
+    if (analysis.dominantColors.length === 0) return [];
+
+    const fallbackWeight = 1 / analysis.dominantColors.length;
+
+    return analysis.dominantColors.map((color, index) => ({
+      name: `#${index + 1}`,
+      value: Math.round((analysis.dominantWeights?.[index] ?? fallbackWeight) * 100),
+      color,
+    }));
+  }, [analysis]);
+
   if (isAnalyzing) {
     return (
       <Card className="shadow-lg border-border/40 animate-pulse">
@@ -46,19 +59,6 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
       </Card>
     );
   }
-
-  const chartData = useMemo(() => {
-    if (!analysis) return [];
-    if (analysis.dominantColors.length === 0) return [];
-
-    const fallbackWeight = 1 / analysis.dominantColors.length;
-
-    return analysis.dominantColors.map((color, index) => ({
-      name: `#${index + 1}`,
-      value: Math.round((analysis.dominantWeights?.[index] ?? fallbackWeight) * 100),
-      color,
-    }));
-  }, [analysis]);
 
   if (!analysis) return null;
 
