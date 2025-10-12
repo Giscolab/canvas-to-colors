@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,11 @@ interface ColorAnalysisPanelProps {
   analysis: ColorAnalysis | null;
   isAnalyzing: boolean;
 }
+
+const COMPLEXITY_THRESHOLDS = {
+  simple: 30,
+  medium: 60,
+} as const;
 
 export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanelProps) {
   const [isDark, setIsDark] = useState(false);
@@ -44,9 +49,13 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
 
   const chartData = useMemo(() => {
     if (!analysis) return [];
+    if (analysis.dominantColors.length === 0) return [];
+
+    const fallbackWeight = 1 / analysis.dominantColors.length;
+
     return analysis.dominantColors.map((color, index) => ({
       name: `#${index + 1}`,
-      value: Math.round((analysis.dominantWeights?.[index] ?? 0) * 100),
+      value: Math.round((analysis.dominantWeights?.[index] ?? fallbackWeight) * 100),
       color,
     }));
   }, [analysis]);
@@ -54,8 +63,10 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
   if (!analysis) return null;
 
   const getComplexityLabel = (score: number) => {
-    if (score < 30) return { label: "Simple", color: "bg-green-500 text-white" };
-    if (score < 60) return { label: "Moyenne", color: "bg-yellow-500 text-black" };
+    if (score < COMPLEXITY_THRESHOLDS.simple)
+      return { label: "Simple", color: "bg-green-500 text-white" };
+    if (score < COMPLEXITY_THRESHOLDS.medium)
+      return { label: "Moyenne", color: "bg-yellow-500 text-black" };
     return { label: "Complexe", color: "bg-red-500 text-white" };
   };
 
@@ -63,11 +74,11 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
 
   const dominantCount = analysis.dominantColors.length;
   const modeLabel = analysis.mode === "vector" ? "vectorielle" : "photographique";
-const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
-  analysis.mode === "vector" ? "(formes nettes)" : ""
-} avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes, idéal pour ${
-  analysis.recommendedNumColors
-} zone${analysis.recommendedNumColors > 1 ? "s" : ""}.`;
+  const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
+    analysis.mode === "vector" ? "(formes nettes)" : ""
+  } avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes, idéal pour ${
+    analysis.recommendedNumColors
+  } zone${analysis.recommendedNumColors > 1 ? "s" : ""}.`;
 
 
   type TooltipValueType = number;
@@ -112,13 +123,13 @@ const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
             value={analysis.complexityScore}
             className={`h-2 mt-2 ${isDark ? "bg-neutral-800" : "bg-neutral-200"}`}
             style={{
-              backgroundColor:
-                analysis.complexityScore < 30
+              "--progress-bar-color":
+                analysis.complexityScore < COMPLEXITY_THRESHOLDS.simple
                   ? "#22c55e"
-                  : analysis.complexityScore < 60
+                  : analysis.complexityScore < COMPLEXITY_THRESHOLDS.medium
                     ? "#eab308"
                     : "#ef4444",
-            }}
+            } as CSSProperties}
           />
         </div>
 
@@ -137,9 +148,6 @@ const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
             <li>
               🧭 Mode détecté : <strong>{modeLabel}</strong>
             </li>
-            <li>
-              🧭 Mode détecté : <strong>{modeLabel}</strong>
-            </li>
           </ul>
         </div>
 
@@ -149,6 +157,8 @@ const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
             {analysis.dominantColors.map(hex => (
               <div
                 key={hex}
+                aria-label={`Couleur dominante ${hex}`}
+                role="img"
                 className={`w-8 h-8 rounded-md border ${
                   isDark ? "border-neutral-700" : "border-neutral-300"
                 } shadow-sm`}
