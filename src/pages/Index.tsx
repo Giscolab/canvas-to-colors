@@ -6,8 +6,9 @@ import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { AuthPanel } from "@/components/AuthPanel";
+import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Canvas } from "@/components/Canvas";
-import { ProcessedResult } from "@/lib/imageProcessing";
+import { ProcessedResult, ColorAnalysis, analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
 import { toast } from "sonner";
@@ -31,6 +32,8 @@ const Index = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [colorAnalysis, setColorAnalysis] = useState<ColorAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const windowSize = useWindowSize();
   const width = windowSize?.width ?? 0;
   const height = windowSize?.height ?? 0;
@@ -50,6 +53,26 @@ const Index = () => {
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
       toast.success("Image chargée avec succès ! 🎨");
+      
+      // Launch color analysis automatically
+      setIsAnalyzing(true);
+      try {
+        const analysis = await analyzeImageColors(file, (progress) => {
+          console.log(`Analyse: ${progress.toFixed(0)}%`);
+        });
+        setColorAnalysis(analysis);
+        
+        // Apply recommendations automatically
+        setNumColors(analysis.recommendedNumColors);
+        setMinRegionSize(analysis.recommendedMinRegionSize);
+        
+        toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées — Recommandations appliquées`);
+      } catch (error) {
+        console.error("Color analysis error:", error);
+        toast.error("Erreur lors de l'analyse des couleurs");
+      } finally {
+        setIsAnalyzing(false);
+      }
     } catch (error) {
       console.error("Image normalization error:", error);
       toast.error("Erreur lors du chargement de l'image");
@@ -149,6 +172,13 @@ const Index = () => {
               onImageSelect={handleImageSelect}
               selectedImage={selectedImageUrl}
             />
+            
+            {(colorAnalysis || isAnalyzing) && (
+              <ColorAnalysisPanel 
+                analysis={colorAnalysis}
+                isAnalyzing={isAnalyzing}
+              />
+            )}
             
             <ParametersPanel
               numColors={numColors}

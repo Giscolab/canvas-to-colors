@@ -31,6 +31,14 @@ export interface ProgressEvent {
   timestamp: number;
 }
 
+export interface ColorAnalysis {
+  uniqueColorsCount: number;
+  dominantColors: string[]; // Top 10 couleurs
+  complexityScore: number; // 0-100
+  recommendedNumColors: number;
+  recommendedMinRegionSize: number;
+}
+
 export interface ProcessedResult {
   contours: ImageData | null;
   numbered: ImageData | null;
@@ -184,6 +192,147 @@ function getCachedResult(key: string): ProcessedResult | null {
 function setCachedResult(key: string, result: ProcessedResult): void {
   resultCache.set(key, result);
   console.log('💾 Result cached for future use. Stats:', resultCache.getStats());
+}
+
+// ============= K-MEANS QUANTIZATION =============
+
+// ============= COLOR ANALYSIS =============
+
+/**
+ * Analyze image colors before processing
+ * Detects unique colors and recommends optimal parameters
+ */
+export async function analyzeImageColors(
+  imageSource: File,
+  onProgress?: (progress: number) => void
+): Promise<ColorAnalysis> {
+  const loadedImage = await loadImageSource(imageSource);
+  
+  // Scale down if too large (max 1200px for analysis)
+  const maxDim = 1200;
+  let width = loadedImage.width;
+  let height = loadedImage.height;
+
+  if (width > maxDim || height > maxDim) {
+    if (width > height) {
+      height = Math.round((height * maxDim) / width);
+      width = maxDim;
+    } else {
+      width = Math.round((width * maxDim) / height);
+      height = maxDim;
+    }
+  }
+
+  const { ctx } = canvasFactory.createCanvas(width, height);
+  ctx.drawImage(loadedImage.source, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  
+  loadedImage.cleanup?.();
+  
+  // Sample intelligently (no need to analyze all pixels)
+  const sampleRate = Math.max(1, Math.floor(imageData.width * imageData.height / 100000));
+  const colorSet = new Set<string>();
+  const colorCounts = new Map<string, number>();
+  
+  for (let i = 0; i < imageData.data.length; i += 4 * sampleRate) {
+    const r = imageData.data[i];
+    const g = imageData.data[i + 1];
+    const b = imageData.data[i + 2];
+    const hex = rgbToHex(r, g, b);
+    
+    colorSet.add(hex);
+    colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
+    
+    if (i % 10000 === 0 && onProgress) {
+      onProgress((i / imageData.data.length) * 100);
+    }
+  }
+  
+  // Calculate complexity (simplified entropy)
+  const totalPixels = imageData.data.length / 4;
+  const entropy = Array.from(colorCounts.values())
+    .map(count => {
+      const p = count / totalPixels;
+      return -p * Math.log2(p);
+    })
+    .reduce((sum, val) => sum + val, 0);
+  
+  const complexityScore = Math.min(100, Math.round(entropy * 10));
+  
+  // Smart recommendations
+  const uniqueCount = colorSet.size;
+  let recommendedNumColors: number;
+  let recommendedMinRegionSize: number;
+  
+  if (uniqueCount < 16) {
+    // Simple image (logo, line art)
+    recommendedNumColors = Math.max(8, uniqueCount);
+    recommendedMinRegionSize = 20;
+  } else if (uniqueCount < 100) {
+    // Medium image (colored illustration)
+    recommendedNumColors = 16;
+    recommendedMinRegionSize = 50;
+  } else if (uniqueCount < 1000) {
+    // Complex image (detailed drawing)
+    recommendedNumColors = 24;
+    recommendedMinRegionSize = 100;
+  } else {
+    // Very complex image (realistic photo)
+    recommendedNumColors = 32;
+    recommendedMinRegionSize = 200;
+  }
+  
+  // Top 10 dominant colors
+  const dominantColors = Array.from(colorCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([hex]) => hex);
+  
+  if (onProgress) onProgress(100);
+  
+  return {
+    uniqueColorsCount: uniqueCount,
+    dominantColors,
+    complexityScore,
+    recommendedNumColors,
+    recommendedMinRegionSize
+  };
+}
+
+/**
+ * Merge near-identical colors to avoid splitting visually identical regions
+ * Uses ΔE2000 threshold to detect imperceptible differences
+ */
+function mergeNearIdenticalColors(
+  palette: string[],
+  threshold: number = 5 // ΔE2000 < 5 = imperceptible
+): string[] {
+  const merged: string[] = [];
+  const skip = new Set<number>();
+  
+  for (let i = 0; i < palette.length; i++) {
+    if (skip.has(i)) continue;
+    
+    const rgb1 = hexToRgb(palette[i]);
+    const lab1 = rgbToLab(rgb1[0], rgb1[1], rgb1[2]);
+    
+    // Find all identical colors
+    for (let j = i + 1; j < palette.length; j++) {
+      if (skip.has(j)) continue;
+      
+      const rgb2 = hexToRgb(palette[j]);
+      const lab2 = rgbToLab(rgb2[0], rgb2[1], rgb2[2]);
+      
+      const distance = deltaE2000(lab1, lab2);
+      if (distance < threshold) {
+        skip.add(j); // Mark as duplicate
+      }
+    }
+    
+    merged.push(palette[i]);
+  }
+  
+  return merged;
 }
 
 // ============= K-MEANS QUANTIZATION =============
@@ -1604,7 +1753,8 @@ export async function processImage(
         // === STEP 1: Quantization ===
         report("Quantification des couleurs", 15, `K-means++ sur ${Math.round(imageData.data.length / 4)} pixels`);
         const quantizationStart = Date.now();
-        const palette = quantizeColors(imageData, numColors);
+        let palette = quantizeColors(imageData, numColors);
+        palette = mergeNearIdenticalColors(palette, 5); // Merge imperceptible color differences
         report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
   
         // === STEP 2: Pixel mapping ===
