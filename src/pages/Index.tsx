@@ -42,6 +42,7 @@ const Index = () => {
   const { user } = useAuth();
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
+  const [mergeTolerance, setMergeTolerance] = useState(5);
 
   const handleImageSelect = async (file: File) => {
     try {
@@ -61,10 +62,12 @@ const Index = () => {
           console.log(`Analyse: ${progress.toFixed(0)}%`);
         });
         setColorAnalysis(analysis);
-        
+
         // Apply recommendations automatically
         setNumColors(analysis.recommendedNumColors);
         setMinRegionSize(analysis.recommendedMinRegionSize);
+        setMergeTolerance(analysis.mode === "vector" ? 10 : 5);
+        setSmoothness(analysis.mode === "vector" ? 0 : 50);
         
         toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées — Recommandations appliquées`);
       } catch (error) {
@@ -94,11 +97,17 @@ const Index = () => {
 
     try {
       // Process image in Web Worker with progress updates
+      const vectorMode = colorAnalysis?.mode === "vector";
+      const effectiveMinRegionSize = Math.max(minRegionSize, vectorMode ? 20 : minRegionSize);
+      const effectiveSmoothness = vectorMode ? 0 : smoothness;
+      const effectiveMergeTolerance = vectorMode ? Math.max(mergeTolerance, 10) : mergeTolerance;
+
       const result = await processImageWithWorker(
         selectedFile,
         numColors,
-        minRegionSize,
-        smoothness,
+        effectiveMinRegionSize,
+        effectiveSmoothness,
+        effectiveMergeTolerance,
         (stage, progress) => {
           setProcessingStage(stage);
           setProcessingProgress(progress);
@@ -123,8 +132,8 @@ const Index = () => {
         width: img.width,
         height: img.height,
         num_colors: numColors,
-        min_region_size: minRegionSize,
-        smoothness: smoothness,
+        min_region_size: effectiveMinRegionSize,
+        smoothness: effectiveSmoothness,
         processing_time_ms: processingTime,
         zones_count: result.zones.length,
         palette: result.palette

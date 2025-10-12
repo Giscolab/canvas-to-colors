@@ -13,6 +13,7 @@ interface WorkerMessage {
     numColors: number;
     minRegionSize: number;
     smoothness: number;
+    mergeTolerance: number;
   };
 }
 
@@ -36,10 +37,16 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   }
 
   try {
-    const { imageFile, numColors, minRegionSize, smoothness } = payload;
-    
+    const { imageFile, numColors, minRegionSize, smoothness, mergeTolerance } = payload;
+
     // Validate payload
-    if (!imageFile || !numColors || minRegionSize === undefined || smoothness === undefined) {
+    if (
+      !imageFile ||
+      !numColors ||
+      minRegionSize === undefined ||
+      smoothness === undefined ||
+      mergeTolerance === undefined
+    ) {
       throw new Error('Invalid payload: missing required parameters');
     }
     
@@ -62,10 +69,11 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
     
     // Process image with progress callback
     const result = await processImage(
-      imageFile, 
-      numColors, 
-      minRegionSize, 
+      imageFile,
+      numColors,
+      minRegionSize,
       smoothness,
+      mergeTolerance,
       progressCallback
     );
     

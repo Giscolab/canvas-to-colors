@@ -60,11 +60,12 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
     })) ?? [];
 
   const dominantCount = analysis.dominantColors.length;
-  const summaryMessage = `Image ${complexity.label.toLowerCase()} avec ${dominantCount} couleur${
-    dominantCount > 1 ? "s" : ""
-  } dominantes, idéal pour ${analysis.recommendedNumColors} zone${
-    analysis.recommendedNumColors > 1 ? "s" : ""
-  }.`;
+  const modeLabel = analysis.mode === "vector" ? "vectorielle" : "photographique";
+  const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
+    analysis.mode === "vector" ? "(formes nettes)" : ""
+  } avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes, idéal pour ${
+    analysis.recommendedNumColors
+  } zone${analysis.recommendedNumColors > 1 ? "s" : ""}.`;
 
   type TooltipValueType = number;
   type TooltipNameType = string;
@@ -121,6 +122,9 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
             </li>
             <li>
               🧠 Niveau de quantification : <strong>{analysis.quantStep}</strong>
+            </li>
+            <li>
+              🧭 Mode détecté : <strong>{modeLabel}</strong>
             </li>
           </ul>
         </div>
