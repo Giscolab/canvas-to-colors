@@ -5,7 +5,9 @@
 import { ProcessedResult } from './imageProcessing';
 import { IMAGE_PROCESSING } from '@/config/constants';
 
-const WORKER_TIMEOUT = IMAGE_PROCESSING.WORKER_TIMEOUT_MS;
+const WORKER_BASE_TIMEOUT = IMAGE_PROCESSING.WORKER_TIMEOUT_MS;
+const WORKER_MAX_TIMEOUT = IMAGE_PROCESSING.WORKER_MAX_TIMEOUT_MS;
+const WORKER_TIMEOUT_PER_MEGAPIXEL = IMAGE_PROCESSING.WORKER_TIMEOUT_PER_MEGAPIXEL_MS;
 const WORKER_IDLE_TIMEOUT = IMAGE_PROCESSING.WORKER_IDLE_TIMEOUT_MS;
 const VALID_MESSAGE_TYPES = ['success', 'progress', 'error', 'done'];
 
@@ -47,6 +49,12 @@ export class ImageProcessingWorker {
     // Validate image file first
     validateImageFile(imageFile);
 
+    const timeoutMs = await this.estimateProcessingTimeout(imageFile);
+    const timeoutDescription =
+      timeoutMs >= WORKER_MAX_TIMEOUT
+        ? `${this.formatDuration(timeoutMs)} (limite maximale atteinte)`
+        : this.formatDuration(timeoutMs);
+
     // Check Worker support
     if (typeof Worker === 'undefined') {
       throw new Error('Web Worker non supporté dans cet environnement');
@@ -75,10 +83,12 @@ export class ImageProcessingWorker {
         timeoutId = setTimeout(() => {
           if (!resultReceived && this.isActive) {
             cleanup();
-            reject(new Error('Timeout: Le traitement a dépassé 35 secondes'));
+            reject(
+              new Error(`Timeout: Le traitement a dépassé ${timeoutDescription}`)
+            );
             this.terminate();
           }
-        }, WORKER_TIMEOUT);
+        }, timeoutMs);
       };
 
       const cleanup = () => {
@@ -176,11 +186,77 @@ export class ImageProcessingWorker {
     if (this.idleTimeoutId !== null) {
       clearTimeout(this.idleTimeoutId);
     }
-    
+
     this.idleTimeoutId = setTimeout(() => {
       console.log('Worker idle timeout - terminating...');
       this.terminate();
     }, WORKER_IDLE_TIMEOUT) as unknown as number;
+  }
+
+  private async estimateProcessingTimeout(imageFile: File): Promise<number> {
+    try {
+      const megapixels = await this.estimateImageMegapixels(imageFile);
+
+      if (megapixels !== null) {
+        const extraMegapixels = Math.max(0, megapixels - 1);
+        const estimatedTimeout =
+          WORKER_BASE_TIMEOUT + extraMegapixels * WORKER_TIMEOUT_PER_MEGAPIXEL;
+        return Math.min(WORKER_MAX_TIMEOUT, Math.round(estimatedTimeout));
+      }
+    } catch (error) {
+      console.warn("Impossible d'estimer la taille de l'image pour le timeout", error);
+    }
+
+    return WORKER_BASE_TIMEOUT;
+  }
+
+  private async estimateImageMegapixels(imageFile: File): Promise<number | null> {
+    if (typeof createImageBitmap === 'function') {
+      try {
+        const bitmap = await createImageBitmap(imageFile);
+        const megapixels = (bitmap.width * bitmap.height) / 1_000_000;
+        bitmap.close();
+        return megapixels;
+      } catch (error) {
+        console.warn("createImageBitmap a échoué pour estimer la taille de l'image", error);
+      }
+    }
+
+    if (
+      typeof document !== 'undefined' &&
+      typeof URL !== 'undefined' &&
+      typeof Image !== 'undefined'
+    ) {
+      return new Promise<number | null>((resolve) => {
+        const objectUrl = URL.createObjectURL(imageFile);
+        const img = new Image();
+        img.onload = () => {
+          const megapixels = (img.width * img.height) / 1_000_000;
+          URL.revokeObjectURL(objectUrl);
+          resolve(megapixels);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(null);
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    return null;
+  }
+
+  private formatDuration(ms: number): string {
+    if (ms >= 60000) {
+      const minutes = ms / 60000;
+      if (Number.isInteger(minutes)) {
+        return `${minutes.toString()} minute${minutes > 1 ? 's' : ''}`;
+      }
+      const formatted = minutes.toFixed(1).replace('.', ',');
+      return `${formatted} minutes`;
+    }
+
+    return `${Math.round(ms / 1000)} secondes`;
   }
 
   /**
