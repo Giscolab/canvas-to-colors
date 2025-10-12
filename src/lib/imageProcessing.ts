@@ -1016,9 +1016,14 @@ function mergeAdjacentPolygons(
   contours: Contour[],
   zones: Zone[]
 ): Contour[] {
+  // Hard limits to avoid blowing the stack when polygons are too complex
+  const MAX_GROUP_CONTOURS = 80;
+  const MAX_TOTAL_POINTS = 8000;
+  const MAX_CONTOUR_POINTS = 4000;
+
   // Group contours by color
   const colorGroups = new Map<number, Contour[]>();
-  
+
   for (const contour of contours) {
     const zone = zones.find(z => z.id === contour.zoneId);
     if (!zone) continue;
@@ -1037,18 +1042,32 @@ function mergeAdjacentPolygons(
     if (groupContours.length === 0) continue;
     
     // Skip merging if only one contour or too many contours (performance)
-    if (groupContours.length === 1 || groupContours.length > 100) {
+    if (groupContours.length === 1) {
       mergedContours.push(...groupContours);
       continue;
     }
-    
+
+    const totalPoints = groupContours.reduce((sum, contour) => sum + contour.path.length, 0);
+    const maxPoints = groupContours.reduce((max, contour) => Math.max(max, contour.path.length), 0);
+
+    if (
+      groupContours.length > MAX_GROUP_CONTOURS ||
+      totalPoints > MAX_TOTAL_POINTS ||
+      maxPoints > MAX_CONTOUR_POINTS
+    ) {
+      // Polygons are too complex, keep original contours to avoid recursion explosions
+      mergedContours.push(...groupContours);
+      continue;
+    }
+
     try {
-      // Convert contours to martinez polygon format
-      let mergedPolygon: Array<Array<[number, number]>> | null = null;
-      
+      // Convert contours to martinez polygon format (MultiPolygon)
+      let mergedPolygon: Array<Array<Array<[number, number]>>> | null = null;
+      let mergeFailed = false;
+
       for (const contour of groupContours) {
         const ring: Array<[number, number]> = contour.path.map(p => [p.x, p.y]);
-        
+
         // Close the ring if not already closed
         if (ring.length > 0) {
           const [fx, fy] = ring[0];
@@ -1061,28 +1080,43 @@ function mergeAdjacentPolygons(
         if (ring.length < 4) continue; // Need at least 3 points + closing point
         
         const polygon: Array<Array<[number, number]>> = [ring];
-        
+
         if (mergedPolygon === null) {
-          mergedPolygon = polygon;
+          mergedPolygon = [polygon];
         } else {
-          // Union with previous merged polygon
-          const result = union(mergedPolygon, polygon);
-          if (result && result.length > 0) {
-            mergedPolygon = result[0]; // Take first polygon from multipolygon result
+          try {
+            const result = union(mergedPolygon, [polygon]);
+            if (result && result.length > 0) {
+              mergedPolygon = result;
+            } else {
+              mergeFailed = true;
+              break;
+            }
+          } catch (_error) {
+            mergeFailed = true;
+            console.warn(`Polygon merge skipped for color ${colorIdx} (geometry too complex)`);
+            break;
           }
         }
       }
-      
-      // Convert merged polygon back to contours
+
+      if (mergeFailed) {
+        mergedContours.push(...groupContours);
+        continue;
+      }
+
+      // Convert merged polygon back to contours (keep outer rings only)
       if (mergedPolygon && mergedPolygon.length > 0) {
-        for (const ring of mergedPolygon) {
-          if (ring.length < 4) continue;
-          
-          const path = ring.slice(0, -1).map(([x, y]) => ({ x, y })); // Remove closing point
+        for (const polygon of mergedPolygon) {
+          if (polygon.length === 0) continue;
+
+          const outerRing = polygon[0];
+          if (outerRing.length < 4) continue;
+
+          const path = outerRing.slice(0, -1).map(([x, y]) => ({ x, y })); // Remove closing point
           const simplifiedPath = simplifyPath(path); // Adaptive simplification
-          
+
           if (simplifiedPath.length >= 3) {
-            // Use the first zone ID from the group
             const zoneId = groupContours[0].zoneId;
             mergedContours.push({ zoneId, path: simplifiedPath });
           }
@@ -1091,13 +1125,13 @@ function mergeAdjacentPolygons(
         // Fallback: keep original contours if merge failed
         mergedContours.push(...groupContours);
       }
-    } catch (error) {
-      console.warn(`Polygon merge failed for color ${colorIdx}:`, error);
+    } catch (_error) {
+      console.warn(`Polygon merge skipped for color ${colorIdx} (unexpected failure)`);
       // Fallback: keep original contours
       mergedContours.push(...groupContours);
     }
   }
-  
+
   return mergedContours;
 }
 
