@@ -44,6 +44,7 @@ export class ImageProcessingWorker {
     numColors: number,
     minRegionSize: number,
     smoothness: number,
+    mergeTolerance: number,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<ProcessedResult> {
     // Validate image file first
@@ -169,7 +170,7 @@ export class ImageProcessingWorker {
         // Send processing request
         this.worker.postMessage({
           type: 'process',
-          payload: { imageFile, numColors, minRegionSize, smoothness }
+          payload: { imageFile, numColors, minRegionSize, smoothness, mergeTolerance }
         });
       } catch (error) {
         cleanup();
@@ -302,8 +303,16 @@ export async function processImageWithWorker(
   numColors: number,
   minRegionSize: number,
   smoothness: number,
+  mergeTolerance: number,
   onProgress?: (stage: string, progress: number) => void
 ): Promise<ProcessedResult> {
   const worker = getImageProcessingWorker();
-  return worker.processImage(imageFile, numColors, minRegionSize, smoothness, onProgress);
+  return worker.processImage(
+    imageFile,
+    numColors,
+    minRegionSize,
+    smoothness,
+    mergeTolerance,
+    onProgress
+  );
 }
