@@ -1,223 +1,185 @@
 # 🎨 Paint by Numbers Generator — Pro Edition
-### Une application web complète pour transformer vos photos en magnifiques dessins Paint by Numbers, avec un moteur de traitement d'image professionnel inspiré de Mimipanda.
 
-> Made with ❤️ using **React + TypeScript + Tailwind + Vite + shadcn/ui**
-
----
-
-## ✨ Fonctionnalités principales
-
-### 🖼️ Traitement d'image avancé
-- **Upload facile** : glissez-déposez vos images (PNG, JPG, JPEG)
-- **Quantification perceptuelle** : K-means++ avec distance ΔE2000 (CIEDE2000)
-- **Contours précis** : Marching Squares + post-traitement topologique
-- **Numérotation automatique** : placement intelligent via `polylabel`
-- **Zones fusionnées** : regroupement des petites zones avec `martinez-polygon-clipping`
-
-### 🎨 Visualisation interactive
-- Canvas interactif avec zoom/pan
-- Modes : Original | Contours | Numéroté | Aperçu
-- Palette de couleurs dynamique
-- Statistiques : zones, couleurs, dimensions
-- Export SVG / PNG / JSON
-
-### 🎯 Paramètres personnalisables
-| Paramètre | Description |
-|------------|-------------|
-| **Nombre de couleurs** | 5 à 50 (recommandé : 20) |
-| **Taille minimale de zone** | 50 à 1000 px² |
-| **Douceur des bords** | 0 à 100 % |
-| **Presets intelligents** | Simple, Détaillé, Artistique |
-
-### 💎 Expérience utilisateur premium
-- Design **glassmorphism** moderne  
-- **Animations fluides**, micro-interactions et transitions  
-- **Dark mode** intégré  
-- **Responsive** (desktop, tablette, mobile)  
-- **Notifications élégantes** et **confetti de succès**
+Application web riche construite avec **React, TypeScript, Vite et Tailwind CSS** pour transformer n'importe quelle photo en modèle Paint by Numbers haute fidélité. Le projet combine un pipeline de traitement d'image avancé, une interface soignée propulsée par shadcn/ui et des fonctionnalités Premium (authentification, historique cloud, export multi-formats).
 
 ---
 
-## 🚀 Démarrage rapide
+## 📚 Sommaire
 
-### Prérequis
-- Node.js ≥ 18  
-- npm ou bun
+1. [Aperçu rapide](#-aperçu-rapide)
+2. [Fonctionnalités clés](#-fonctionnalités-clés)
+3. [Expérience utilisateur](#-expérience-utilisateur)
+4. [Pipeline de traitement d'image](#-pipeline-de-traitement-dimage)
+5. [Architecture & organisation](#-architecture--organisation)
+6. [Technologies principales](#-technologies-principales)
+7. [Prérequis & installation](#-prérequis--installation)
+8. [Configuration Supabase](#-configuration-supabase)
+9. [Scripts npm disponibles](#-scripts-npm-disponibles)
+10. [Qualité & bonnes pratiques](#-qualité--bonnes-pratiques)
+11. [Aller plus loin](#-aller-plus-loin)
 
-### Installation
-```bash
-git clone <YOUR_GIT_URL>
-cd <YOUR_PROJECT_NAME>
-npm install
-npm run dev
+---
+
+## ⚡ Aperçu rapide
+
+- **Objectif** : générer en quelques clics un kit complet de peinture numérotée (zones, palette, exports) à partir d'une photo personnelle.
+- **Interface** : tableau de bord ergonomique avec panneaux contextuels, notifications sonner, confettis de succès et mode sombre.
+- **Performance** : traitement intensif déporté dans un Web Worker, cache LRU pour rejouer instantanément les paramètres déjà calculés et normalisation EXIF automatique.
+
+---
+
+## ✨ Fonctionnalités clés
+
+### Traitement et analyse d'image
+- Import par glisser-déposer avec normalisation (`resizeForDisplay`) et vérification de taille maximale (`IMAGE_PROCESSING.MAX_FILE_SIZE_MB`).
+- Analyse colorimétrique proactive (`analyzeImageColors`) : détection des dominantes, complexité et recommandations auto-appliquées (nombre optimal de couleurs, taille de zones).
+- Pipeline paramétrable : nombre de couleurs, taille minimale des régions, douceur des contours et suivi de progression en temps réel (`ProcessingProgress`).
+
+### Restitution graphique
+- Zone de travail multi-onglets (`Canvas`) : Original / Contours / Numéroté / Aperçu fusionné.
+- Zoom, pan, remise à zéro, plein écran, surbrillance animée des zones ou couleurs (`useCanvasInteractions`).
+- Palette dynamique avec sélection, stats par couleur et liste des zones associées (`ColorPalette`, `PalettePanel`).
+
+### Export & productivité
+- Export PNG et JSON (structure de zones, palette, paramètres) via `useExport`.
+- Historique des traitements sauvegardé dans Supabase (`useImageHistory`) avec pagination et tri antichronologique (`HistoryPanel`).
+- Notifications toast/success & confettis réglés via `UI.CONFETTI_*`.
+
+### Authentification & profils
+- Auth email/mot de passe gérée par Supabase (`useAuth`).
+- Panneau de connexion/inscription (`AuthPanel`) et mise à jour du profil (`ProfilePanel`).
+- Stratégies RLS côté base (migrations Supabase) garantissant que chaque utilisateur ne voit que ses jobs.
+
+---
+
+## 🖥️ Expérience utilisateur
+
+1. **Charger une image** : support PNG/JPG jusqu'à 16 MP, feedback immédiat et preview.
+2. **Analyser automatiquement** : recommandations intelligentes appliquées aux sliders de paramètres.
+3. **Lancer le traitement** : suivi étape par étape avec messages d'avancement et blocage de l'UI.
+4. **Explorer le rendu** : navigation entre couches, zoom, surbrillance de zones/couleurs, stats détaillées.
+5. **Exporter et sauvegarder** : téléchargement des assets, stockage de l'opération dans l'historique cloud.
+
+---
+
+## 🧠 Pipeline de traitement d'image
+
+Le cœur métier réside dans `src/lib/imageProcessing.ts` et le worker `src/workers/imageProcessor.worker.ts` :
+
+| Étape | Description | Bibliothèques / modules |
+|-------|-------------|--------------------------|
+| 1. Normalisation | Correction EXIF, redimensionnement, hashage pour le cache | `imageNormalization.ts`, Canvas API |
+| 2. Quantification | K-means++ + distance perceptuelle ΔE2000 | `colorUtils.ts`, `perceptualDistance` |
+| 3. Segmentation | Détection de régions et contours | `marchingsquares`, flood-fill maison |
+| 4. Fusion topologique | Union de polygones adjacents | `martinez-polygon-clipping` |
+| 5. Simplification | Lissage adaptatif des contours | `simplify-js` |
+| 6. Placement des labels | Centre de gravité perceptuel | `polylabel` |
+| 7. Cache & export | LRU cache, exports SVG/PNG/JSON, logging progress | `lruCache.ts`, hooks `useExport` |
+
+Toutes les opérations lourdes se font dans un Web Worker (`processImageWithWorker`) qui diffuse des événements de progression vers l'UI.
+
+---
+
+## 🏗️ Architecture & organisation
+
+```
+src/
+├─ components/             # UI modulaire (Canvas, Upload, Panels, UI primitives shadcn)
+├─ hooks/                  # Logique réutilisable (auth, export, canvas, historique)
+├─ lib/                    # Traitement d'image, cache, utilitaires couleurs
+├─ workers/                # Web Worker de génération
+├─ config/                 # Constantes globales (UI, image, export)
+├─ integrations/supabase/  # Client Supabase typé + types générés
+├─ pages/                  # Pages routées (Index, NotFound)
+└─ main.tsx                # Entrée React/Vite
 ```
 
-L'application sera disponible sur : [http://localhost:5173](http://localhost:5173)
+Autres dossiers :
+- `supabase/` — configuration CLI + migrations SQL (tables `profiles`, `image_jobs`, politiques RLS).
+- `components.json` — configuration shadcn/ui.
+- `tailwind.config.ts`, `postcss.config.js` — pipeline CSS.
 
 ---
 
-## 🧠 Pipeline professionnel (Core Engine)
+## 🛠️ Technologies principales
 
-| Étape | Description | Librairie |
-|-------|-------------|-----------|
-| 1️⃣ Chargement | Normalisation EXIF, hash, redimensionnement | Canvas API |
-| 2️⃣ Quantification | K-means++ + ΔE2000 (perceptual color distance) | `colorUtils.ts` |
-| 3️⃣ Segmentation | Flood-fill + Marching Squares | `marchingsquares` |
-| 4️⃣ Fusion topologique | Union de polygones adjacents | `martinez-polygon-clipping` |
-| 5️⃣ Simplification adaptative | Tolerance dynamique selon surface | `simplify-js` |
-| 6️⃣ Placement des labels | Pole of inaccessibility (centre visuel) | `polylabel` |
-| 7️⃣ Export | SVG, PNG, JSON | Canvas |
-| 8️⃣ Cache | Hash(image + params) | interne |
-| 9️⃣ Web Worker | Traitement non-bloquant | navigateur |
+| Domaine | Stack |
+|---------|-------|
+| Front-end | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Visualisation | Canvas API, custom hooks d'interactions, lucide-react |
+| Traitement d'image | marchingsquares, martinez-polygon-clipping, simplify-js, polylabel, ΔE2000 |
+| Etat & formulaires | React Hook Form, sonner/toaster pour feedback |
+| Backend-as-a-service | Supabase (Auth, Postgres, RLS, migrations) |
 
 ---
 
-## ⚙️ Architecture technique
+## 📦 Prérequis & installation
 
-```
-📦 src/
- ┣ 📂 components/          # Interface utilisateur
- ┃ ┣ Canvas.tsx
- ┃ ┣ ColorPalette.tsx
- ┃ ┣ ParametersPanel.tsx
- ┣ 📂 lib/
- ┃ ┣ imageProcessing.ts    # Pipeline principal (core)
- ┃ ┣ colorUtils.ts         # Conversion Lab / ΔE2000
- ┣ 📂 workers/
- ┃ ┣ imageWorker.ts        # Web Worker (thread de traitement)
- ┣ 📂 types/
- ┃ ┣ external.d.ts         # Types des libs externes
- ┣ 📜 index.tsx            # Point d'entrée front-end
- ┣ 📜 tailwind.config.ts
- ┗ 📜 index.css            # Design tokens & thèmes
-```
+1. **Cloner le dépôt**
+   ```bash
+   git clone <repo-url>
+   cd canvas-to-colors
+   ```
+2. **Installer les dépendances**
+   ```bash
+   npm install
+   ```
+3. **Configurer l'environnement** (voir section Supabase ci-dessous).
+4. **Lancer le serveur de dev**
+   ```bash
+   npm run dev
+   ```
+   L'application est accessible sur [http://localhost:5173](http://localhost:5173).
 
----
-
-## 🧩 Technologies principales
-
-| Domaine | Outils |
-|---------|--------|
-| UI | React 18, Tailwind CSS, shadcn/ui |
-| Build | Vite |
-| Typage | TypeScript |
-| Interaction | React Hook Form, Sonner, Lucide React |
-| Traitement d'image | `martinez-polygon-clipping`, `simplify-js`, `marchingsquares`, `polylabel` |
-| Math / Couleur | ΔE2000, K-means++, RGB↔Lab conversion |
+Pour une build production : `npm run build` puis `npm run preview`.
 
 ---
 
-## 📖 Utilisation
+## 🔐 Configuration Supabase
 
-1. **Upload d'image**
-   - Formats acceptés : PNG / JPG / JPEG
-   - Taille max recommandée : 4000×4000 px
+1. Créez un projet Supabase (ou utilisez la config fournie `supabase/config.toml`).
+2. Copiez les variables d'environnement dans un fichier `.env.local` à la racine :
+   ```env
+   VITE_SUPABASE_URL=<https://...supabase.co>
+   VITE_SUPABASE_PUBLISHABLE_KEY=<clé-anonyme>
+   ```
+3. Optionnel : pour un environnement local complet, installez le [CLI Supabase](https://supabase.com/docs/guides/cli) puis exécutez :
+   ```bash
+   supabase start
+   supabase db reset   # applique les migrations du dossier supabase/migrations
+   ```
+4. Mettez à jour les politiques ou schémas via `supabase migration new` puis `supabase db push`.
 
-2. **Ajustez les paramètres**
-   - Couleurs → plus de détails
-   - Taille min → fusionne les petites zones
-   - Lissage → bords plus doux
-
-3. **Cliquez sur "Générer le modèle"**
-   - Le moteur analyse et vectorise automatiquement
-   - Résultat visible en quelques secondes
-
-4. **Explorez les onglets**
-   - Original | Contours | Numéroté | Aperçu
-
-5. **Exportez vos créations**
-   - Téléchargez SVG / PNG / JSON
-   - Copiez la palette hexadécimale
+Les migrations fournies créent les tables `profiles` & `image_jobs` avec politiques RLS garantissant la confidentialité des historiques.
 
 ---
 
-## 🧱 Paramètres du moteur
+## 🧩 Scripts npm disponibles
 
-```ts
-interface ProcessedResult {
-  contours: ImageData;
-  numbered: ImageData;
-  colorized: ImageData;
-  palette: string[];
-  zones: Zone[];
-  svg: string;
-  legend: LegendEntry[];
-  labels?: Int32Array;
-  colorZoneMapping?: Map<number, number[]>;
-}
-```
+| Commande | Description |
+|----------|-------------|
+| `npm run dev` | Démarre Vite en mode développement |
+| `npm run build` | Génère la build production |
+| `npm run build:dev` | Build avec configuration `development` (profilage) |
+| `npm run preview` | Sert la build de production localement |
+| `npm run lint` | Vérifie le code avec ESLint |
 
 ---
 
-## 📦 Algorithmes intégrés
+## ✅ Qualité & bonnes pratiques
 
-| Algorithme | Rôle |
-|------------|------|
-| **K-means++** | Quantification de couleurs stable |
-| **ΔE2000 (CIEDE2000)** | Distance perceptuelle précise |
-| **Flood-fill / Labeling** | Segmentation des zones |
-| **Marching Squares** | Extraction vectorielle |
-| **Martinez Polygon Clipping** | Fusion topologique |
-| **Simplify-js** | Lissage adaptatif |
-| **Polylabel** | Placement des labels |
+- Respectez la configuration ESLint/TypeScript fournie (`eslint.config.js`, `tsconfig.*`).
+- Les composants UI réutilisent les primitives shadcn : privilégiez `@/components/ui/*` pour homogénéité.
+- Utilisez les hooks maison (`useAuth`, `useImageHistory`, `useCanvasInteractions`, etc.) plutôt que de réinventer la roue.
+- Pour de nouvelles opérations de traitement, pensez au Web Worker (`processImageWithWorker`) afin de garder l'UI fluide.
 
 ---
 
-## 🧠 Conseils d'utilisation
+## 🚀 Aller plus loin
 
-| Problème | Solution |
-|----------|----------|
-| Image trop lente | Réduire `numColors` ou la taille |
-| Contours trop fins | Augmenter le paramètre de lissage |
-| Zones trop nombreuses | Augmenter `minRegionSize` |
-| Numéros mal centrés | Activer la simplification adaptative |
+- Ajouter des presets d'impression (PDF, planche A4/A3) à partir des exports JSON.
+- Implémenter un mode collaboratif via Supabase Realtime (partage de palettes & historiques).
+- Introduire des tests unitaires (Vitest) pour sécuriser le pipeline de traitement d'image.
 
----
+Bonnes créations !
 
-## 🖋️ Design system
-
-Fichier : `src/index.css`
-
-```css
-:root {
-  --primary: hsl(220, 90%, 60%);
-  --secondary: hsl(160, 70%, 45%);
-  --gradient-mesh: linear-gradient(...);
-  --glass-bg: rgba(255, 255, 255, 0.1);
-  --shadow-glow: 0 0 40px var(--primary);
-}
-```
-
----
-
-## 🤝 Contribution
-
-1. Forkez le projet
-2. Créez une branche :
-   `git checkout -b feature/awesome-feature`
-3. Committez vos changements
-4. Pushez :
-   `git push origin feature/awesome-feature`
-5. Ouvrez une Pull Request ✨
-
----
-
-## 🧰 Commandes utiles
-
-```bash
-npm run dev       # Dev + hot reload
-npm run build     # Build production
-npm run preview   # Preview du build
-npm run lint      # Vérification du code
-```
-
----
-
-## 📄 Licence
-
-Ce projet est sous licence **MIT**.
-Libre d'utilisation, modification et distribution.
-
----
-
-> *"Build sharp. Keep it local. Ship clean."*
