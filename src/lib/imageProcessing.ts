@@ -321,6 +321,21 @@ export async function analyzeImageColors(
   const dominantColors = sortedColors.slice(0, 10).map(([hex]) => hex);
   const dominantWeights = sortedColors.slice(0, 10).map(([_, count]) => (totalCount ? count / totalCount : 0));
 
+  // === 6.5️⃣ Détection du mode de traitement ===
+  let mode: 'vector' | 'photo' = 'photo';
+  if (
+    uniqueCount < 300 &&
+    complexityScore < 25 &&
+    dominantColors.length <= 10
+  ) {
+    mode = 'vector';
+  }
+
+  if (mode === 'vector') {
+    recommendedNumColors = Math.min(recommendedNumColors, 12);
+    recommendedMinRegionSize = Math.max(20, recommendedMinRegionSize);
+  }
+
   if (onProgress) onProgress(100);
 
   console.log(`🧠 Analyse auto :\n  • Couleurs uniques (après quantification ${quantStep}) : ${uniqueCount}\n  • Complexité visuelle : ${complexityScore}/100\n  • Palette recommandée : ${recommendedNumColors} couleurs\n  • Taille min. région : ${recommendedMinRegionSize}px\n  • Mode détecté : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}\n  `);

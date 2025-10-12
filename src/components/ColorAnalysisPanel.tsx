@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,15 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
     );
   }
 
+  const chartData = useMemo(() => {
+    if (!analysis) return [];
+    return analysis.dominantColors.map((color, index) => ({
+      name: `#${index + 1}`,
+      value: Math.round((analysis.dominantWeights?.[index] ?? 0) * 100),
+      color,
+    }));
+  }, [analysis]);
+
   if (!analysis) return null;
 
   const getComplexityLabel = (score: number) => {
@@ -52,20 +61,14 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
 
   const complexity = getComplexityLabel(analysis.complexityScore);
 
-  const chartData =
-    analysis.dominantColors.map((color, index) => ({
-      name: `#${index + 1}`,
-      value: Math.round((analysis.dominantWeights[index] ?? 0) * 100),
-      color,
-    })) ?? [];
-
   const dominantCount = analysis.dominantColors.length;
   const modeLabel = analysis.mode === "vector" ? "vectorielle" : "photographique";
-  const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
-    analysis.mode === "vector" ? "(formes nettes)" : ""
-  } avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes, idéal pour ${
-    analysis.recommendedNumColors
-  } zone${analysis.recommendedNumColors > 1 ? "s" : ""}.`;
+const summaryMessage = `Image ${complexity.label.toLowerCase()} ${
+  analysis.mode === "vector" ? "(formes nettes)" : ""
+} avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes, idéal pour ${
+  analysis.recommendedNumColors
+} zone${analysis.recommendedNumColors > 1 ? "s" : ""}.`;
+
 
   type TooltipValueType = number;
   type TooltipNameType = string;
@@ -108,6 +111,14 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
           <Progress
             value={analysis.complexityScore}
             className={`h-2 mt-2 ${isDark ? "bg-neutral-800" : "bg-neutral-200"}`}
+            style={{
+              backgroundColor:
+                analysis.complexityScore < 30
+                  ? "#22c55e"
+                  : analysis.complexityScore < 60
+                    ? "#eab308"
+                    : "#ef4444",
+            }}
           />
         </div>
 
@@ -121,7 +132,10 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
               🧩 Taille min. région : <strong>{analysis.recommendedMinRegionSize}px</strong>
             </li>
             <li>
-              🧠 Niveau de quantification : <strong>{analysis.quantStep}</strong>
+              🧠 Niveau de quantification : <strong>{analysis.quantStep ?? "auto"}</strong>
+            </li>
+            <li>
+              🧭 Mode détecté : <strong>{modeLabel}</strong>
             </li>
             <li>
               🧭 Mode détecté : <strong>{modeLabel}</strong>
