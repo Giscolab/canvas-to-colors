@@ -335,6 +335,51 @@ function mergeNearIdenticalColors(
   return merged;
 }
 
+/**
+ * Consolidate near-identical colors in a colorMap post-mapping
+ * Merges colors with ΔE2000 < threshold and updates the colorMap indices
+ * This fixes issues where K-means produces visually identical colors (e.g., multiple whites)
+ */
+function consolidateColorMap(
+  palette: string[],
+  colorMap: number[],
+  paletteLabCache: [number, number, number][]
+): { consolidatedPalette: string[]; consolidatedColorMap: number[] } {
+  const threshold = 5; // ΔE2000 < 5 = imperceptible difference
+  const mergeMap = new Map<number, number>(); // oldIndex -> newIndex
+  const consolidatedPalette: string[] = [];
+  const skip = new Set<number>();
+  
+  // Build merge mapping
+  for (let i = 0; i < palette.length; i++) {
+    if (skip.has(i)) continue;
+    
+    const currentIndex = consolidatedPalette.length;
+    mergeMap.set(i, currentIndex);
+    consolidatedPalette.push(palette[i]);
+    
+    const lab1 = paletteLabCache[i];
+    
+    // Find all identical colors and map them to current index
+    for (let j = i + 1; j < palette.length; j++) {
+      if (skip.has(j)) continue;
+      
+      const lab2 = paletteLabCache[j];
+      const distance = deltaE2000(lab1, lab2);
+      
+      if (distance < threshold) {
+        mergeMap.set(j, currentIndex);
+        skip.add(j);
+      }
+    }
+  }
+  
+  // Remap colorMap indices
+  const consolidatedColorMap = colorMap.map(oldIndex => mergeMap.get(oldIndex)!);
+  
+  return { consolidatedPalette, consolidatedColorMap };
+}
+
 // ============= K-MEANS QUANTIZATION =============
 
 /**
@@ -344,8 +389,19 @@ function mergeNearIdenticalColors(
 export function quantizeColors(imageData: ImageData, numColors: number): string[] {
   const pixels: number[][] = [];
   
-  // Sample pixels (every 4th pixel for performance)
-  for (let i = 0; i < imageData.data.length; i += 16) {
+  // Adaptive sampling based on image size for optimal performance
+  const totalPixels = imageData.data.length / 4;
+  let stride: number;
+  
+  if (totalPixels > 1000000) {
+    stride = 24; // Large images (>1000x1000): sample every 6th pixel
+  } else if (totalPixels > 400000) {
+    stride = 16; // Medium images (>630x630): sample every 4th pixel
+  } else {
+    stride = 8;  // Small images: sample every 2nd pixel for better quality
+  }
+  
+  for (let i = 0; i < imageData.data.length; i += stride) {
     pixels.push([
       imageData.data[i],
       imageData.data[i + 1],
@@ -356,7 +412,11 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
   // K-means clustering with K-means++ initialization
   let centroids = initializeCentroids(pixels, numColors);
   
-  for (let iter = 0; iter < 10; iter++) {
+  // Early convergence detection for faster processing
+  const maxIterations = 10;
+  const convergenceThreshold = 1.0; // Stop if max centroid movement < 1 pixel
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
     const clusters: number[][][] = Array(numColors).fill(null).map(() => []);
     
     // Pre-convert centroids to Lab once per iteration
@@ -368,15 +428,34 @@ export function quantizeColors(imageData: ImageData, numColors: number): string[
       clusters[nearest].push(pixel);
     });
     
-    // Update centroids
-    centroids = clusters.map((cluster, idx) => {
+    // Update centroids and track maximum shift
+    let maxShift = 0;
+    const newCentroids = clusters.map((cluster, idx) => {
       if (cluster.length === 0) return centroids[idx];
-      return [
+      
+      const newCentroid = [
         Math.round(cluster.reduce((sum, p) => sum + p[0], 0) / cluster.length),
         Math.round(cluster.reduce((sum, p) => sum + p[1], 0) / cluster.length),
         Math.round(cluster.reduce((sum, p) => sum + p[2], 0) / cluster.length)
       ];
+      
+      // Calculate shift for convergence detection
+      const shift = Math.sqrt(
+        Math.pow(newCentroid[0] - centroids[idx][0], 2) +
+        Math.pow(newCentroid[1] - centroids[idx][1], 2) +
+        Math.pow(newCentroid[2] - centroids[idx][2], 2)
+      );
+      maxShift = Math.max(maxShift, shift);
+      
+      return newCentroid;
     });
+    
+    centroids = newCentroids;
+    
+    // Early exit if converged
+    if (maxShift < convergenceThreshold) {
+      break;
+    }
   }
 
   return centroids.map(c => rgbToHex(c[0], c[1], c[2]));
@@ -1792,6 +1871,30 @@ export async function processImage(
           quantizedData.data[i + 3] = 255;
         }
         report("Attribution terminée", 42, `Carte de couleurs générée en ${Date.now() - mappingStart}ms`);
+  
+        // === STEP 2.5: Consolidate near-identical colors ===
+        report("Consolidation des couleurs", 44, "Fusion des couleurs perceptuellement identiques");
+        const consolidationStart = Date.now();
+        const { consolidatedPalette, consolidatedColorMap } = consolidateColorMap(
+          palette,
+          colorMap,
+          paletteLabCache
+        );
+        report("Consolidation terminée", 46, `${palette.length - consolidatedPalette.length} couleurs fusionnées en ${Date.now() - consolidationStart}ms`);
+        
+        // Update palette and colorMap with consolidated versions
+        palette = consolidatedPalette;
+        colorMap.splice(0, colorMap.length, ...consolidatedColorMap);
+        
+        // Update quantizedData with consolidated colors
+        for (let i = 0; i < consolidatedColorMap.length; i++) {
+          const colorIndex = consolidatedColorMap[i];
+          const [qr, qg, qb] = hexToRgb(consolidatedPalette[colorIndex]);
+          quantizedData.data[i * 4] = qr;
+          quantizedData.data[i * 4 + 1] = qg;
+          quantizedData.data[i * 4 + 2] = qb;
+          quantizedData.data[i * 4 + 3] = 255;
+        }
   
         // === STEP 3: Connected components ===
         report("Segmentation des zones", 48, "Étiquetage des composantes connexes");
