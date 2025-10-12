@@ -39,6 +39,7 @@ export interface ColorAnalysis {
   recommendedNumColors: number;
   recommendedMinRegionSize: number;
   quantStep?: number;
+  mode: 'vector' | 'photo';
 }
 
 export interface ProcessedResult {
@@ -142,6 +143,7 @@ interface CacheKey {
   numColors: number;
   minRegionSize: number;
   smoothness: number;
+  mergeTolerance: number;
 }
 
 interface CacheEntry {
@@ -158,7 +160,7 @@ const resultCache = new LRUCache<ProcessedResult>(5, 10 * 60 * 1000, false);
  * Generate cache key from parameters
  */
 function generateCacheKey(params: CacheKey): string {
-  return `${params.imageHash}_${params.numColors}_${params.minRegionSize}_${params.smoothness}`;
+  return `${params.imageHash}_${params.numColors}_${params.minRegionSize}_${params.smoothness}_${params.mergeTolerance}`;
 }
 
 /**
@@ -298,6 +300,21 @@ export async function analyzeImageColors(
     recommendedMinRegionSize = 200;
   }
 
+  // === 6.5️⃣ Détection du mode de traitement ===
+  let mode: 'vector' | 'photo' = 'photo';
+  if (
+    uniqueCount < 300 &&
+    complexityScore < 25 &&
+    dominantColors.length <= 10
+  ) {
+    mode = 'vector';
+  }
+
+  if (mode === 'vector') {
+    recommendedNumColors = Math.min(recommendedNumColors, 12);
+    recommendedMinRegionSize = Math.max(20, recommendedMinRegionSize);
+  }
+
   // === 7️⃣ Tri et pondération des couleurs dominantes ===
   const totalCount = Array.from(colorCounts.values()).reduce((acc, val) => acc + val, 0);
   const sortedColors = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
@@ -306,7 +323,7 @@ export async function analyzeImageColors(
 
   if (onProgress) onProgress(100);
 
-  console.log(`🧠 Analyse auto :\n  • Couleurs uniques (après quantification ${quantStep}) : ${uniqueCount}\n  • Complexité visuelle : ${complexityScore}/100\n  • Palette recommandée : ${recommendedNumColors} couleurs\n  • Taille min. région : ${recommendedMinRegionSize}px\n  `);
+  console.log(`🧠 Analyse auto :\n  • Couleurs uniques (après quantification ${quantStep}) : ${uniqueCount}\n  • Complexité visuelle : ${complexityScore}/100\n  • Palette recommandée : ${recommendedNumColors} couleurs\n  • Taille min. région : ${recommendedMinRegionSize}px\n  • Mode détecté : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}\n  `);
 
   return {
     uniqueColorsCount: uniqueCount,
@@ -316,6 +333,7 @@ export async function analyzeImageColors(
     recommendedNumColors,
     recommendedMinRegionSize,
     quantStep,
+    mode,
   };
 }
 
@@ -363,9 +381,10 @@ function mergeNearIdenticalColors(
 function consolidateColorMap(
   palette: string[],
   colorMap: number[],
-  paletteLabCache: [number, number, number][]
+  paletteLabCache: [number, number, number][],
+  threshold: number
 ): { consolidatedPalette: string[]; consolidatedColorMap: number[] } {
-  const threshold = 5; // ΔE2000 < 5 = imperceptible difference
+  const effectiveThreshold = Math.max(threshold, 1);
   const mergeMap = new Map<number, number>(); // oldIndex -> newIndex
   const consolidatedPalette: string[] = [];
   const skip = new Set<number>();
@@ -386,8 +405,8 @@ function consolidateColorMap(
       
       const lab2 = paletteLabCache[j];
       const distance = deltaE2000(lab1, lab2);
-      
-      if (distance < threshold) {
+
+      if (distance < effectiveThreshold) {
         mergeMap.set(j, currentIndex);
         skip.add(j);
       }
@@ -813,6 +832,175 @@ function buildZonesFromLabels(
   });
 }
 
+function mergeSimilarAdjacentZones(
+  zones: Zone[],
+  labels: Int32Array,
+  palette: string[],
+  width: number,
+  height: number,
+  tolerance: number
+): { labels: Int32Array; zones: Zone[] } {
+  if (zones.length === 0 || tolerance <= 0) {
+    return { labels, zones };
+  }
+
+  const zoneMap = new Map<number, Zone>();
+  for (const zone of zones) {
+    zoneMap.set(zone.id, zone);
+  }
+
+  const paletteLab = palette.map(hex => {
+    const [r, g, b] = hexToRgb(hex);
+    return rgbToLab(r, g, b);
+  });
+
+  const parent = new Map<number, number>();
+  for (const zone of zones) {
+    parent.set(zone.id, zone.id);
+  }
+
+  const find = (id: number): number => {
+    let root = parent.get(id) ?? id;
+    while (parent.get(root) !== root) {
+      const next = parent.get(root);
+      if (next === undefined) break;
+      root = next;
+    }
+
+    // Path compression
+    let current = id;
+    while (current !== root) {
+      const next = parent.get(current);
+      if (next === undefined) break;
+      parent.set(current, root);
+      current = next;
+    }
+
+    return root;
+  };
+
+  const union = (a: number, b: number): boolean => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA === rootB) return false;
+    parent.set(rootB, rootA);
+    return true;
+  };
+
+  const processedPairs = new Set<string>();
+  let hasMerged = false;
+
+  const recordPair = (a: number, b: number) => {
+    const [minId, maxId] = a < b ? [a, b] : [b, a];
+    return `${minId}-${maxId}`;
+  };
+
+  const toleranceLimit = Math.max(tolerance, 0.5);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const label = labels[idx];
+      if (label === -1) continue;
+
+      const zoneA = zoneMap.get(label);
+      if (!zoneA) continue;
+
+      const neighbors: number[] = [];
+      if (x + 1 < width) neighbors.push(labels[idx + 1]);
+      if (y + 1 < height) neighbors.push(labels[idx + width]);
+
+      for (const neighborLabel of neighbors) {
+        if (neighborLabel === -1 || neighborLabel === label) continue;
+
+        const pairKey = recordPair(label, neighborLabel);
+        if (processedPairs.has(pairKey)) continue;
+        processedPairs.add(pairKey);
+
+        const zoneB = zoneMap.get(neighborLabel);
+        if (!zoneB) continue;
+
+        const labA = paletteLab[zoneA.colorIdx];
+        const labB = paletteLab[zoneB.colorIdx];
+        if (!labA || !labB) continue;
+
+        const distance = deltaE2000(labA, labB);
+        if (distance <= toleranceLimit) {
+          if (union(zoneA.id, zoneB.id)) {
+            hasMerged = true;
+          }
+        }
+      }
+    }
+  }
+
+  if (!hasMerged) {
+    return { labels, zones };
+  }
+
+  const remappedLabels = new Int32Array(labels.length);
+  remappedLabels.fill(-1);
+
+  const rootToNewId = new Map<number, number>();
+  const rootToRepresentative = new Map<number, Zone>();
+  let nextId = 0;
+
+  for (const zone of zones) {
+    const root = find(zone.id);
+    if (!rootToNewId.has(root)) {
+      rootToNewId.set(root, nextId++);
+      rootToRepresentative.set(root, zone);
+    } else {
+      const current = rootToRepresentative.get(root)!;
+      if (zone.area > current.area) {
+        rootToRepresentative.set(root, zone);
+      }
+    }
+  }
+
+  const zoneIdToNewId = new Map<number, number>();
+  for (const zone of zones) {
+    const root = find(zone.id);
+    const newId = rootToNewId.get(root);
+    if (newId !== undefined) {
+      zoneIdToNewId.set(zone.id, newId);
+    }
+  }
+
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    if (label === -1) {
+      remappedLabels[i] = -1;
+      continue;
+    }
+    const newId = zoneIdToNewId.get(label);
+    remappedLabels[i] = newId ?? -1;
+  }
+
+  const referenceZones: Zone[] = [];
+  for (const [root, zone] of rootToRepresentative.entries()) {
+    const newId = rootToNewId.get(root);
+    if (newId === undefined) continue;
+    referenceZones.push({
+      ...zone,
+      id: newId,
+    });
+  }
+
+  const rebuiltZones = buildZonesFromLabels(
+    remappedLabels,
+    palette,
+    width,
+    height,
+    referenceZones
+  );
+
+  return {
+    labels: remappedLabels,
+    zones: rebuiltZones,
+  };
+}
+
 /**
  * Merge small zones with their nearest neighbor by color distance and compactness
  * Optimized with zone maps for faster lookups
@@ -826,7 +1014,8 @@ function mergeSmallZones(
   minRegionSize: number
 ): { mergedLabels: Int32Array; mergedZones: Zone[] } {
   const mergedLabels = new Int32Array(labels);
-  const zonesToMerge = zones.filter(z => z.area < minRegionSize);
+  const minAreaThreshold = Math.max(minRegionSize, 20);
+  const zonesToMerge = zones.filter(z => z.area < minAreaThreshold);
   
   // Build zone map for O(1) lookups instead of O(n) find()
   const zoneMap = new Map<number, Zone>();
@@ -1804,6 +1993,7 @@ export async function processImage(
   numColors: number,
   minRegionSize: number,
   smoothness: number,
+  mergeTolerance: number,
   onProgress?: (stage: string, progress: number) => void
 ): Promise<ProcessedResult> {
   const GLOBAL_TIMEOUT = 30000; // 30 seconds max
@@ -1830,7 +2020,13 @@ export async function processImage(
 
     const run = async () => {
       try {
-        report("Initialisation du traitement", 2, `Paramètres : ${numColors} couleurs, zone minimale ${minRegionSize}px, lissage ${smoothness}`);
+        const effectiveMinRegionSize = Math.max(minRegionSize, 20);
+        const effectiveMergeTolerance = Math.max(mergeTolerance, 1);
+        report(
+          "Initialisation du traitement",
+          2,
+          `Paramètres : ${numColors} couleurs, zone minimale ${effectiveMinRegionSize}px, lissage ${smoothness}, fusion ΔE ≤ ${effectiveMergeTolerance}`
+        );
         report("Chargement de l'image", 5, "Décodage de la source");
         const loadedImage = await loadImageSource(imageFile);
   
@@ -1862,8 +2058,9 @@ export async function processImage(
         const cacheKey = generateCacheKey({
           imageHash,
           numColors,
-          minRegionSize,
+          minRegionSize: effectiveMinRegionSize,
           smoothness,
+          mergeTolerance: effectiveMergeTolerance,
         });
   
         const cached = getCachedResult(cacheKey);
@@ -1895,7 +2092,7 @@ export async function processImage(
         report("Quantification des couleurs", 15, `K-means++ sur ${Math.round(imageData.data.length / 4)} pixels`);
         const quantizationStart = Date.now();
         let palette = quantizeColors(imageData, numColors);
-        palette = mergeNearIdenticalColors(palette, 5); // Merge imperceptible color differences
+        palette = mergeNearIdenticalColors(palette, effectiveMergeTolerance); // Merge imperceptible color differences
         report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
   
 // === STEP 2: Pixel mapping ===
@@ -1951,7 +2148,8 @@ const consolidationStart = Date.now();
 const { consolidatedPalette, consolidatedColorMap } = consolidateColorMap(
   palette,
   Array.from(colorMap), // ✅ convertit le TypedArray
-  paletteLabCache
+  paletteLabCache,
+  effectiveMergeTolerance
 );
 
 report(
@@ -1997,7 +2195,7 @@ report(
 );
 
 // === STEP 4: Merge small zones ===
-report("Fusion des petites zones", 56, `Taille minimale ${minRegionSize}px`);
+report("Fusion des petites zones", 56, `Taille minimale ${effectiveMinRegionSize}px`);
 const mergeStart = Date.now();
 const { mergedLabels, mergedZones } = mergeSmallZones(
   initialZones,
@@ -2005,19 +2203,48 @@ const { mergedLabels, mergedZones } = mergeSmallZones(
   palette,
   width,
   height,
-  minRegionSize
+  effectiveMinRegionSize
 );
+
+// === STEP 4.5: Merge adjacent zones sharing identical colors ===
+const adjacencyTolerance = Math.min(effectiveMergeTolerance / 2, 2);
+let postMergeLabels = mergedLabels;
+let postMergeZones = mergedZones;
+if (adjacencyTolerance > 0 && mergedZones.length > 0) {
+  report(
+    "Fusion des contours fantômes",
+    58,
+    `ΔE ≤ ${adjacencyTolerance.toFixed(2)} entre zones adjacentes`
+  );
+  const adjacencyStart = Date.now();
+  const mergedAdjacencyResult = mergeSimilarAdjacentZones(
+    mergedZones,
+    mergedLabels,
+    palette,
+    width,
+    height,
+    adjacencyTolerance
+  );
+  postMergeLabels = mergedAdjacencyResult.labels;
+  postMergeZones = mergedAdjacencyResult.zones;
+  report(
+    "Contours fantômes fusionnés",
+    59,
+    `${mergedZones.length - postMergeZones.length} regroupements en ${Date.now() - adjacencyStart}ms`
+  );
+}
+
 report(
   "Fusion terminée",
   60,
-  `${mergedZones.length} zones après fusion en ${Date.now() - mergeStart}ms`
+  `${postMergeZones.length} zones après fusion en ${Date.now() - mergeStart}ms`
 );
 
 // === STEP 5: Smooth zones ===
 report("Lissage des bords", 64, `Itérations de lissage : ${Math.round(smoothness)}`);
 const smoothStart = Date.now();
 const smoothedLabels = smoothZones(
-  mergedLabels,
+  postMergeLabels,
   width,
   height,
   Math.round(smoothness)
@@ -2027,7 +2254,7 @@ const smoothedZones = buildZonesFromLabels(
   palette,
   width,
   height,
-  mergedZones
+  postMergeZones
 );
 report(
   "Lissage terminé",
