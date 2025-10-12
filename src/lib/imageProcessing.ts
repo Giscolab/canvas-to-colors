@@ -1878,232 +1878,294 @@ export async function processImage(
         palette = mergeNearIdenticalColors(palette, 5); // Merge imperceptible color differences
         report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
   
-        // === STEP 2: Pixel mapping ===
-        report("Attribution des pixels", 35, "Calcul des distances perceptuelles ΔE2000");
-        const mappingStart = Date.now();
-        const colorMap: number[] = [];
-        const quantizedData = new ImageData(width, height);
-        const paletteLabCache = palette.map((hex) => {
-          const [r, g, b] = hexToRgb(hex);
-          return rgbToLab(r, g, b);
-        });
-  
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const r = imageData.data[i];
-          const g = imageData.data[i + 1];
-          const b = imageData.data[i + 2];
-  
-          let minDist = Infinity;
-          let colorIndex = 0;
-  
-          const pixelLab = rgbToLab(r, g, b);
-          // Use for loop instead of forEach to prevent stack overflow
-          for (let idx = 0; idx < paletteLabCache.length; idx++) {
-            const dist = deltaE2000(pixelLab, paletteLabCache[idx]);
-            if (dist < minDist) {
-              minDist = dist;
-              colorIndex = idx;
-            }
-          }
-  
-          colorMap.push(colorIndex);
-          const [qr, qg, qb] = hexToRgb(palette[colorIndex]);
-          quantizedData.data[i] = qr;
-          quantizedData.data[i + 1] = qg;
-          quantizedData.data[i + 2] = qb;
-          quantizedData.data[i + 3] = 255;
-        }
-        report("Attribution terminée", 42, `Carte de couleurs générée en ${Date.now() - mappingStart}ms`);
-  
-        // === STEP 2.5: Consolidate near-identical colors ===
-        report("Consolidation des couleurs", 44, "Fusion des couleurs perceptuellement identiques");
-        const consolidationStart = Date.now();
-        const { consolidatedPalette, consolidatedColorMap } = consolidateColorMap(
-          palette,
-          colorMap,
-          paletteLabCache
-        );
-        report("Consolidation terminée", 46, `${palette.length - consolidatedPalette.length} couleurs fusionnées en ${Date.now() - consolidationStart}ms`);
-        
-        // Update palette and colorMap with consolidated versions
-        palette = consolidatedPalette;
-        colorMap.splice(0, colorMap.length, ...consolidatedColorMap);
-        
-        // Update quantizedData with consolidated colors
-        const pixelCount = Math.min(
-          consolidatedColorMap.length,
-          width * height
-        );
-        for (let i = 0; i < pixelCount; i++) {
-          const colorIndex = consolidatedColorMap[i];
-          if (
-            typeof colorIndex !== "number" ||
-            colorIndex < 0 ||
-            colorIndex >= consolidatedPalette.length
-          ) {
-            continue;
-          }
+// === STEP 2: Pixel mapping ===
+report("Attribution des pixels", 35, "Calcul des distances perceptuelles ΔE2000");
+const mappingStart = Date.now();
 
-          const [qr, qg, qb] = hexToRgb(consolidatedPalette[colorIndex]);
-          const base = i * 4;
-          quantizedData.data[base] = qr;
-          quantizedData.data[base + 1] = qg;
-          quantizedData.data[base + 2] = qb;
-          quantizedData.data[base + 3] = 255;
-        }
-  
-        // === STEP 3: Connected components ===
-        report("Segmentation des zones", 48, "Étiquetage des composantes connexes");
-        const segmentationStart = Date.now();
-        const { labels: initialLabels, zones: initialZones } =
-          labelConnectedComponents(colorMap, width, height);
-        report("Segmentation terminée", 52, `${initialZones.length} zones détectées en ${Date.now() - segmentationStart}ms`);
-  
-        // === STEP 4: Merge small zones ===
-        report("Fusion des petites zones", 56, `Taille minimale ${minRegionSize}px`);
-        const mergeStart = Date.now();
-        const { mergedLabels, mergedZones } = mergeSmallZones(
-          initialZones,
-          initialLabels,
-          palette,
-          width,
-          height,
-          minRegionSize
-        );
-        report("Fusion terminée", 60, `${mergedZones.length} zones après fusion en ${Date.now() - mergeStart}ms`);
-  
-        // === STEP 5: Smooth zones ===
-        report("Lissage des bords", 64, `Itérations de lissage : ${Math.round(smoothness)}`);
-        const smoothStart = Date.now();
-        const smoothedLabels = smoothZones(
-          mergedLabels,
-          width,
-          height,
-          Math.round(smoothness)
-        );
-        const smoothedZones = buildZonesFromLabels(
-          smoothedLabels,
-          palette,
-          width,
-          height,
-          mergedZones
-        );
-        report("Lissage terminé", 68, `${smoothedZones.length} zones prêtes en ${Date.now() - smoothStart}ms`);
-  
-        // === STEP 6: Contour tracing ===
-        report("Traçage des contours", 72, "Marching Squares en cours");
-        const contourStart = Date.now();
-        const contours = traceContours(width, height, smoothedZones);
-        report("Contours extraits", 76, `${contours.length} chemins détectés en ${Date.now() - contourStart}ms`);
-  
-        // === STEP 6.5: Merge polygons of same color ===
-        report("Fusion topologique", 80, "Regroupement des polygones par couleur");
-        const topologyStart = Date.now();
-        const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
-        report("Topologie stabilisée", 83, `${mergedContours.length} contours après fusion en ${Date.now() - topologyStart}ms`);
-  
-        // === STEP 7: Label placement refinement ===
-        report("Placement des numéros", 86, "Calcul des centres visuels");
-        const labelPlacementStart = Date.now();
-        const refinedZones = refineZoneLabelPositions(
-          smoothedZones,
-          mergedContours,
-          width,
-          height
-        );
-        report("Positions des étiquettes", 88, `Zones optimisées en ${Date.now() - labelPlacementStart}ms`);
-  
-        // === STEP 8: Generate contours image ===
-        report("Génération des contours", 90, "Rasterisation des lignes de séparation");
-        const contoursData = detectEdges(smoothedLabels, width, height);
-  
-        // === STEP 9: SVG generation ===
-        report("Génération du SVG", 92, "Conversion des polygones en chemins");
-        const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
-  
-        // === STEP 10: Numbered version ===
-        report("Création de la version numérotée", 94, "Rendu des zones et numéros");
-        const numberedData = createNumberedVersion(
-          quantizedData,
-          refinedZones,
-          palette,
-          smoothedLabels
-        );
-  
-        // === ✅ STEP 11: True preview fusion (original + contours + numbers) ===
-        report("Fusion de l'aperçu final", 96, "Superposition image + contours + numéros");
-  
-        const { ctx: previewCtx } = canvasFactory.createCanvas(width, height);
-        previewCtx.drawImage(loadedImage.source, 0, 0, width, height);
-        const originalImageData = previewCtx.getImageData(0, 0, width, height);
-  
-        const previewData = createPreviewFusion(
-          originalImageData, // ✅ image originale, pas quantizedData
-          contoursData,
-          numberedData,
-          width,
-          height
-        );
-  
-        // === STEP 12: Legend generation ===
-        report("Génération de la légende", 98, `${palette.length} couleurs ordonnées par surface`);
-        const legend = generateLegend(refinedZones, palette, width * height);
-  
-        // === STEP 13: Build color->zone map ===
-        const colorZoneMapping = new Map<number, number[]>();
-        refinedZones.forEach((zone) => {
-          if (!colorZoneMapping.has(zone.colorIdx)) {
-            colorZoneMapping.set(zone.colorIdx, []);
-          }
-          colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
-        });
-  
-        // === Final result ===
-        clearTimeout(timeoutId);
-        const totalTime = Date.now() - startTime;
-        console.log(
-          `✅ Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`
-        );
-  
-        report("Validation des données", 97, "Contrôle des zones et contours");
-  
-        // Validation & caching
-        if (
-          refinedZones.length === 0 ||
-          palette.length === 0 ||
-          mergedContours.length === 0
-        ) {
-          throw new Error(
-            "Résultat de traitement invalide : zones, palette ou contours vides"
-          );
-        }
-  
-        report("Mise en cache", 99, "Résultat prêt pour réutilisation");
-        report("Terminé", 100, `${refinedZones.length} zones en ${totalTime}ms`);
-  
-        const result: ProcessedResult = {
-          contours: contoursData,
-          numbered: numberedData,
-          colorized: previewData,
-          palette,
-          zones: refinedZones,
-          svg,
-          legend,
-          labels: smoothedLabels,
-          colorZoneMapping,
-          progressLog: [...progressLog],
-          metadata: {
-            totalProcessingTimeMs: totalTime,
-            width,
-            height,
-            cacheKey,
-            wasCached: false,
-          },
-        };
-  
-        setCachedResult(cacheKey, result);
-  
-        resolve(result);
+// ⚡️ Utilisation d'un TypedArray pour éviter la surcharge de pile
+const colorMap = new Uint16Array(width * height);
+const quantizedData = new ImageData(width, height);
+
+// Pré-calcul du Lab pour la palette
+const paletteLabCache = new Array(palette.length);
+for (let i = 0; i < palette.length; i++) {
+  const [r, g, b] = hexToRgb(palette[i]);
+  paletteLabCache[i] = rgbToLab(r, g, b);
+}
+
+let pixelIndex = 0;
+for (let i = 0; i < imageData.data.length; i += 4) {
+  const r = imageData.data[i];
+  const g = imageData.data[i + 1];
+  const b = imageData.data[i + 2];
+
+  const pixelLab = rgbToLab(r, g, b);
+  let minDist = Infinity;
+  let colorIndex = 0;
+
+  // Boucle optimisée
+  for (let idx = 0; idx < paletteLabCache.length; idx++) {
+    const dist = deltaE2000(pixelLab, paletteLabCache[idx]);
+    if (dist < minDist) {
+      minDist = dist;
+      colorIndex = idx;
+    }
+  }
+
+  // Affectation directe sans push()
+  colorMap[pixelIndex++] = colorIndex;
+
+  const [qr, qg, qb] = hexToRgb(palette[colorIndex]);
+  quantizedData.data[i] = qr;
+  quantizedData.data[i + 1] = qg;
+  quantizedData.data[i + 2] = qb;
+  quantizedData.data[i + 3] = 255;
+}
+
+report("Attribution terminée", 42, `Carte de couleurs générée en ${Date.now() - mappingStart}ms`);
+
+// === STEP 2.5: Consolidate near-identical colors ===
+report("Consolidation des couleurs", 44, "Fusion des couleurs perceptuellement identiques");
+const consolidationStart = Date.now();
+
+const { consolidatedPalette, consolidatedColorMap } = consolidateColorMap(
+  palette,
+  Array.from(colorMap), // ✅ convertit le TypedArray
+  paletteLabCache
+);
+
+report(
+  "Consolidation terminée",
+  46,
+  `${palette.length - consolidatedPalette.length} couleurs fusionnées en ${Date.now() - consolidationStart}ms`
+);
+
+// ✅ Update palette et colorMap (reconstruit TypedArray propre)
+palette = consolidatedPalette;
+const newColorMap = new Uint16Array(consolidatedColorMap.length);
+for (let i = 0; i < consolidatedColorMap.length; i++) {
+  newColorMap[i] = consolidatedColorMap[i];
+}
+
+// ✅ Mise à jour du quantizedData consolidé
+const pixelCount = Math.min(consolidatedColorMap.length, width * height);
+for (let i = 0; i < pixelCount; i++) {
+  const colorIndex = consolidatedColorMap[i];
+  if (
+    typeof colorIndex !== "number" ||
+    colorIndex < 0 ||
+    colorIndex >= consolidatedPalette.length
+  ) continue;
+
+  const [qr, qg, qb] = hexToRgb(consolidatedPalette[colorIndex]);
+  const base = i * 4;
+  quantizedData.data[base] = qr;
+  quantizedData.data[base + 1] = qg;
+  quantizedData.data[base + 2] = qb;
+  quantizedData.data[base + 3] = 255;
+}
+
+// === STEP 3: Connected components ===
+report("Segmentation des zones", 48, "Étiquetage des composantes connexes");
+const segmentationStart = Date.now();
+const { labels: initialLabels, zones: initialZones } =
+  labelConnectedComponents(Array.from(newColorMap), width, height); // ✅ conversion Array
+report(
+  "Segmentation terminée",
+  52,
+  `${initialZones.length} zones détectées en ${Date.now() - segmentationStart}ms`
+);
+
+// === STEP 4: Merge small zones ===
+report("Fusion des petites zones", 56, `Taille minimale ${minRegionSize}px`);
+const mergeStart = Date.now();
+const { mergedLabels, mergedZones } = mergeSmallZones(
+  initialZones,
+  initialLabels,
+  palette,
+  width,
+  height,
+  minRegionSize
+);
+report(
+  "Fusion terminée",
+  60,
+  `${mergedZones.length} zones après fusion en ${Date.now() - mergeStart}ms`
+);
+
+// === STEP 5: Smooth zones ===
+report("Lissage des bords", 64, `Itérations de lissage : ${Math.round(smoothness)}`);
+const smoothStart = Date.now();
+const smoothedLabels = smoothZones(
+  mergedLabels,
+  width,
+  height,
+  Math.round(smoothness)
+);
+const smoothedZones = buildZonesFromLabels(
+  smoothedLabels,
+  palette,
+  width,
+  height,
+  mergedZones
+);
+report(
+  "Lissage terminé",
+  68,
+  `${smoothedZones.length} zones prêtes en ${Date.now() - smoothStart}ms`
+);
+
+// === STEP 6: Contour tracing ===
+report("Traçage des contours", 72, "Marching Squares en cours");
+const contourStart = Date.now();
+const contours = traceContours(width, height, smoothedZones);
+report(
+  "Contours extraits",
+  76,
+  `${contours.length} chemins détectés en ${Date.now() - contourStart}ms`
+);
+
+// === STEP 6.5: Merge polygons of same color ===
+report("Fusion topologique", 80, "Regroupement des polygones par couleur");
+const topologyStart = Date.now();
+const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
+report(
+  "Topologie stabilisée",
+  83,
+  `${mergedContours.length} contours après fusion en ${Date.now() - topologyStart}ms`
+);
+
+// === STEP 7: Label placement refinement ===
+report("Placement des numéros", 86, "Calcul des centres visuels");
+const labelPlacementStart = Date.now();
+const refinedZones = refineZoneLabelPositions(
+  smoothedZones,
+  mergedContours,
+  width,
+  height
+);
+report(
+  "Positions des étiquettes",
+  88,
+  `Zones optimisées en ${Date.now() - labelPlacementStart}ms`
+);
+
+// === STEP 8: Generate contours image ===
+report("Génération des contours", 90, "Rasterisation des lignes de séparation");
+const contoursData = detectEdges(smoothedLabels, width, height);
+
+// === STEP 9: SVG generation ===
+report("Génération du SVG", 92, "Conversion des polygones en chemins");
+const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
+
+// === STEP 10: Numbered version ===
+report("Création de la version numérotée", 94, "Rendu des zones et numéros");
+const numberedData = createNumberedVersion(
+  quantizedData,
+  refinedZones,
+  palette,
+  smoothedLabels
+);
+
+// === STEP 11: True preview fusion ===
+report("Fusion de l'aperçu final", 96, "Superposition image + contours + numéros");
+
+const { ctx: previewCtx } = canvasFactory.createCanvas(width, height);
+previewCtx.drawImage(loadedImage.source, 0, 0, width, height);
+const originalImageData = previewCtx.getImageData(0, 0, width, height);
+
+const previewData = createPreviewFusion(
+  originalImageData,
+  contoursData,
+  numberedData,
+  width,
+  height
+);
+
+// === STEP 12: Legend generation ===
+report("Génération de la légende", 98, `${palette.length} couleurs ordonnées par surface`);
+const legend = generateLegend(refinedZones, palette, width * height);
+
+// === STEP 13: Build color->zone map ===
+const colorZoneMapping = new Map<number, number[]>();
+for (const zone of refinedZones) {
+  if (!colorZoneMapping.has(zone.colorIdx)) {
+    colorZoneMapping.set(zone.colorIdx, []);
+  }
+  colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
+}
+
+// === Final result ===
+clearTimeout(timeoutId);
+const totalTime = Date.now() - startTime;
+console.log(
+  `✅ Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`
+);
+
+report("Validation des données", 97, "Contrôle des zones et contours");
+
+if (!refinedZones.length || !palette.length || !mergedContours.length) {
+  throw new Error("Résultat de traitement invalide : zones, palette ou contours vides");
+}
+
+report("Mise en cache", 99, "Résultat prêt pour réutilisation");
+report("Terminé", 100, `${refinedZones.length} zones en ${totalTime}ms`);
+
+// 🧩 Safe serialization with deep logging
+console.groupCollapsed("🧩 Safe serialization diagnostics");
+console.log("Zones:", refinedZones.length);
+console.log("Palette:", palette.length);
+console.log("Contours:", mergedContours.length);
+
+let totalPixels = 0, largestZone = 0;
+for (const z of refinedZones) {
+  totalPixels += z.pixels.length;
+  largestZone = Math.max(largestZone, z.pixels.length);
+}
+console.log("Taille totale pixels:", totalPixels);
+console.log("Plus grande zone:", largestZone);
+
+const safeZones = refinedZones.map((z) => ({
+  ...z,
+  pixels: z.area < 20000 ? Array.from(z.pixels.slice(0, 20000)) : [],
+}));
+const safeColorZoneMapping = Object.fromEntries(Array.from(colorZoneMapping.entries()));
+console.log("Mapping couleurs:", Object.keys(safeColorZoneMapping).length);
+
+const estimatedSizeMb = (
+  JSON.stringify({ zones: safeZones.slice(0, 10), colorZoneMapping: safeColorZoneMapping }).length /
+  1024 /
+  1024
+).toFixed(2);
+console.log("Taille JSON estimée:", `${estimatedSizeMb} MB`);
+console.groupEnd();
+
+const result: ProcessedResult = {
+  contours: contoursData,
+  numbered: numberedData,
+  colorized: previewData,
+  palette,
+  zones: safeZones,
+  svg,
+  legend,
+  labels: smoothedLabels,
+  colorZoneMapping: safeColorZoneMapping,
+  progressLog: [...progressLog],
+  metadata: { totalProcessingTimeMs: totalTime, width, height, cacheKey, wasCached: false },
+};
+
+// 🔍 Structured clone test
+try {
+  structuredClone(result);
+  console.log("✅ Structured clone test réussi — pas de références circulaires.");
+} catch (cloneErr) {
+  console.error("❌ Structured clone échoué :", cloneErr);
+}
+
+setCachedResult(cacheKey, result);
+resolve(result);
+
+
     } catch (error) {
       clearTimeout(timeoutId);
       const message =
