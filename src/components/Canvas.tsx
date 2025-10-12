@@ -1,14 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import {
-  Download,
-  FileCode,
-  ZoomIn,
-  Maximize2,
-  RefreshCw
-} from "lucide-react";
-import { useRef, useEffect, useState, useCallback } from "react";
+import { Download, FileCode, ZoomIn, Maximize2, RefreshCw } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
 import { useCanvasInteractions, Zone } from "@/hooks/useCanvasInteractions";
 import { Badge } from "@/components/ui/badge";
 
@@ -26,75 +20,138 @@ interface CanvasProps {
   onZonesByColorReady?: (zonesByColor: Map<number, Zone[]>) => void;
 }
 
-export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON, onZonesByColorReady }: CanvasProps) => {
+export const Canvas = ({
+  originalImage,
+  processedData,
+  onExportPNG,
+  onExportJSON,
+  onZonesByColorReady
+}: CanvasProps) => {
   const contoursCanvasRef = useRef<HTMLCanvasElement>(null);
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
-  const colorizedCanvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Draw all canvases once when data is available (optimized single loop)
-  useEffect(() => {
-    if (!processedData) return;
+// Draw the image and layers once data is available
+useEffect(() => {
+  if (!processedData) return;
 
-    [
-      { data: processedData.contours, ref: contoursCanvasRef },
-      { data: processedData.numbered, ref: numberedCanvasRef },
-      { data: processedData.colorized, ref: colorizedCanvasRef }
-    ].forEach(({ data, ref }) => {
-      if (data && ref.current) {
-        const canvas = ref.current;
-        canvas.width = data.width;
-        canvas.height = data.height;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (ctx) ctx.putImageData(data, 0, 0);
+  const drawCanvas = (
+    canvasRef: React.RefObject<HTMLCanvasElement>,
+    data: ImageData | null
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    // Efface tout avant redessin
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (data) {
+      // ✅ Fixe la taille avant d’afficher l’image
+      canvas.width = data.width;
+      canvas.height = data.height;
+      ctx.putImageData(data, 0, 0);
+    } else {
+      // Fond neutre si pas encore de data
+      canvas.width = 512;
+      canvas.height = 512;
+      ctx.fillStyle = "#f8f9fa";
+      ctx.fillRect(0, 0, 512, 512);
+    }
+  };
+
+  // Dessine les calques de base
+  drawCanvas(contoursCanvasRef, processedData.contours);
+  drawCanvas(numberedCanvasRef, processedData.numbered);
+
+  // === Fusion en "aperçu" ===
+  if (previewCanvasRef.current && originalImage) {
+    const previewCanvas = previewCanvasRef.current;
+    const ctx = previewCanvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous"; // évite les erreurs CORS avec fichiers locaux
+
+    img.onload = () => {
+      previewCanvas.width = img.width;
+      previewCanvas.height = img.height;
+
+      // Étape 1 : Image originale
+      ctx.globalAlpha = 1;
+      ctx.drawImage(img, 0, 0);
+
+      // Étape 2 : Contours
+      if (contoursCanvasRef.current) {
+        ctx.globalAlpha = 1;
+        ctx.drawImage(contoursCanvasRef.current, 0, 0);
       }
-    });
-  }, [processedData]);
 
-  const contoursInteractions = useCanvasInteractions({
-    canvasRef: contoursCanvasRef,
-    originalImageData: processedData?.contours || null,
-    zones: processedData?.zones || [],
-    labels: processedData?.labels,
-  });
+      // Étape 3 : Numéros
+      if (numberedCanvasRef.current) {
+        ctx.globalAlpha = 1;
+        ctx.drawImage(numberedCanvasRef.current, 0, 0);
+      }
+    };
 
-  const numberedInteractions = useCanvasInteractions({
-    canvasRef: numberedCanvasRef,
-    originalImageData: processedData?.numbered || null,
-    zones: processedData?.zones || [],
-    labels: processedData?.labels,
-  });
+    img.src = originalImage;
+  }
+}, [
+  processedData?.contours,
+  processedData?.numbered,
+  processedData?.colorized,
+  originalImage,
+]);
 
-  const colorizedInteractions = useCanvasInteractions({
-    canvasRef: colorizedCanvasRef,
-    originalImageData: processedData?.colorized || null,
-    zones: processedData?.zones || [],
-    labels: processedData?.labels,
-  });
+// === Canvas Interactions ===
+const contoursInteractions = useCanvasInteractions({
+  canvasRef: contoursCanvasRef,
+  originalImageData: processedData?.contours || null,
+  zones: processedData?.zones || [],
+  labels: processedData?.labels,
+});
 
-  // Expose zonesByColor to parent when available (debounced for performance)
+const numberedInteractions = useCanvasInteractions({
+  canvasRef: numberedCanvasRef,
+  originalImageData: processedData?.numbered || null,
+  zones: processedData?.zones || [],
+  labels: processedData?.labels,
+});
+
+const previewInteractions = useCanvasInteractions({
+  canvasRef: previewCanvasRef,
+  originalImageData: processedData?.colorized || null,
+  zones: processedData?.zones || [],
+  labels: processedData?.labels,
+});
+
+
+  // Emit zones by color when ready
   useEffect(() => {
-    if (onZonesByColorReady && colorizedInteractions.zonesByColor.size > 0) {
+    if (onZonesByColorReady && previewInteractions.zonesByColor.size > 0) {
       const timeout = setTimeout(() => {
-        onZonesByColorReady(colorizedInteractions.zonesByColor);
+        onZonesByColorReady(previewInteractions.zonesByColor);
       }, 150);
       return () => clearTimeout(timeout);
     }
-  }, [colorizedInteractions.zonesByColor, onZonesByColorReady]);
+  }, [previewInteractions.zonesByColor, onZonesByColorReady]);
 
-  // Centralized interactions mapping (more efficient than switch)
   const interactions = {
     contours: contoursInteractions,
     numbered: numberedInteractions,
-    colorized: colorizedInteractions
+    preview: previewInteractions,
   };
 
-  const activeInteractions = activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
+  const activeInteractions =
+    activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
+
   const zonesCount = processedData?.zones?.length || 0;
 
-  // Freeze document scroll when in fullscreen mode
   useEffect(() => {
     document.body.style.overflow = isFullscreen ? "hidden" : "auto";
     return () => {
@@ -103,7 +160,11 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
   }, [isFullscreen]);
 
   return (
-    <Card className={`p-4 flex-1 relative border bg-card text-card-foreground shadow-sm ${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
+    <Card
+      className={`p-4 flex-1 relative border bg-card text-card-foreground shadow-sm ${
+        isFullscreen ? "fixed inset-4 z-50" : ""
+      }`}
+    >
       <div className="space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -116,18 +177,36 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
           <div className="flex gap-1.5">
             {activeInteractions && activeTab !== "original" && (
               <>
-                <Button variant="outline" size="sm" onClick={() => activeInteractions.resetTransform()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => activeInteractions.resetTransform()}
+                >
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setIsFullscreen(!isFullscreen)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                >
                   <Maximize2 className="h-4 w-4" />
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={onExportPNG} disabled={!processedData}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportPNG}
+              disabled={!processedData}
+            >
               <Download className="mr-2 h-4 w-4" /> PNG
             </Button>
-            <Button variant="outline" size="sm" onClick={onExportJSON} disabled={!processedData}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportJSON}
+              disabled={!processedData}
+            >
               <FileCode className="mr-2 h-4 w-4" /> JSON
             </Button>
           </div>
@@ -143,50 +222,96 @@ export const Canvas = ({ originalImage, processedData, onExportPNG, onExportJSON
         )}
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-4 rounded-md border bg-muted/50 text-xs">
             <TabsTrigger value="original">Original</TabsTrigger>
-            <TabsTrigger value="contours" disabled={!processedData}>Contours</TabsTrigger>
-            <TabsTrigger value="numbered" disabled={!processedData}>Numéroté</TabsTrigger>
-            <TabsTrigger value="colorized" disabled={!processedData}>Aperçu</TabsTrigger>
+            <TabsTrigger value="contours" disabled={!processedData}>
+              Contours
+            </TabsTrigger>
+            <TabsTrigger value="numbered" disabled={!processedData}>
+              Numéroté
+            </TabsTrigger>
+            <TabsTrigger value="preview" disabled={!processedData}>
+              Aperçu
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="original" className="mt-3 transition-opacity duration-300 ease-in-out">
+          {/* Original */}
+          <TabsContent
+            value="original"
+            className="mt-3 transition-opacity duration-300 ease-in-out"
+          >
             <div className="canvas-container bg-secondary rounded-md shadow-inner">
               {originalImage ? (
                 <img src={originalImage} alt="Original" />
               ) : (
-                <div className="text-muted-foreground p-6 text-sm">Aucune image chargée</div>
+                <div className="text-muted-foreground p-6 text-sm">
+                  Aucune image chargée
+                </div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="contours" className="mt-3 transition-opacity duration-300 ease-in-out">
+          {/* Contours */}
+          <TabsContent
+            value="contours"
+            className="mt-3 transition-opacity duration-300 ease-in-out"
+          >
             <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.contours ? (
-                <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+                <canvas
+                  ref={contoursCanvasRef}
+                  className="cursor-move"
+                  style={{ touchAction: "none" }}
+                />
               ) : (
-                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">
+                  Traitez d'abord une image
+                </div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="numbered" className="mt-3 transition-opacity duration-300 ease-in-out">
+          {/* Numbered */}
+          <TabsContent
+            value="numbered"
+            className="mt-3 transition-opacity duration-300 ease-in-out"
+          >
             <div className="canvas-container bg-white rounded-md shadow-inner">
               {processedData?.numbered ? (
-                <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+                <canvas
+                  ref={numberedCanvasRef}
+                  className="cursor-move"
+                  style={{ touchAction: "none" }}
+                />
               ) : (
-                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">
+                  Traitez d'abord une image
+                </div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="colorized" className="mt-3 transition-opacity duration-300 ease-in-out">
+          {/* Preview */}
+          <TabsContent
+            value="preview"
+            className="mt-3 transition-opacity duration-300 ease-in-out"
+          >
             <div className="canvas-container bg-white rounded-md shadow-inner">
-              {processedData?.colorized ? (
-                <canvas ref={colorizedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+              {processedData ? (
+                <canvas
+                  ref={previewCanvasRef}
+                  className="cursor-move"
+                  style={{ touchAction: "none" }}
+                />
               ) : (
-                <div className="text-muted-foreground p-6 text-sm">Traitez d'abord une image</div>
+                <div className="text-muted-foreground p-6 text-sm">
+                  Traitez d'abord une image
+                </div>
               )}
             </div>
           </TabsContent>

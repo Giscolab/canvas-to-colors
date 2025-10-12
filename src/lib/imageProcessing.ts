@@ -122,7 +122,7 @@ interface CacheEntry {
 /**
  * LRU cache with proper ordering
  */
-const resultCache = new LRUCache<ProcessedResult>(10, 5 * 60 * 1000, false); // Reduced to 10 for heavy objects
+const resultCache = new LRUCache<ProcessedResult>(5, 10 * 60 * 1000, false);
 
 /**
  * Generate cache key from parameters
@@ -1365,50 +1365,68 @@ function generateLegend(zones: Zone[], palette: string[], totalPixels: number): 
 
 function detectEdges(labels: Int32Array, width: number, height: number): ImageData {
   const result = new ImageData(width, height);
-  
-  // Fill with white background
+
+  // === 1. Fond blanc par défaut ===
   for (let i = 0; i < result.data.length; i += 4) {
     result.data[i] = 255;
     result.data[i + 1] = 255;
     result.data[i + 2] = 255;
     result.data[i + 3] = 255;
   }
-  
-  // Draw thin black contours
+
+  // === 2. Détection des transitions de zones ===
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
       const label = labels[idx];
-      
-      // Check 4 neighbors for edge detection
+
+      // Ignore les pixels sans zone
+      if (label === -1) continue;
+
       let isEdge = false;
-      const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      
+      const deltas = [
+        [-1, 0], [1, 0],
+        [0, -1], [0, 1],
+      ];
+
       for (const [dx, dy] of deltas) {
         const nx = x + dx;
         const ny = y + dy;
+
+        // Si on sort de l'image → bord
         if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
           isEdge = true;
           break;
         }
+
         const nidx = ny * width + nx;
-        if (labels[nidx] !== label) {
+        const nlabel = labels[nidx];
+
+        // ✅ Correction : éviter les faux bords internes et pixels vides
+        if (nlabel !== label && nlabel !== -1) {
           isEdge = true;
           break;
         }
       }
-      
-      // Draw black pixel for edges
-      if (isEdge) {
+
+      // === 3. Dessine les contours fins (noir sur fond blanc) ===
+      if (isEdge && labels[idx] !== -1) {
         const offset = idx * 4;
-        result.data[offset] = 0;     // R
-        result.data[offset + 1] = 0; // G
-        result.data[offset + 2] = 0; // B
-        result.data[offset + 3] = 255; // A
+        // ✅ Ne redessine pas un pixel déjà noir
+        if (
+          result.data[offset] !== 0 ||
+          result.data[offset + 1] !== 0 ||
+          result.data[offset + 2] !== 0
+        ) {
+          result.data[offset] = 0;     // R
+          result.data[offset + 1] = 0; // G
+          result.data[offset + 2] = 0; // B
+          result.data[offset + 3] = 255; // A
+        }
       }
     }
   }
-  
+
   return result;
 }
 
@@ -1488,7 +1506,11 @@ export async function processImage(
 
   return new Promise(async (resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      reject(new Error('Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs.'));
+      reject(
+        new Error(
+          "Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs."
+        )
+      );
     }, GLOBAL_TIMEOUT);
 
     try {
@@ -1512,36 +1534,37 @@ export async function processImage(
 
       const { ctx } = canvasFactory.createCanvas(width, height);
       ctx.drawImage(loadedImage.source, 0, 0, width, height);
-      loadedImage.cleanup?.();
 
       const imageData = ctx.getImageData(0, 0, width, height);
 
-      // Check cache before processing
+      // === Cache check ===
       onProgress?.("Vérification du cache...", 10);
       const imageHash = await hashImageData(imageData);
-      const cacheKey = generateCacheKey({ imageHash, numColors, minRegionSize, smoothness });
-      
+      const cacheKey = generateCacheKey({
+        imageHash,
+        numColors,
+        minRegionSize,
+        smoothness,
+      });
+
       const cached = getCachedResult(cacheKey);
       if (cached) {
         clearTimeout(timeoutId);
-        console.log('✨ Returning cached result');
+        console.log("✨ Returning cached result");
         onProgress?.("Résultat en cache trouvé!", 100);
+        loadedImage.cleanup?.();
         return resolve(cached);
       }
 
-      // STEP 1: Quantize colors
+      // === STEP 1: Quantization ===
       onProgress?.("Quantification des couleurs (K-means++)...", 15);
-      console.log('Step 1: Quantizing colors...');
       const palette = quantizeColors(imageData, numColors);
 
-      // STEP 2: Map pixels to palette using ΔE2000 perceptual distance
+      // === STEP 2: Pixel mapping ===
       onProgress?.("Mapping des pixels (ΔE2000)...", 25);
-      console.log('Step 2: Mapping pixels to palette with perceptual distance...');
       const colorMap: number[] = [];
       const quantizedData = new ImageData(width, height);
-
-      // Pre-convert palette to Lab for performance
-      const paletteLabCache = palette.map(hex => {
+      const paletteLabCache = palette.map((hex) => {
         const [r, g, b] = hexToRgb(hex);
         return rgbToLab(r, g, b);
       });
@@ -1555,11 +1578,8 @@ export async function processImage(
         let colorIndex = 0;
 
         const pixelLab = rgbToLab(r, g, b);
-
-        // Use pre-calculated Lab palette for ΔE2000 distance
         paletteLabCache.forEach((paletteLabColor, idx) => {
           const dist = deltaE2000(pixelLab, paletteLabColor);
-
           if (dist < minDist) {
             minDist = dist;
             colorIndex = idx;
@@ -1574,18 +1594,13 @@ export async function processImage(
         quantizedData.data[i + 3] = 255;
       }
 
-      // STEP 3: Label connected components
+      // === STEP 3: Connected components ===
       onProgress?.("Segmentation des zones...", 40);
-      console.log('Step 3: Labeling connected components...');
-      const { labels: initialLabels, zones: initialZones } = labelConnectedComponents(
-        colorMap,
-        width,
-        height
-      );
+      const { labels: initialLabels, zones: initialZones } =
+        labelConnectedComponents(colorMap, width, height);
 
-      // STEP 4: Merge small zones
+      // === STEP 4: Merge small zones ===
       onProgress?.("Fusion des petites zones...", 50);
-      console.log('Step 4: Merging small zones...');
       const { mergedLabels, mergedZones } = mergeSmallZones(
         initialZones,
         initialLabels,
@@ -1595,16 +1610,14 @@ export async function processImage(
         minRegionSize
       );
 
-      // STEP 5: Smooth zones
+      // === STEP 5: Smooth zones ===
       onProgress?.("Lissage des bords...", 60);
-      console.log('Step 5: Smoothing zones...');
       const smoothedLabels = smoothZones(
         mergedLabels,
         width,
         height,
         Math.round(smoothness)
       );
-
       const smoothedZones = buildZonesFromLabels(
         smoothedLabels,
         palette,
@@ -1613,60 +1626,76 @@ export async function processImage(
         mergedZones
       );
 
-  // STEP 6: Trace contours
-  onProgress?.("Traçage des contours...", 70);
-  console.log('Step 6: Tracing contours...');
-  const contours = traceContours(width, height, smoothedZones);
-  
-  // STEP 6.5: Merge adjacent polygons of same color (new optimization)
-  onProgress?.("Fusion topologique (Martinez)...", 75);
-  console.log('Step 6.5: Merging adjacent polygons...');
-  const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
-  console.log(`Polygon merging: ${contours.length} -> ${mergedContours.length} contours`);
+      // === STEP 6: Contour tracing ===
+      onProgress?.("Traçage des contours...", 70);
+      const contours = traceContours(width, height, smoothedZones);
 
-  // STEP 7: Refine label placement using polylabel
-  onProgress?.("Placement des numéros...", 80);
-  console.log('Step 7: Refining label placement...');
-  const refinedZones = refineZoneLabelPositions(smoothedZones, mergedContours, width, height);
+      // === STEP 6.5: Merge polygons of same color ===
+      onProgress?.("Fusion topologique (Martinez)...", 75);
+      const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
 
-      // STEP 8: Generate edge image
+      // === STEP 7: Label placement refinement ===
+      onProgress?.("Placement des numéros...", 80);
+      const refinedZones = refineZoneLabelPositions(
+        smoothedZones,
+        mergedContours,
+        width,
+        height
+      );
+
+      // === STEP 8: Generate contours image ===
       onProgress?.("Détection des contours...", 85);
-      console.log('Step 8: Generating edge image...');
       const contoursData = detectEdges(smoothedLabels, width, height);
 
-  // STEP 9: Generate SVG
-  onProgress?.("Génération SVG...", 90);
-  console.log('Step 9: Generating SVG...');
-  const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
+      // === STEP 9: SVG generation ===
+      onProgress?.("Génération SVG...", 90);
+      const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
 
-      // STEP 10: Create numbered version with optimal positioning
+      // === STEP 10: Numbered version ===
       onProgress?.("Version numérotée...", 93);
-      console.log('Step 10: Creating numbered version...');
-      const numberedData = createNumberedVersion(quantizedData, refinedZones, palette, smoothedLabels);
+      const numberedData = createNumberedVersion(
+        quantizedData,
+        refinedZones,
+        palette,
+        smoothedLabels
+      );
 
-      // STEP 11: Create preview version (fusion: image + contours + numbers)
-      onProgress?.("Fusion des aperçus...", 96);
-      console.log('Step 11: Creating preview fusion...');
-      const previewData = createPreviewFusion(quantizedData, contoursData, numberedData, width, height);
+      // === ✅ STEP 11: True preview fusion (original + contours + numbers) ===
+      onProgress?.("Fusion de l'aperçu final...", 96);
+      console.log("Step 11: Creating true preview fusion...");
 
-      // STEP 12: Generate legend
+const { ctx: previewCtx } = canvasFactory.createCanvas(width, height);
+previewCtx.drawImage(loadedImage.source, 0, 0, width, height);
+const originalImageData = previewCtx.getImageData(0, 0, width, height);
+
+const previewData = createPreviewFusion(
+  originalImageData, // ✅ image originale, pas quantizedData
+  contoursData,
+  numberedData,
+  width,
+  height
+);
+
+
+      // === STEP 12: Legend generation ===
       onProgress?.("Génération de la légende...", 98);
-      console.log('Step 12: Generating legend...');
       const legend = generateLegend(refinedZones, palette, width * height);
 
-      // STEP 13: Build color->zone mapping
+      // === STEP 13: Build color->zone map ===
       const colorZoneMapping = new Map<number, number[]>();
-      refinedZones.forEach(zone => {
+      refinedZones.forEach((zone) => {
         if (!colorZoneMapping.has(zone.colorIdx)) {
           colorZoneMapping.set(zone.colorIdx, []);
         }
         colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
       });
 
-      const totalTime = Date.now() - startTime;
-      console.log(`Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`);
-
+      // === Final result ===
       clearTimeout(timeoutId);
+      const totalTime = Date.now() - startTime;
+      console.log(
+        `✅ Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`
+      );
 
       const result: ProcessedResult = {
         contours: contoursData,
@@ -1677,15 +1706,20 @@ export async function processImage(
         svg,
         legend,
         labels: smoothedLabels,
-        colorZoneMapping
+        colorZoneMapping,
       };
 
-      // Validate result integrity before caching
-      if (refinedZones.length === 0 || palette.length === 0 || mergedContours.length === 0) {
-        throw new Error('Résultat de traitement invalide : zones, palette ou contours vides');
+      // Validation & caching
+      if (
+        refinedZones.length === 0 ||
+        palette.length === 0 ||
+        mergedContours.length === 0
+      ) {
+        throw new Error(
+          "Résultat de traitement invalide : zones, palette ou contours vides"
+        );
       }
 
-      // Cache the result
       onProgress?.("Mise en cache...", 99);
       setCachedResult(cacheKey, result);
 
@@ -1693,7 +1727,11 @@ export async function processImage(
       resolve(result);
     } catch (error) {
       clearTimeout(timeoutId);
-      reject(error instanceof Error ? error : new Error('Erreur inconnue lors du traitement de l\'image'));
+      reject(
+        error instanceof Error
+          ? error
+          : new Error("Erreur inconnue lors du traitement de l'image")
+      );
     }
   });
 }
