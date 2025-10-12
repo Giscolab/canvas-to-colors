@@ -60,8 +60,26 @@ export class ImageProcessingWorker {
 
     return new Promise((resolve, reject) => {
       this.isActive = true;
-      let timeoutId: number | null = null;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       let resultReceived = false;
+
+      const restartTimeout = () => {
+        if (!this.isActive) {
+          return;
+        }
+
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+        }
+
+        timeoutId = setTimeout(() => {
+          if (!resultReceived && this.isActive) {
+            cleanup();
+            reject(new Error('Timeout: Le traitement a dépassé 35 secondes'));
+            this.terminate();
+          }
+        }, WORKER_TIMEOUT);
+      };
 
       const cleanup = () => {
         this.isActive = false;
@@ -83,13 +101,7 @@ export class ImageProcessingWorker {
         }
 
         // Set up timeout protection
-        timeoutId = setTimeout(() => {
-          if (!resultReceived && this.isActive) {
-            cleanup();
-            reject(new Error('Timeout: Le traitement a dépassé 35 secondes'));
-            this.terminate();
-          }
-        }, WORKER_TIMEOUT) as unknown as number;
+        restartTimeout();
 
         // Set up message handler with validation
         this.worker.onmessage = (e: MessageEvent) => {
@@ -105,6 +117,7 @@ export class ImageProcessingWorker {
 
           if (type === 'success') {
             resultReceived = true;
+            restartTimeout();
             // Don't resolve yet, wait for 'done' signal
           } else if (type === 'done') {
             if (resultReceived) {
@@ -117,8 +130,11 @@ export class ImageProcessingWorker {
               cleanup();
               reject(new Error('Traitement interrompu sans résultat'));
             }
-          } else if (type === 'progress' && onProgress && this.isActive) {
-            onProgress(payload.stage, payload.progress);
+          } else if (type === 'progress') {
+            restartTimeout();
+            if (onProgress && this.isActive) {
+              onProgress(payload.stage, payload.progress);
+            }
           } else if (type === 'error') {
             resultReceived = true;
             cleanup();
