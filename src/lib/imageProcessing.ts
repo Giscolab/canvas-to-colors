@@ -111,6 +111,11 @@ function rgbToHex(r: number, g: number, b: number): string {
   return rgbToHexColor(Math.round(r), Math.round(g), Math.round(b));
 }
 
+function quantizeChannel(value: number, step = 4): number {
+  const quantized = Math.round(value / step) * step;
+  return Math.min(255, Math.max(0, quantized));
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? [
@@ -235,9 +240,9 @@ export async function analyzeImageColors(
   const colorCounts = new Map<string, number>();
   
   for (let i = 0; i < imageData.data.length; i += 4 * sampleRate) {
-    const r = imageData.data[i];
-    const g = imageData.data[i + 1];
-    const b = imageData.data[i + 2];
+    const r = quantizeChannel(imageData.data[i]);
+    const g = quantizeChannel(imageData.data[i + 1]);
+    const b = quantizeChannel(imageData.data[i + 2]);
     const hex = rgbToHex(r, g, b);
     
     colorSet.add(hex);
