@@ -7,7 +7,11 @@ import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
-import { Canvas } from "@/components/Canvas";
+import { StudioLayout } from "@/components/studio/StudioLayout";
+import { ViewTabs } from "@/components/studio/ViewTabs";
+import { ExportBar } from "@/components/studio/ExportBar";
+import { DebugPanel } from "@/components/studio/DebugPanel";
+import { ProjectManager } from "@/components/studio/ProjectManager";
 import { ProcessedResult, ColorAnalysis, analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
@@ -154,7 +158,7 @@ const Index = () => {
   const handleExportJSON = () => exportJSON(processedData, { numColors, minRegionSize, smoothness });
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       {showConfetti && (
         <Confetti
           width={width}
@@ -173,10 +177,9 @@ const Index = () => {
         isVisible={isProcessing}
       />
       
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-[380px_1fr] gap-6">
-          {/* Left Panel */}
-          <div className="space-y-6">
+      <StudioLayout
+        leftPanel={
+          <>
             <ImageUpload 
               onImageSelect={handleImageSelect}
               selectedImage={selectedImageUrl}
@@ -199,40 +202,61 @@ const Index = () => {
               onProcess={handleProcess}
               isProcessing={isProcessing}
             />
-
-            {processedData && (
-              <ColorPalette colors={processedData.palette} />
-            )}
-
-            {processedData && zonesByColor.size > 0 && (
-              <PalettePanel
-                zonesByColor={zonesByColor}
-                selectedColorIdx={selectedColorIdx}
-                onColorSelect={setSelectedColorIdx}
-              />
-            )}
-
-            {user && <HistoryPanel />}
             
-            <AuthPanel />
-          </div>
-
-          {/* Main Canvas Area */}
-          <Canvas
+            <ProjectManager
+              currentImage={selectedImageUrl}
+              currentResult={processedData}
+              currentParams={{ numColors, minRegionSize, smoothness }}
+              onLoadProject={(project) => {
+                setSelectedImageUrl(project.imageUrl);
+                setProcessedData(project.result);
+                setNumColors(project.parameters.numColors);
+                setMinRegionSize(project.parameters.minRegionSize);
+                setSmoothness(project.parameters.smoothness);
+                toast.success(`Projet "${project.name}" chargé`);
+              }}
+            />
+          </>
+        }
+        
+        centerPanel={
+          <ViewTabs
             originalImage={selectedImageUrl}
+            processedData={processedData}
+          />
+        }
+        
+        rightPanel={
+          <>
+            {processedData && (
+              <>
+                <ColorPalette colors={processedData.palette} />
+                
+                {zonesByColor.size > 0 && (
+                  <PalettePanel
+                    zonesByColor={zonesByColor}
+                    selectedColorIdx={selectedColorIdx}
+                    onColorSelect={setSelectedColorIdx}
+                  />
+                )}
+                
+                <DebugPanel processedData={processedData} />
+              </>
+            )}
+            
+            {user && <HistoryPanel />}
+            <AuthPanel />
+          </>
+        }
+        
+        bottomBar={
+          <ExportBar
             processedData={processedData}
             onExportPNG={handleExportPNG}
             onExportJSON={handleExportJSON}
-            onZonesByColorReady={setZonesByColor}
           />
-        </div>
-      </main>
-
-      <footer className="glass border-t border-border/50 mt-12 py-6">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p className="font-medium">PaintByNumbers Studio • Créé avec ❤️ et ✨</p>
-        </div>
-      </footer>
+        }
+      />
     </div>
   );
 };
