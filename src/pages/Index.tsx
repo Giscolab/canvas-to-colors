@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
@@ -7,11 +7,12 @@ import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
-import { StudioLayout } from "@/components/studio/StudioLayout";
-import { ViewTabs } from "@/components/studio/ViewTabs";
+import { ResizableStudioLayout } from "@/components/studio/ResizableStudioLayout";
+import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
-import { ProjectManager } from "@/components/studio/ProjectManager";
+import { EnhancedProjectManager } from "@/components/studio/EnhancedProjectManager";
+import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { ProcessedResult, ColorAnalysis, analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
@@ -25,18 +26,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { Zone } from "@/hooks/useCanvasInteractions";
 import { IMAGE_PROCESSING, UI } from "@/config/constants";
 
-const Index = () => {
+function IndexContent() {
+  const studio = useStudio();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
-  const [numColors, setNumColors] = useState(20);
-  const [minRegionSize, setMinRegionSize] = useState(100);
-  const [smoothness, setSmoothness] = useState(50);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processedData, setProcessedData] = useState<ProcessedResult | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
-  const [colorAnalysis, setColorAnalysis] = useState<ColorAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const windowSize = useWindowSize();
   const width = windowSize?.width ?? 0;
@@ -46,7 +42,13 @@ const Index = () => {
   const { user } = useAuth();
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
-  const [mergeTolerance, setMergeTolerance] = useState(5);
+
+  // Sync with studio context
+  useEffect(() => {
+    if (studio.result) {
+      // Sync local state when studio result changes
+    }
+  }, [studio.result]);
 
   const handleImageSelect = async (file: File) => {
     try {
@@ -54,7 +56,15 @@ const Index = () => {
       // Normalize image with EXIF correction and resize
       const normalizedUrl = await resizeForDisplay(file, IMAGE_PROCESSING.MAX_DISPLAY_WIDTH);
       setSelectedImageUrl(normalizedUrl);
-      setProcessedData(null);
+      studio.setResult(null);
+      studio.setCurrentProject({ 
+        id: Date.now().toString(), 
+        name: file.name, 
+        timestamp: Date.now(),
+        imageUrl: normalizedUrl,
+        imageFile: file,
+        settings: studio.settings 
+      });
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
       toast.success("Image chargée avec succès ! 🎨");
@@ -65,13 +75,15 @@ const Index = () => {
         const analysis = await analyzeImageColors(file, (progress) => {
           console.log(`Analyse: ${progress.toFixed(0)}%`);
         });
-        setColorAnalysis(analysis);
+        studio.setAnalysis(analysis);
 
         // Apply recommendations automatically
-        setNumColors(analysis.recommendedNumColors);
-        setMinRegionSize(analysis.recommendedMinRegionSize);
-        setMergeTolerance(analysis.mode === "vector" ? 10 : 5);
-        setSmoothness(analysis.mode === "vector" ? 0 : 50);
+        studio.updateSettings({
+          numColors: analysis.recommendedNumColors,
+          minRegionSize: analysis.recommendedMinRegionSize,
+          mergeTolerance: analysis.mode === "vector" ? 10 : 5,
+          smoothness: analysis.mode === "vector" ? 0 : 50
+        });
         
         toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées — Recommandations appliquées`);
       } catch (error) {
@@ -92,7 +104,7 @@ const Index = () => {
       return;
     }
 
-    setIsProcessing(true);
+    studio.setIsProcessing(true);
     setProcessingProgress(0);
     setProcessingStage("Initialisation...");
     toast.info("Traitement de l'image en cours... ⚡");
@@ -101,14 +113,14 @@ const Index = () => {
 
     try {
       // Process image in Web Worker with progress updates
-      const vectorMode = colorAnalysis?.mode === "vector";
-      const effectiveMinRegionSize = Math.max(minRegionSize, vectorMode ? 20 : minRegionSize);
-      const effectiveSmoothness = vectorMode ? 0 : smoothness;
-      const effectiveMergeTolerance = vectorMode ? Math.max(mergeTolerance, 10) : mergeTolerance;
+      const vectorMode = studio.analysis?.mode === "vector";
+      const effectiveMinRegionSize = Math.max(studio.settings.minRegionSize, vectorMode ? 20 : studio.settings.minRegionSize);
+      const effectiveSmoothness = vectorMode ? 0 : studio.settings.smoothness;
+      const effectiveMergeTolerance = vectorMode ? Math.max(studio.settings.mergeTolerance, 10) : studio.settings.mergeTolerance;
 
       const result = await processImageWithWorker(
         selectedFile,
-        numColors,
+        studio.settings.numColors,
         effectiveMinRegionSize,
         effectiveSmoothness,
         effectiveMergeTolerance,
@@ -120,7 +132,7 @@ const Index = () => {
       
       const processingTime = Date.now() - startTime;
       
-      setProcessedData(result);
+      studio.setResult(result);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), UI.CONFETTI_DURATION_MS);
       toast.success("🎉 Modèle généré avec succès !");
@@ -135,7 +147,7 @@ const Index = () => {
         image_size: selectedFile.size,
         width: img.width,
         height: img.height,
-        num_colors: numColors,
+        num_colors: studio.settings.numColors,
         min_region_size: effectiveMinRegionSize,
         smoothness: effectiveSmoothness,
         processing_time_ms: processingTime,
@@ -147,15 +159,15 @@ const Index = () => {
       const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
       toast.error(errorMessage);
     } finally {
-      setIsProcessing(false);
+      studio.setIsProcessing(false);
       setProcessingProgress(0);
       setProcessingStage("");
     }
   };
 
-  const handleExportPNG = () => exportPNG(processedData);
+  const handleExportPNG = () => exportPNG(studio.result);
   
-  const handleExportJSON = () => exportJSON(processedData, { numColors, minRegionSize, smoothness });
+  const handleExportJSON = () => exportJSON(studio.result, studio.settings);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -174,10 +186,10 @@ const Index = () => {
       <ProcessingProgress
         stage={processingStage}
         progress={processingProgress}
-        isVisible={isProcessing}
+        isVisible={studio.isProcessing}
       />
       
-      <StudioLayout
+      <ResizableStudioLayout
         leftPanel={
           <>
             <ImageUpload 
@@ -185,52 +197,40 @@ const Index = () => {
               selectedImage={selectedImageUrl}
             />
             
-            {(colorAnalysis || isAnalyzing) && (
+            {(studio.analysis || isAnalyzing) && (
               <ColorAnalysisPanel 
-                analysis={colorAnalysis}
+                analysis={studio.analysis}
                 isAnalyzing={isAnalyzing}
               />
             )}
             
             <ParametersPanel
-              numColors={numColors}
-              onNumColorsChange={setNumColors}
-              minRegionSize={minRegionSize}
-              onMinRegionSizeChange={setMinRegionSize}
-              smoothness={smoothness}
-              onSmoothnessChange={setSmoothness}
+              numColors={studio.settings.numColors}
+              onNumColorsChange={(v) => studio.updateSettings({ numColors: v })}
+              minRegionSize={studio.settings.minRegionSize}
+              onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
+              smoothness={studio.settings.smoothness}
+              onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
               onProcess={handleProcess}
-              isProcessing={isProcessing}
+              isProcessing={studio.isProcessing}
             />
             
-            <ProjectManager
-              currentImage={selectedImageUrl}
-              currentResult={processedData}
-              currentParams={{ numColors, minRegionSize, smoothness }}
-              onLoadProject={(project) => {
-                setSelectedImageUrl(project.imageUrl);
-                setProcessedData(project.result);
-                setNumColors(project.parameters.numColors);
-                setMinRegionSize(project.parameters.minRegionSize);
-                setSmoothness(project.parameters.smoothness);
-                toast.success(`Projet "${project.name}" chargé`);
-              }}
-            />
+            <EnhancedProjectManager />
           </>
         }
         
         centerPanel={
-          <ViewTabs
+          <EnhancedViewTabs
             originalImage={selectedImageUrl}
-            processedData={processedData}
+            processedData={studio.result}
           />
         }
         
         rightPanel={
           <>
-            {processedData && (
+            {studio.result && (
               <>
-                <ColorPalette colors={processedData.palette} />
+                <ColorPalette colors={studio.result.palette} />
                 
                 {zonesByColor.size > 0 && (
                   <PalettePanel
@@ -240,7 +240,7 @@ const Index = () => {
                   />
                 )}
                 
-                <DebugPanel processedData={processedData} />
+                <DebugPanel processedData={studio.result} />
               </>
             )}
             
@@ -251,13 +251,21 @@ const Index = () => {
         
         bottomBar={
           <ExportBar
-            processedData={processedData}
+            processedData={studio.result}
             onExportPNG={handleExportPNG}
             onExportJSON={handleExportJSON}
           />
         }
       />
     </div>
+  );
+}
+
+const Index = () => {
+  return (
+    <StudioProvider>
+      <IndexContent />
+    </StudioProvider>
   );
 };
 
