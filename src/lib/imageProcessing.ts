@@ -2376,13 +2376,12 @@ console.log("Plus grande zone:", largestZone);
 
 const safeZones = refinedZones.map((z) => ({
   ...z,
-  pixels: z.area < 20000 ? Array.from(z.pixels.slice(0, 20000)) : [],
+  pixels: z.area < 20000 ? z.pixels.slice(0, 20000) : new Uint32Array(0),
 }));
-const safeColorZoneMapping = Object.fromEntries(Array.from(colorZoneMapping.entries()));
-console.log("Mapping couleurs:", Object.keys(safeColorZoneMapping).length);
+console.log("Mapping couleurs:", colorZoneMapping.size);
 
 const estimatedSizeMb = (
-  JSON.stringify({ zones: safeZones.slice(0, 10), colorZoneMapping: safeColorZoneMapping }).length /
+  JSON.stringify({ zones: safeZones.slice(0, 10).map(z => ({ ...z, pixels: [] })) }).length /
   1024 /
   1024
 ).toFixed(2);
@@ -2398,7 +2397,7 @@ const result: ProcessedResult = {
   svg,
   legend,
   labels: smoothedLabels,
-  colorZoneMapping: safeColorZoneMapping,
+  colorZoneMapping,
   progressLog: [...progressLog],
   metadata: { totalProcessingTimeMs: totalTime, width, height, cacheKey, wasCached: false },
 };
