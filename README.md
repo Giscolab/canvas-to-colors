@@ -34,14 +34,35 @@ Application web riche construite avec **React, TypeScript, Vite et Tailwind CSS*
 - Import par glisser-déposer avec normalisation (`resizeForDisplay`) et vérification de taille maximale (`IMAGE_PROCESSING.MAX_FILE_SIZE_MB`).
 - Analyse colorimétrique proactive (`analyzeImageColors`) : détection des dominantes, complexité et recommandations auto-appliquées (nombre optimal de couleurs, taille de zones).
 - Pipeline paramétrable : nombre de couleurs, taille minimale des régions, douceur des contours et suivi de progression en temps réel (`ProcessingProgress`).
+- Timeout configurable de **5 minutes** pour les traitements complexes (ajustable via `WORKER_TIMEOUT_MS`).
+
+### Studio Mode — Interface professionnelle
+- **Layout redimensionnable** (`ResizableStudioLayout`) : panneaux gauche/droite ajustables avec persistance des positions.
+- **Contexte global** (`StudioContext`) : gestion centralisée de l'état (projet actif, vue, paramètres, préférences utilisateur).
+- **Tabs améliorés** (`EnhancedViewTabs`) : 5 modes de visualisation avec cache intelligent pour navigation instantanée :
+  - **Original** : image source
+  - **Colorisé** : rendu avec palette quantifiée
+  - **Contours** : tracés vectoriels des zones
+  - **Numéroté** : modèle final avec labels
+  - **Comparer** : slider avant/après interactif
+- **Overlay d'inspection** (`InspectionOverlay`) : survol interactif affichant numéro de zone, couleur HEX, surface en temps réel.
+- **Mode Debug scientifique** (`DebugPanel`) : visualisation des étapes intermédiaires du pipeline (quantification, fusion, lissage).
+
+### Gestion de projets & persistance
+- **Gestionnaire de projets avancé** (`EnhancedProjectManager`) :
+  - Sauvegarde/chargement de projets locaux (localStorage)
+  - Export/import de fichiers `.pbnproj` (JSON complet)
+  - **Auto-sauvegarde** toutes les 2 minutes (activable/désactivable)
+  - Gestion des préférences utilisateur (thème, dernière vue, dernier projet)
+- Format de projet structuré : image, paramètres, résultats, analyse colorimétrique.
+- Persistance automatique des préférences entre sessions.
 
 ### Restitution graphique
-- Zone de travail multi-onglets (`Canvas`) : Original / Contours / Numéroté / Aperçu fusionné.
 - Zoom, pan, remise à zéro, plein écran, surbrillance animée des zones ou couleurs (`useCanvasInteractions`).
 - Palette dynamique avec sélection, stats par couleur et liste des zones associées (`ColorPalette`, `PalettePanel`).
 
 ### Export & productivité
-- Export PNG et JSON (structure de zones, palette, paramètres) via `useExport`.
+- Export PNG, JSON et SVG (structure de zones, palette, paramètres) via `useExport`.
 - Historique des traitements sauvegardé dans Supabase (`useImageHistory`) avec pagination et tri antichronologique (`HistoryPanel`).
 - Notifications toast/success & confettis réglés via `UI.CONFETTI_*`.
 
@@ -56,9 +77,18 @@ Application web riche construite avec **React, TypeScript, Vite et Tailwind CSS*
 
 1. **Charger une image** : support PNG/JPG jusqu'à 16 MP, feedback immédiat et preview.
 2. **Analyser automatiquement** : recommandations intelligentes appliquées aux sliders de paramètres.
-3. **Lancer le traitement** : suivi étape par étape avec messages d'avancement et blocage de l'UI.
-4. **Explorer le rendu** : navigation entre couches, zoom, surbrillance de zones/couleurs, stats détaillées.
-5. **Exporter et sauvegarder** : téléchargement des assets, stockage de l'opération dans l'historique cloud.
+3. **Lancer le traitement** : suivi étape par étape avec messages d'avancement (timeout max : 5 minutes).
+4. **Explorer le rendu** : 
+   - Navigation fluide entre 5 modes de visualisation (Original, Colorisé, Contours, Numéroté, Comparer)
+   - Inspection interactive : survolez une zone pour voir ses métadonnées (numéro, couleur, surface)
+   - Zoom, pan, surbrillance de zones/couleurs, stats détaillées
+   - Comparateur avant/après avec slider ajustable
+5. **Gérer ses projets** :
+   - Sauvegarde manuelle ou automatique (toutes les 2 min)
+   - Export/import de projets complets (.pbnproj)
+   - Liste des projets enregistrés avec aperçu
+6. **Mode Debug** : visualisation des étapes intermédiaires du pipeline pour diagnostic et optimisation.
+7. **Exporter et sauvegarder** : téléchargement PNG/JSON/SVG, stockage de l'opération dans l'historique cloud.
 
 ---
 
@@ -84,15 +114,39 @@ Toutes les opérations lourdes se font dans un Web Worker (`processImageWithWork
 
 ```
 src/
-├─ components/             # UI modulaire (Canvas, Upload, Panels, UI primitives shadcn)
-├─ hooks/                  # Logique réutilisable (auth, export, canvas, historique)
+├─ components/
+│  ├─ studio/              # Composants Studio Mode (Phase 2)
+│  │  ├─ ResizableStudioLayout.tsx   # Layout avec panneaux redimensionnables
+│  │  ├─ EnhancedViewTabs.tsx        # Système de tabs avec cache intelligent
+│  │  ├─ EnhancedProjectManager.tsx  # Gestionnaire de projets avancé
+│  │  ├─ InspectionOverlay.tsx       # Overlay d'inspection interactif
+│  │  ├─ CompareSlider.tsx           # Comparateur avant/après
+│  │  ├─ DebugPanel.tsx              # Panel de debug scientifique
+│  │  ├─ ExportBar.tsx               # Barre d'export multi-formats
+│  │  └─ ...                         # ProjectManager, ViewTabs, StudioLayout (legacy)
+│  ├─ ui/                  # Primitives shadcn/ui (button, card, tabs, etc.)
+│  └─ ...                  # Canvas, Upload, Panels, Auth, etc.
+├─ contexts/
+│  └─ StudioContext.tsx    # Contexte global (état, préférences, projets)
+├─ hooks/
+│  ├─ useAutoSave.ts       # Hook d'auto-sauvegarde intelligente
+│  └─ ...                  # useAuth, useExport, useCanvasInteractions, etc.
 ├─ lib/                    # Traitement d'image, cache, utilitaires couleurs
 ├─ workers/                # Web Worker de génération
-├─ config/                 # Constantes globales (UI, image, export)
+├─ config/                 # Constantes globales (UI, image, export, timeouts)
 ├─ integrations/supabase/  # Client Supabase typé + types générés
 ├─ pages/                  # Pages routées (Index, NotFound)
 └─ main.tsx                # Entrée React/Vite
 ```
+
+### Architecture de contexte (Phase 2)
+Le `StudioContext` centralise :
+- **État projet** : projet actif, vue sélectionnée, résultats de traitement
+- **Paramètres** : nombre de couleurs, taille régions, lissage, tolérance de fusion
+- **Préférences utilisateur** : thème, dernière vue, auto-sauvegarde, dernier projet
+- **Actions** : sauvegarde/chargement de projets, gestion des préférences
+
+Tous les composants Studio accèdent à ce contexte via `useStudio()`, éliminant le prop-drilling et garantissant la cohérence de l'état.
 
 Autres dossiers :
 - `supabase/` — configuration CLI + migrations SQL (tables `profiles`, `image_jobs`, politiques RLS).
@@ -170,16 +224,27 @@ Les migrations fournies créent les tables `profiles` & `image_jobs` avec politi
 
 - Respectez la configuration ESLint/TypeScript fournie (`eslint.config.js`, `tsconfig.*`).
 - Les composants UI réutilisent les primitives shadcn : privilégiez `@/components/ui/*` pour homogénéité.
-- Utilisez les hooks maison (`useAuth`, `useImageHistory`, `useCanvasInteractions`, etc.) plutôt que de réinventer la roue.
+- Utilisez les hooks maison (`useAuth`, `useImageHistory`, `useCanvasInteractions`, `useAutoSave`, etc.) plutôt que de réinventer la roue.
+- **Architecture de contexte** : accédez à l'état global via `useStudio()` plutôt que du prop-drilling.
 - Pour de nouvelles opérations de traitement, pensez au Web Worker (`processImageWithWorker`) afin de garder l'UI fluide.
+- **Persistance** : le `StudioContext` gère automatiquement la sauvegarde des préférences dans localStorage.
+- **Cache intelligent** : `EnhancedViewTabs` utilise un cache mémoire pour éviter les recalculs lors de la navigation.
 
 ---
 
 ## 🚀 Aller plus loin
 
-- Ajouter des presets d'impression (PDF, planche A4/A3) à partir des exports JSON.
-- Implémenter un mode collaboratif via Supabase Realtime (partage de palettes & historiques).
-- Introduire des tests unitaires (Vitest) pour sécuriser le pipeline de traitement d'image.
+### Phase 3 — Roadmap envisagée
+- **Post-processing AI** : colorisation adaptative, segmentation intelligente.
+- **Export avancé** : génération SVG optimisée, presets d'impression (PDF, planches A4/A3).
+- **UX avancée** : mini-map de navigation, mode focus plein écran, statistiques détaillées du pipeline.
+- **Collaboration** : mode collaboratif via Supabase Realtime (partage de palettes & historiques).
+- **Tests** : couverture unitaire (Vitest) pour sécuriser le pipeline de traitement d'image.
+
+### État actuel du projet
+✅ **Phase 1 complétée** : pipeline d'image robuste, UI modulaire, auth/historique.  
+✅ **Phase 2 complétée** : Studio Mode interactif, gestion de projets, persistance, debug scientifique.  
+🚧 **Phase 3 en préparation** : post-processing AI, export SVG avancé, UX pro.
 
 Bonnes créations !
 
