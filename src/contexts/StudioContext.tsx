@@ -1,13 +1,20 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
 
-export type ViewMode = "original" | "contours" | "numbered" | "colorized";
+export type ViewMode = "original" | "contours" | "numbered" | "colorized" | "compare";
 
 export interface StudioSettings {
   numColors: number;
   minRegionSize: number;
   smoothness: number;
   mergeTolerance: number;
+}
+
+export interface UserPreferences {
+  lastViewMode: ViewMode;
+  autoSave: boolean;
+  theme: 'light' | 'dark' | 'system';
+  lastProjectId?: string;
 }
 
 export interface Project {
@@ -29,6 +36,7 @@ interface StudioContextValue {
   result: ProcessedResult | null;
   settings: StudioSettings;
   isProcessing: boolean;
+  preferences: UserPreferences;
   
   // Actions
   setCurrentProject: (project: Project | null) => void;
@@ -37,6 +45,7 @@ interface StudioContextValue {
   setResult: (result: ProcessedResult | null) => void;
   updateSettings: (settings: Partial<StudioSettings>) => void;
   setIsProcessing: (processing: boolean) => void;
+  updatePreferences: (prefs: Partial<UserPreferences>) => void;
   
   // Project actions
   saveProject: (name: string) => void;
@@ -54,13 +63,54 @@ const DEFAULT_SETTINGS: StudioSettings = {
   mergeTolerance: 5,
 };
 
+const DEFAULT_PREFERENCES: UserPreferences = {
+  lastViewMode: "original",
+  autoSave: false,
+  theme: 'system',
+};
+
+// Helper functions for localStorage
+const loadPreferences = (): UserPreferences => {
+  try {
+    const stored = localStorage.getItem('pbn-preferences');
+    return stored ? { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) } : DEFAULT_PREFERENCES;
+  } catch {
+    return DEFAULT_PREFERENCES;
+  }
+};
+
+const savePreferences = (prefs: UserPreferences) => {
+  try {
+    localStorage.setItem('pbn-preferences', JSON.stringify(prefs));
+  } catch (error) {
+    console.error('Failed to save preferences:', error);
+  }
+};
+
 export function StudioProvider({ children }: { children: ReactNode }) {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("original");
+  const [preferences, setPreferences] = useState<UserPreferences>(loadPreferences);
+  const [viewMode, setViewMode] = useState<ViewMode>(preferences.lastViewMode);
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
   const [settings, setSettings] = useState<StudioSettings>(DEFAULT_SETTINGS);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Auto-save preferences when they change
+  useEffect(() => {
+    savePreferences(preferences);
+  }, [preferences]);
+
+  // Update view mode preference when it changes
+  useEffect(() => {
+    if (viewMode !== preferences.lastViewMode) {
+      setPreferences(prev => ({ ...prev, lastViewMode: viewMode }));
+    }
+  }, [viewMode]);
+
+  const updatePreferences = useCallback((newPrefs: Partial<UserPreferences>) => {
+    setPreferences(prev => ({ ...prev, ...newPrefs }));
+  }, []);
 
   const updateSettings = useCallback((newSettings: Partial<StudioSettings>) => {
     setSettings(prev => ({ ...prev, ...newSettings }));
@@ -121,12 +171,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     result,
     settings,
     isProcessing,
+    preferences,
     setCurrentProject,
     setViewMode,
     setAnalysis,
     setResult,
     updateSettings,
     setIsProcessing,
+    updatePreferences,
     saveProject,
     loadProject,
     deleteProject,

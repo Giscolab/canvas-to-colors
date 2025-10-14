@@ -4,28 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Save, FolderOpen, Trash2, Download, Upload } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Save, FolderOpen, Trash2, Download, Upload, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useStudio } from "@/contexts/StudioContext";
+import { useAutoSave } from "@/hooks/useAutoSave";
 
 export function EnhancedProjectManager() {
   const [projectName, setProjectName] = useState("");
-  const { 
-    currentProject, 
-    result, 
-    saveProject, 
-    loadProject, 
-    deleteProject, 
-    getSavedProjects,
-    setCurrentProject,
-    setResult,
-    updateSettings
-  } = useStudio();
+  const studio = useStudio();
+  
+  // Initialize auto-save hook
+  useAutoSave();
 
-  const savedProjects = getSavedProjects();
+  const savedProjects = studio.getSavedProjects();
 
   const handleSave = () => {
-    if (!currentProject?.imageUrl || !result) {
+    if (!studio.currentProject?.imageUrl || !studio.result) {
       toast.error("Aucun projet à sauvegarder");
       return;
     }
@@ -36,7 +31,7 @@ export function EnhancedProjectManager() {
     }
 
     try {
-      saveProject(projectName.trim());
+      studio.saveProject(projectName.trim());
       setProjectName("");
       toast.success(`Projet "${projectName}" sauvegardé`);
     } catch (error) {
@@ -46,8 +41,8 @@ export function EnhancedProjectManager() {
 
   const handleLoad = (projectId: string) => {
     try {
-      loadProject(projectId);
-      const project = getSavedProjects().find(p => p.id === projectId);
+      studio.loadProject(projectId);
+      const project = studio.getSavedProjects().find(p => p.id === projectId);
       if (project) {
         toast.success(`Projet "${project.name}" chargé`);
       }
@@ -58,7 +53,7 @@ export function EnhancedProjectManager() {
 
   const handleDelete = (projectId: string) => {
     try {
-      deleteProject(projectId);
+      studio.deleteProject(projectId);
       toast.success("Projet supprimé");
     } catch (error) {
       toast.error("Erreur lors de la suppression");
@@ -66,7 +61,7 @@ export function EnhancedProjectManager() {
   };
 
   const handleExportProject = (projectId: string) => {
-    const project = getSavedProjects().find(p => p.id === projectId);
+    const project = studio.getSavedProjects().find(p => p.id === projectId);
     if (!project) return;
 
     const dataStr = JSON.stringify(project, null, 2);
@@ -99,7 +94,7 @@ export function EnhancedProjectManager() {
         }
 
         // Save to local storage
-        const projects = getSavedProjects();
+        const projects = studio.getSavedProjects();
         const updated = [...projects, { ...project, id: Date.now().toString() }];
         localStorage.setItem('pbn-projects', JSON.stringify(updated));
         
@@ -144,12 +139,27 @@ export function EnhancedProjectManager() {
             <Button
               size="sm"
               onClick={handleSave}
-              disabled={!currentProject?.imageUrl || !result}
+              disabled={!studio.currentProject?.imageUrl || !studio.result}
               className="h-9 px-3"
             >
               <Save className="w-4 h-4" />
             </Button>
           </div>
+        </div>
+
+        {/* Auto-save toggle */}
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/50">
+          <div className="flex items-center gap-2">
+            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+            <Label htmlFor="auto-save" className="text-xs cursor-pointer">
+              Sauvegarde auto (2 min)
+            </Label>
+          </div>
+          <Switch
+            id="auto-save"
+            checked={studio.preferences.autoSave}
+            onCheckedChange={(checked) => studio.updatePreferences({ autoSave: checked })}
+          />
         </div>
 
         {savedProjects.length > 0 && (

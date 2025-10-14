@@ -25,9 +25,14 @@ import { useExport } from "@/hooks/useExport";
 import { useAuth } from "@/hooks/useAuth";
 import { Zone } from "@/hooks/useCanvasInteractions";
 import { IMAGE_PROCESSING, UI } from "@/config/constants";
+import { useAutoSave } from "@/hooks/useAutoSave";
 
 function IndexContent() {
   const studio = useStudio();
+  
+  // Initialize auto-save
+  useAutoSave();
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);

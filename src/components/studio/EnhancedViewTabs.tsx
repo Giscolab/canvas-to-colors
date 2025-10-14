@@ -1,8 +1,10 @@
 import { useMemo, useRef, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Image, Grid3x3, Hash, Palette } from "lucide-react";
+import { Image, Grid3x3, Hash, Palette, ArrowLeftRight } from "lucide-react";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { useStudio } from "@/contexts/StudioContext";
+import { CompareSlider } from "./CompareSlider";
+import { InspectionOverlay } from "./InspectionOverlay";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -10,7 +12,7 @@ interface EnhancedViewTabsProps {
 }
 
 export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewTabsProps) {
-  const { viewMode, setViewMode } = useStudio();
+  const studio = useStudio();
   const canvasCache = useRef<Map<string, string>>(new Map());
 
   const getCanvasDataUrl = useMemo(() => {
@@ -61,12 +63,12 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
 
   return (
     <Tabs 
-      value={viewMode} 
-      onValueChange={(v) => setViewMode(v as any)} 
+      value={studio.viewMode} 
+      onValueChange={(v) => studio.setViewMode(v as any)} 
       className="h-full flex flex-col"
     >
       <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-card/30 backdrop-blur-sm">
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
           <TabsTrigger value="original" className="flex items-center gap-2">
             <Image className="w-4 h-4" />
             Original
@@ -82,6 +84,10 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
           <TabsTrigger value="numbered" className="flex items-center gap-2" disabled={!processedData}>
             <Hash className="w-4 h-4" />
             Numéroté
+          </TabsTrigger>
+          <TabsTrigger value="compare" className="flex items-center gap-2" disabled={!processedData}>
+            <ArrowLeftRight className="w-4 h-4" />
+            Comparer
           </TabsTrigger>
         </TabsList>
       </div>
@@ -136,7 +142,18 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         </TabsContent>
 
         <TabsContent value="numbered" className="h-full mt-0 data-[state=active]:flex">
-          {numberedUrl ? (
+          {processedData?.numbered && processedData?.labels ? (
+            <div className="w-full h-full flex items-center justify-center p-8">
+              <InspectionOverlay
+                imageData={processedData.numbered}
+                zones={processedData.zones}
+                palette={processedData.palette}
+                labels={processedData.labels}
+                width={processedData.numbered.width}
+                height={processedData.numbered.height}
+              />
+            </div>
+          ) : numberedUrl ? (
             <div className="w-full h-full flex items-center justify-center p-8">
               <img 
                 src={numberedUrl} 
@@ -147,6 +164,25 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground">
               Traitez l'image pour voir le résultat numéroté
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="compare" className="h-full mt-0 data-[state=active]:flex">
+          {originalImage && colorizedUrl ? (
+            <div className="w-full h-full flex items-center justify-center p-8">
+              <div className="w-full h-full max-w-4xl">
+                <CompareSlider
+                  beforeImage={originalImage}
+                  afterImage={colorizedUrl}
+                  beforeLabel="Original"
+                  afterLabel="Colorisé"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              Traitez l'image pour comparer les versions
             </div>
           )}
         </TabsContent>
