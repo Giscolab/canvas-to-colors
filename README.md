@@ -244,7 +244,108 @@ Les migrations fournies créent les tables `profiles` & `image_jobs` avec politi
 ### État actuel du projet
 ✅ **Phase 1 complétée** : pipeline d'image robuste, UI modulaire, auth/historique.  
 ✅ **Phase 2 complétée** : Studio Mode interactif, gestion de projets, persistance, debug scientifique.  
-🚧 **Phase 3 en préparation** : post-processing AI, export SVG avancé, UX pro.
+✅ **Phase 3.1 complétée** : adaptation chromatique intelligente, équilibrage de palettes.  
+🚧 **Phase 3 en cours** : segmentation avancée, export SVG, profiling, build desktop.
 
 Bonnes créations !
+
+---
+
+## 🎨 Phase 3.1 — Smart Color Adaptation (Palette intelligente)
+
+### Objectif
+Équilibrer et harmoniser automatiquement la palette de couleurs extraite pour produire des rendus plus homogènes, sans teintes ternes ni doublons visuels.
+
+### Implémentation technique
+
+#### 1. Utilitaires de conversion colorimétrique (`src/lib/colorUtils.ts`)
+Nouvelles fonctions ajoutées pour la manipulation avancée des couleurs :
+
+- **`rgbToHsl(r, g, b)`** : conversion RGB → HSL (Hue, Saturation, Lightness)
+- **`hslToRgb(h, s, l)`** : conversion inverse HSL → RGB
+- **`balancePalette(palette, options)`** : fonction principale d'équilibrage avec options paramétrables :
+  - `targetLightness` : luminosité cible (0-100, défaut: 50)
+  - `targetSaturation` : saturation cible (0-100, défaut: 60)
+  - `contrastBoost` : amplification du contraste (0-100, défaut: 20)
+  - `preserveHue` : préservation des teintes originales (booléen, défaut: true)
+- **`averagePaletteDeltaE(palette1, palette2)`** : calcul du ΔE moyen entre deux palettes pour mesurer l'impact de l'adaptation
+
+#### 2. Intégration au pipeline de traitement (`src/lib/imageProcessing.ts`)
+Extension du type `ProcessedResult` :
+```typescript
+{
+  palette: string[];          // Palette optimisée (si activée)
+  rawPalette?: string[];      // Palette brute d'origine
+  averageDeltaE?: number;     // ΔE moyen après correction
+  // ... autres propriétés existantes
+}
+```
+
+Ajout du paramètre `enableSmartPalette` dans `processImage()` et `processImageWithWorker()` :
+- Si `true` : applique `balancePalette()` avec paramètres par défaut
+- Si `false` : conserve la palette brute (mode classique)
+
+#### 3. Contrôle utilisateur (`src/components/ParametersPanel.tsx`)
+Nouveau toggle dans l'interface :
+```tsx
+<div className="flex items-center justify-between">
+  <Label>Palette intelligente</Label>
+  <Switch 
+    checked={settings.smartPalette}
+    onCheckedChange={(checked) => updateSettings({ smartPalette: checked })}
+  />
+</div>
+```
+
+#### 4. Contexte global (`src/contexts/StudioContext.tsx`)
+Ajout de `smartPalette: boolean` dans `StudioSettings` avec valeur par défaut `true`.
+
+#### 5. Affichage comparatif (`src/components/ColorAnalysisPanel.tsx`)
+Extension du panneau d'analyse pour afficher :
+- **Palette brute** (grisée si palette intelligente activée)
+- **Palette optimisée** (mise en avant avec badge "Optimisée")
+- **Métrique ΔE moyen** : indicateur de l'ampleur des corrections appliquées
+
+Structure visuelle :
+```
+┌─────────────────────────────────────┐
+│ Palette brute        [8 nuances]    │ ← affichée en semi-transparence
+│ ΔE moyen : 12.4                     │ ← métrique de correction
+│                                     │
+│ Palette optimisée    [8 nuances]    │ ← palette finale équilibrée
+│ [Badge: Optimisée]                  │
+└─────────────────────────────────────┘
+```
+
+### Bénéfices utilisateur
+- **Automatisation** : l'utilisateur n'a plus à corriger manuellement les palettes déséquilibrées
+- **Homogénéité** : luminosité et saturation équilibrées sur l'ensemble des couleurs
+- **Contraste amélioré** : séparation visuelle des tons clairs et foncés
+- **Traçabilité** : conservation de la palette brute + métrique ΔE pour évaluer l'impact
+- **Contrôle** : toggle ON/OFF pour revenir au mode classique si nécessaire
+
+### Fichiers modifiés
+```
+src/lib/colorUtils.ts                       # +150 lignes (fonctions HSL, balance)
+src/lib/imageProcessing.ts                  # ~20 lignes (intégration pipeline)
+src/lib/imageProcessingWorker.ts            # ~10 lignes (paramètre worker)
+src/workers/imageProcessor.worker.ts        # ~10 lignes (passage paramètre)
+src/contexts/StudioContext.tsx              # ~5 lignes (settings)
+src/components/ParametersPanel.tsx          # ~15 lignes (toggle UI)
+src/components/ColorAnalysisPanel.tsx       # ~60 lignes (affichage comparatif)
+src/pages/Index.tsx                         # ~5 lignes (passage paramètre)
+```
+
+### Tests recommandés
+1. Charger une image avec palette terne → vérifier l'amélioration visuelle
+2. Comparer le ΔE avant/après sur différentes images (paysage, portrait, abstract)
+3. Tester la désactivation du toggle → palette brute restaurée
+4. Vérifier la cohérence entre `ColorAnalysisPanel` et le rendu final
+
+### Prochaines étapes (Phase 3.2+)
+- Segmentation avancée avec fusion artistique (3.2)
+- Post-processing AI pour colorisation simulée (3.3)
+- Export SVG intelligent avec groupement par couleur (3.4)
+- Pipeline Stats & Profiler temps réel (3.5)
+- Build Desktop avec Tauri (3.6)
 
