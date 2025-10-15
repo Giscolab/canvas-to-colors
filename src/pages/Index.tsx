@@ -133,7 +133,8 @@ function IndexContent() {
           setProcessingStage(stage);
           setProcessingProgress(progress);
         },
-        studio.settings.smartPalette
+        studio.settings.smartPalette,
+        studio.settings.enableArtisticMerge
       );
       
       const processingTime = Date.now() - startTime;
@@ -218,6 +219,10 @@ function IndexContent() {
               onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
               smoothness={studio.settings.smoothness}
               onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
+              mergeTolerance={studio.settings.mergeTolerance}
+              onMergeToleranceChange={(v) => studio.updateSettings({ mergeTolerance: v })}
+              enableArtisticMerge={studio.settings.enableArtisticMerge}
+              onEnableArtisticMergeChange={(v) => studio.updateSettings({ enableArtisticMerge: v })}
               smartPalette={studio.settings.smartPalette}
               onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
               onProcess={handleProcess}

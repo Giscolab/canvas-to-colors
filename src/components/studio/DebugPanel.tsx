@@ -30,7 +30,7 @@ export function DebugPanel({ processedData }: DebugPanelProps) {
     );
   }
 
-  const { zones, palette, metadata, progressLog } = processedData;
+  const { zones, palette, metadata, progressLog, artisticMergeStats } = processedData;
 
   return (
     <Card>
@@ -76,6 +76,41 @@ export function DebugPanel({ processedData }: DebugPanelProps) {
                 <div className="font-mono">{palette.length}</div>
               </div>
             </div>
+
+            {artisticMergeStats && (
+              <div className="space-y-2 border border-dashed border-border/60 rounded-md p-3 bg-muted/30">
+                <div className="flex items-center gap-2 text-muted-foreground font-medium">
+                  <Layers className="w-3 h-3" />
+                  Fusion artistique
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avant</div>
+                    <div className="font-mono text-sm">{artisticMergeStats.beforeCount}</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Après</div>
+                    <div className="font-mono text-sm">{artisticMergeStats.afterCount}</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Fusions</div>
+                    <div className="font-mono text-sm">{artisticMergeStats.mergedCount}</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">ΔE moyen</div>
+                    <div className="font-mono text-sm">{artisticMergeStats.averageDeltaE.toFixed(1)}</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Temps</div>
+                    <div className="font-mono text-sm">{artisticMergeStats.timeMs.toFixed(1)}ms</div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tolérance</div>
+                    <div className="font-mono text-sm">ΔE ≤ {artisticMergeStats.mergeTolerance}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {progressLog && progressLog.length > 0 && (
               <div className="space-y-1">
