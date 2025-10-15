@@ -8,6 +8,7 @@ export interface StudioSettings {
   minRegionSize: number;
   smoothness: number;
   mergeTolerance: number;
+  enableArtisticMerge: boolean;
   smartPalette: boolean;
 }
 
@@ -61,7 +62,8 @@ const DEFAULT_SETTINGS: StudioSettings = {
   numColors: 20,
   minRegionSize: 100,
   smoothness: 50,
-  mergeTolerance: 5,
+  mergeTolerance: 12,
+  enableArtisticMerge: true,
   smartPalette: false,
 };
 
@@ -154,7 +156,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     
     if (project) {
       setCurrentProject(project);
-      setSettings(project.settings);
+      setSettings({ ...DEFAULT_SETTINGS, ...project.settings });
       setAnalysis(project.analysis || null);
       setResult(project.result || null);
     }

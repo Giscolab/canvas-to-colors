@@ -45,6 +45,7 @@ export class ImageProcessingWorker {
     minRegionSize: number,
     smoothness: number,
     mergeTolerance: number,
+    enableArtisticMerge: boolean,
     onProgress?: (stage: string, progress: number) => void,
     enableSmartPalette: boolean = false
   ): Promise<ProcessedResult> {
@@ -171,7 +172,15 @@ export class ImageProcessingWorker {
         // Send processing request
         this.worker.postMessage({
           type: 'process',
-          payload: { imageFile, numColors, minRegionSize, smoothness, mergeTolerance, enableSmartPalette }
+          payload: {
+            imageFile,
+            numColors,
+            minRegionSize,
+            smoothness,
+            mergeTolerance,
+            enableSmartPalette,
+            enableArtisticMerge,
+          }
         });
       } catch (error) {
         cleanup();
@@ -306,7 +315,8 @@ export async function processImageWithWorker(
   smoothness: number,
   mergeTolerance: number,
   onProgress?: (stage: string, progress: number) => void,
-  enableSmartPalette: boolean = false
+  enableSmartPalette: boolean = false,
+  enableArtisticMerge: boolean = true
 ): Promise<ProcessedResult> {
   const worker = getImageProcessingWorker();
   return worker.processImage(
@@ -315,6 +325,7 @@ export async function processImageWithWorker(
     minRegionSize,
     smoothness,
     mergeTolerance,
+    enableArtisticMerge,
     onProgress,
     enableSmartPalette
   );

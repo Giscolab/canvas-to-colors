@@ -3,6 +3,7 @@ import polylabel from 'polylabel';
 import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
 import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor, balancePalette, averagePaletteDeltaE } from './colorUtils';
+import { artisticMerge, ArtisticMergeStats } from './regionMerge';
 import { LRUCache } from './lruCache';
 
 // Image processing utilities for paint-by-numbers conversion
@@ -53,6 +54,7 @@ export interface ProcessedResult {
   legend: LegendEntry[];
   labels?: Int32Array;
   colorZoneMapping?: Map<number, number[]>; // colorIdx -> zoneIds[]
+  artisticMergeStats?: ArtisticMergeStats;
   progressLog?: ProgressEvent[];
   metadata?: {
     totalProcessingTimeMs: number;
@@ -146,6 +148,7 @@ interface CacheKey {
   minRegionSize: number;
   smoothness: number;
   mergeTolerance: number;
+  enableArtisticMerge: boolean;
 }
 
 interface CacheEntry {
@@ -162,7 +165,7 @@ const resultCache = new LRUCache<ProcessedResult>(5, 10 * 60 * 1000, false);
  * Generate cache key from parameters
  */
 function generateCacheKey(params: CacheKey): string {
-  return `${params.imageHash}_${params.numColors}_${params.minRegionSize}_${params.smoothness}_${params.mergeTolerance}`;
+  return `${params.imageHash}_${params.numColors}_${params.minRegionSize}_${params.smoothness}_${params.mergeTolerance}_${params.enableArtisticMerge ? 1 : 0}`;
 }
 
 /**
@@ -1999,12 +2002,14 @@ export async function processImage(
   minRegionSize: number,
   smoothness: number,
   mergeTolerance: number,
+  enableArtisticMerge: boolean = true,
   onProgress?: (stage: string, progress: number) => void,
   enableSmartPalette: boolean = false
 ): Promise<ProcessedResult> {
   const GLOBAL_TIMEOUT = 30000; // 30 seconds max
   const startTime = Date.now();
   const progressLog: ProgressEvent[] = [];
+  let artisticMergeStats: ArtisticMergeStats | undefined;
 
   const report = (stage: string, progress: number, detail?: string) => {
     const timestamp = Date.now() - startTime;
@@ -2067,6 +2072,7 @@ export async function processImage(
           minRegionSize: effectiveMinRegionSize,
           smoothness,
           mergeTolerance: effectiveMergeTolerance,
+          enableArtisticMerge,
         });
   
         const cached = getCachedResult(cacheKey);
@@ -2265,6 +2271,31 @@ report(
   `${postMergeZones.length} zones après fusion en ${Date.now() - mergeStart}ms`
 );
 
+if (enableArtisticMerge && postMergeZones.length > 0) {
+  report(
+    "Fusion artistique",
+    61,
+    `ΔE ≤ ${effectiveMergeTolerance.toFixed(1)} / aire ≤ ${effectiveMinRegionSize}px`
+  );
+
+  const artisticResult = artisticMerge(postMergeZones, postMergeLabels, palette, {
+    mergeTolerance: effectiveMergeTolerance,
+    minMergeArea: effectiveMinRegionSize,
+    width,
+    height,
+  });
+
+  postMergeLabels = artisticResult.labels;
+  postMergeZones = artisticResult.zones;
+  artisticMergeStats = artisticResult.stats;
+
+  report(
+    "Fusion artistique terminée",
+    62,
+    `${artisticMergeStats.mergedCount} fusions en ${artisticMergeStats.timeMs.toFixed(1)}ms`
+  );
+}
+
 // === STEP 5: Smooth zones ===
 report("Lissage des bords", 64, `Itérations de lissage : ${Math.round(smoothness)}`);
 const smoothStart = Date.now();
@@ -2422,8 +2453,9 @@ const result: ProcessedResult = {
   legend,
   labels: smoothedLabels,
   colorZoneMapping,
+  artisticMergeStats,
   progressLog: [...progressLog],
-  metadata: { 
+  metadata: {
     totalProcessingTimeMs: totalTime, 
     width, 
     height, 

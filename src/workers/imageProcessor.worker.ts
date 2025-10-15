@@ -15,6 +15,7 @@ interface WorkerMessage {
     smoothness: number;
     mergeTolerance: number;
     enableSmartPalette?: boolean;
+    enableArtisticMerge?: boolean;
   };
 }
 
@@ -38,7 +39,15 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
   }
 
   try {
-    const { imageFile, numColors, minRegionSize, smoothness, mergeTolerance, enableSmartPalette } = payload;
+    const {
+      imageFile,
+      numColors,
+      minRegionSize,
+      smoothness,
+      mergeTolerance,
+      enableSmartPalette,
+      enableArtisticMerge,
+    } = payload;
 
     // Validate payload
     if (
@@ -75,6 +84,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       minRegionSize,
       smoothness,
       mergeTolerance,
+      enableArtisticMerge ?? true,
       progressCallback,
       enableSmartPalette ?? false
     );

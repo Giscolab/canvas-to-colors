@@ -13,6 +13,10 @@ interface ParametersPanelProps {
   onMinRegionSizeChange: (value: number) => void;
   smoothness: number;
   onSmoothnessChange: (value: number) => void;
+  mergeTolerance: number;
+  onMergeToleranceChange: (value: number) => void;
+  enableArtisticMerge: boolean;
+  onEnableArtisticMergeChange: (value: boolean) => void;
   smartPalette: boolean;
   onSmartPaletteChange: (value: boolean) => void;
   onProcess: () => void;
@@ -26,6 +30,10 @@ export const ParametersPanel = ({
   onMinRegionSizeChange,
   smoothness,
   onSmoothnessChange,
+  mergeTolerance,
+  onMergeToleranceChange,
+  enableArtisticMerge,
+  onEnableArtisticMergeChange,
   smartPalette,
   onSmartPaletteChange,
   onProcess,
@@ -106,6 +114,44 @@ export const ParametersPanel = ({
             <span>10 (Précis)</span>
             <span>500 (Simplifié)</span>
           </div>
+        </div>
+
+        {/* --- Fusion artistique --- */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2 text-sm">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              Fusion artistique
+            </Label>
+            <Switch
+              checked={enableArtisticMerge}
+              onCheckedChange={onEnableArtisticMergeChange}
+              aria-label="Activer la fusion artistique"
+            />
+          </div>
+
+          {enableArtisticMerge && (
+            <div className="space-y-2 pl-6">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Gauge className="h-3 w-3 text-primary/70" />
+                  Tolérance ΔE
+                </Label>
+                <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {mergeTolerance}
+                </span>
+              </div>
+              <Slider
+                min={1}
+                max={30}
+                step={1}
+                value={[mergeTolerance]}
+                onValueChange={(value) => onMergeToleranceChange(value[0])}
+                aria-label="Tolérance ΔE"
+                className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+              />
+            </div>
+          )}
         </div>
 
         {/* --- Douceur des bords --- */}
