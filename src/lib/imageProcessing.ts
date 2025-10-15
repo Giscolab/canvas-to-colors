@@ -2,7 +2,7 @@ import { isoContours } from 'marchingsquares';
 import polylabel from 'polylabel';
 import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
-import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } from './colorUtils';
+import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor, balancePalette, averagePaletteDeltaE } from './colorUtils';
 import { LRUCache } from './lruCache';
 
 // Image processing utilities for paint-by-numbers conversion
@@ -47,6 +47,7 @@ export interface ProcessedResult {
   numbered: ImageData | null;
   colorized: ImageData | null;
   palette: string[];
+  rawPalette?: string[]; // Palette brute avant optimisation
   zones: Zone[];
   svg: string;
   legend: LegendEntry[];
@@ -59,6 +60,7 @@ export interface ProcessedResult {
     height: number;
     cacheKey: string;
     wasCached: boolean;
+    averageDeltaE?: number; // ΔE moyen après correction de palette
   };
 }
 
@@ -1989,6 +1991,7 @@ async function loadImageSource(imageFile: File): Promise<LoadedImageSource> {
 
 /**
  * Process image: quantize, segment, merge, smooth, trace contours, generate SVG and numbered version
+ * @param enableSmartPalette - Enable intelligent palette balancing (default: false)
  */
 export async function processImage(
   imageFile: File,
@@ -1996,7 +1999,8 @@ export async function processImage(
   minRegionSize: number,
   smoothness: number,
   mergeTolerance: number,
-  onProgress?: (stage: string, progress: number) => void
+  onProgress?: (stage: string, progress: number) => void,
+  enableSmartPalette: boolean = false
 ): Promise<ProcessedResult> {
   const GLOBAL_TIMEOUT = 30000; // 30 seconds max
   const startTime = Date.now();
@@ -2095,7 +2099,26 @@ export async function processImage(
         const quantizationStart = Date.now();
         let palette = quantizeColors(imageData, numColors);
         palette = mergeNearIdenticalColors(palette, effectiveMergeTolerance); // Merge imperceptible color differences
-        report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
+        
+        // Store raw palette before adaptation
+        const rawPalette = [...palette];
+        let averageDeltaE = 0;
+        
+        // === STEP 1.5: Smart Palette Adaptation (optional) ===
+        if (enableSmartPalette) {
+          report("Adaptation intelligente de la palette", 30, "Équilibrage chromatique");
+          const adaptedPalette = balancePalette(palette, {
+            targetLightness: 50,
+            targetSaturation: 60,
+            contrastBoost: 20,
+            preserveHue: true
+          });
+          averageDeltaE = averagePaletteDeltaE(palette, adaptedPalette);
+          palette = adaptedPalette;
+          report("Palette optimisée", 33, `ΔE moyen: ${averageDeltaE.toFixed(2)}`);
+        } else {
+          report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
+        }
   
 // === STEP 2: Pixel mapping ===
 report("Attribution des pixels", 35, "Calcul des distances perceptuelles ΔE2000");
@@ -2393,13 +2416,21 @@ const result: ProcessedResult = {
   numbered: numberedData,
   colorized: previewData,
   palette,
+  rawPalette: enableSmartPalette ? rawPalette : undefined,
   zones: safeZones,
   svg,
   legend,
   labels: smoothedLabels,
   colorZoneMapping,
   progressLog: [...progressLog],
-  metadata: { totalProcessingTimeMs: totalTime, width, height, cacheKey, wasCached: false },
+  metadata: { 
+    totalProcessingTimeMs: totalTime, 
+    width, 
+    height, 
+    cacheKey, 
+    wasCached: false,
+    averageDeltaE: enableSmartPalette ? averageDeltaE : undefined
+  },
 };
 
 // 🔍 Structured clone test

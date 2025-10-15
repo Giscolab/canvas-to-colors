@@ -132,7 +132,8 @@ function IndexContent() {
         (stage, progress) => {
           setProcessingStage(stage);
           setProcessingProgress(progress);
-        }
+        },
+        studio.settings.smartPalette
       );
       
       const processingTime = Date.now() - startTime;
@@ -206,6 +207,7 @@ function IndexContent() {
               <ColorAnalysisPanel 
                 analysis={studio.analysis}
                 isAnalyzing={isAnalyzing}
+                processedResult={studio.result}
               />
             )}
             
@@ -216,6 +218,8 @@ function IndexContent() {
               onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
               smoothness={studio.settings.smoothness}
               onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
+              smartPalette={studio.settings.smartPalette}
+              onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />

@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ColorAnalysis } from "@/lib/imageProcessing";
+import { ColorAnalysis, ProcessedResult } from "@/lib/imageProcessing";
 import { ResponsiveContainer, BarChart, Bar, Tooltip, XAxis, YAxis, Cell } from "recharts";
 import type { TooltipProps } from "recharts";
 
 interface ColorAnalysisPanelProps {
   analysis: ColorAnalysis | null;
   isAnalyzing: boolean;
+  processedResult?: ProcessedResult | null;
 }
 
 const COMPLEXITY_THRESHOLDS = {
@@ -18,7 +19,7 @@ const COMPLEXITY_THRESHOLDS = {
   medium: 60,
 } as const;
 
-export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanelProps) {
+export function ColorAnalysisPanel({ analysis, isAnalyzing, processedResult }: ColorAnalysisPanelProps) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -168,6 +169,29 @@ export function ColorAnalysisPanel({ analysis, isAnalyzing }: ColorAnalysisPanel
             ))}
           </div>
         </div>
+
+        {processedResult?.rawPalette && processedResult.metadata?.averageDeltaE && (
+          <div className="pt-3 border-t border-border/40">
+            <Label className="text-sm text-muted-foreground flex items-center gap-2">
+              ✨ Palette optimisée
+              <Badge variant="secondary" className="text-[10px]">
+                ΔE: {processedResult.metadata.averageDeltaE.toFixed(2)}
+              </Badge>
+            </Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {processedResult.palette.slice(0, 10).map((hex, idx) => (
+                <div
+                  key={`optimized-${idx}`}
+                  className={`w-8 h-8 rounded-md border ${
+                    isDark ? "border-neutral-700" : "border-neutral-300"
+                  } shadow-sm`}
+                  style={{ backgroundColor: hex }}
+                  title={`${hex} (optimisé)`}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {chartData.length > 1 && (
           <div className="mt-4">

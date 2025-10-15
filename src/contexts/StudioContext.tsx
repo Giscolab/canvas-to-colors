@@ -8,6 +8,7 @@ export interface StudioSettings {
   minRegionSize: number;
   smoothness: number;
   mergeTolerance: number;
+  smartPalette: boolean;
 }
 
 export interface UserPreferences {
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: StudioSettings = {
   minRegionSize: 100,
   smoothness: 50,
   mergeTolerance: 5,
+  smartPalette: false,
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {

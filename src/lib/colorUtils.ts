@@ -239,3 +239,198 @@ export function perceptualDistance(
   const lab2 = rgbToLab(rgb2[0], rgb2[1], rgb2[2]);
   return deltaE2000(lab1, lab2);
 }
+
+// ============= SMART COLOR ADAPTATION =============
+
+/**
+ * Convert RGB to HSL (Hue, Saturation, Lightness)
+ * @returns [H (0-360), S (0-100), L (0-100)]
+ */
+export function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r = clampRgb(r) / 255;
+  g = clampRgb(g) / 255;
+  b = clampRgb(b) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (delta !== 0) {
+    s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+
+    switch (max) {
+      case r:
+        h = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / delta + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / delta + 4) / 6;
+        break;
+    }
+  }
+
+  return [h * 360, s * 100, l * 100];
+}
+
+/**
+ * Convert HSL to RGB
+ * @param h Hue (0-360)
+ * @param s Saturation (0-100)
+ * @param l Lightness (0-100)
+ * @returns [R, G, B] (0-255)
+ */
+export function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  h = h / 360;
+  s = s / 100;
+  l = l / 100;
+
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+
+  let r: number, g: number, b: number;
+
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+/**
+ * Balance a color palette by adjusting lightness, saturation and contrast
+ * @param palette Array of hex colors
+ * @param options Balance options
+ * @returns Balanced palette with same length
+ */
+export function balancePalette(
+  palette: string[],
+  options: {
+    targetLightness?: number; // 0-100, default: 50
+    targetSaturation?: number; // 0-100, default: 60
+    contrastBoost?: number; // 0-100, default: 20
+    preserveHue?: boolean; // default: true
+  } = {}
+): string[] {
+  const {
+    targetLightness = 50,
+    targetSaturation = 60,
+    contrastBoost = 20,
+    preserveHue = true,
+  } = options;
+
+  if (palette.length === 0) return [];
+
+  // Convert all colors to HSL
+  const hslColors = palette.map(hex => {
+    const match = hex.match(/^#?([0-9a-f]{6})$/i);
+    if (!match) return [0, 0, 0] as [number, number, number];
+    
+    const r = parseInt(match[1].slice(0, 2), 16);
+    const g = parseInt(match[1].slice(2, 4), 16);
+    const b = parseInt(match[1].slice(4, 6), 16);
+    return rgbToHsl(r, g, b);
+  });
+
+  // Calculate current averages
+  const avgLightness = hslColors.reduce((sum, [_, __, l]) => sum + l, 0) / hslColors.length;
+  const avgSaturation = hslColors.reduce((sum, [_, s]) => sum + s, 0) / hslColors.length;
+
+  // Calculate adjustment factors
+  const lightnessShift = targetLightness - avgLightness;
+  const saturationMultiplier = avgSaturation > 0 ? targetSaturation / avgSaturation : 1;
+
+  // Balance each color
+  const balanced = hslColors.map(([h, s, l]) => {
+    let newH = h;
+    let newS = s;
+    let newL = l;
+
+    // Adjust saturation
+    newS = Math.min(100, Math.max(0, s * saturationMultiplier));
+
+    // Adjust lightness
+    newL = Math.min(100, Math.max(0, l + lightnessShift));
+
+    // Boost contrast: push lights lighter, darks darker
+    if (contrastBoost > 0) {
+      const contrastFactor = contrastBoost / 100;
+      if (newL > 50) {
+        newL = newL + (100 - newL) * contrastFactor * 0.3;
+      } else {
+        newL = newL - newL * contrastFactor * 0.3;
+      }
+      newL = Math.min(100, Math.max(0, newL));
+    }
+
+    // Preserve original hue if requested
+    if (!preserveHue) {
+      // Slightly shift hues for artistic effect (optional)
+      newH = (h + 5) % 360;
+    }
+
+    return [newH, newS, newL] as [number, number, number];
+  });
+
+  // Convert back to hex
+  return balanced.map(([h, s, l]) => {
+    const [r, g, b] = hslToRgb(h, s, l);
+    return rgbToHex(r, g, b);
+  });
+}
+
+/**
+ * Calculate average ΔE between two palettes
+ * Useful for measuring the impact of palette adaptation
+ */
+export function averagePaletteDeltaE(
+  palette1: string[],
+  palette2: string[]
+): number {
+  if (palette1.length !== palette2.length || palette1.length === 0) {
+    return 0;
+  }
+
+  let totalDelta = 0;
+  for (let i = 0; i < palette1.length; i++) {
+    const hex1 = palette1[i];
+    const hex2 = palette2[i];
+    
+    const match1 = hex1.match(/^#?([0-9a-f]{6})$/i);
+    const match2 = hex2.match(/^#?([0-9a-f]{6})$/i);
+    
+    if (!match1 || !match2) continue;
+    
+    const r1 = parseInt(match1[1].slice(0, 2), 16);
+    const g1 = parseInt(match1[1].slice(2, 4), 16);
+    const b1 = parseInt(match1[1].slice(4, 6), 16);
+    
+    const r2 = parseInt(match2[1].slice(0, 2), 16);
+    const g2 = parseInt(match2[1].slice(2, 4), 16);
+    const b2 = parseInt(match2[1].slice(4, 6), 16);
+    
+    const lab1 = rgbToLab(r1, g1, b1);
+    const lab2 = rgbToLab(r2, g2, b2);
+    
+    totalDelta += deltaE2000(lab1, lab2);
+  }
+
+  return totalDelta / palette1.length;
+}

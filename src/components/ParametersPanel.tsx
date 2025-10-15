@@ -2,7 +2,8 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Wand2, Sparkles, Gauge, Layers } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Wand2, Sparkles, Gauge, Layers, Palette } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface ParametersPanelProps {
@@ -12,6 +13,8 @@ interface ParametersPanelProps {
   onMinRegionSizeChange: (value: number) => void;
   smoothness: number;
   onSmoothnessChange: (value: number) => void;
+  smartPalette: boolean;
+  onSmartPaletteChange: (value: boolean) => void;
   onProcess: () => void;
   isProcessing: boolean;
 }
@@ -23,6 +26,8 @@ export const ParametersPanel = ({
   onMinRegionSizeChange,
   smoothness,
   onSmoothnessChange,
+  smartPalette,
+  onSmartPaletteChange,
   onProcess,
   isProcessing,
 }: ParametersPanelProps) => {
@@ -127,6 +132,27 @@ export const ParametersPanel = ({
           <div className="flex justify-between text-[11px] text-muted-foreground">
             <span>0 (Net)</span>
             <span>100 (Doux)</span>
+          </div>
+        </div>
+
+        {/* --- Palette intelligente --- */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="smart-palette" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Palette className="h-3.5 w-3.5 text-primary" />
+              <div className="flex flex-col">
+                <span>Palette intelligente</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  Équilibrage chromatique automatique
+                </span>
+              </div>
+            </Label>
+            <Switch
+              id="smart-palette"
+              checked={smartPalette}
+              onCheckedChange={onSmartPaletteChange}
+              aria-label="Activer la palette intelligente"
+            />
           </div>
         </div>
       </div>
