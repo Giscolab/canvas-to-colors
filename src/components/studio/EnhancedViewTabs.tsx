@@ -5,6 +5,7 @@ import { ProcessedResult } from "@/lib/imageProcessing";
 import { useStudio } from "@/contexts/StudioContext";
 import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
+import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -41,10 +42,10 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     };
   }, []);
 
-  // Clear cache when processed data changes
+  // Clear cache when processed data or paint settings change
   useEffect(() => {
     canvasCache.current.clear();
-  }, [processedData]);
+  }, [processedData, studio.settings.paintEffect, studio.settings.paintIntensity]);
 
   const contoursUrl = useMemo(() => 
     getCanvasDataUrl(processedData?.contours || null, 'contours'),
@@ -56,10 +57,22 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     [processedData?.numbered, getCanvasDataUrl]
   );
 
-  const colorizedUrl = useMemo(() => 
-    getCanvasDataUrl(processedData?.colorized || null, 'colorized'),
-    [processedData?.colorized, getCanvasDataUrl]
-  );
+  const colorizedUrl = useMemo(() => {
+    if (!processedData?.colorized) return null;
+    
+    // Apply paint effect if enabled
+    let finalImageData = processedData.colorized;
+    
+    if (studio.settings.paintEffect !== 'none') {
+      const effect: PaintEffect = {
+        type: studio.settings.paintEffect,
+        intensity: studio.settings.paintIntensity,
+      };
+      finalImageData = applyPaintEffect(finalImageData, effect);
+    }
+    
+    return getCanvasDataUrl(finalImageData, `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}`);
+  }, [processedData?.colorized, studio.settings.paintEffect, studio.settings.paintIntensity, getCanvasDataUrl]);
 
   return (
     <Tabs 

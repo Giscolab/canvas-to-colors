@@ -10,6 +10,8 @@ export interface StudioSettings {
   mergeTolerance: number;
   enableArtisticMerge: boolean;
   smartPalette: boolean;
+  paintEffect: 'none' | 'watercolor' | 'brush';
+  paintIntensity: number;
 }
 
 export interface UserPreferences {
@@ -65,6 +67,8 @@ const DEFAULT_SETTINGS: StudioSettings = {
   mergeTolerance: 12,
   enableArtisticMerge: true,
   smartPalette: false,
+  paintEffect: 'none',
+  paintIntensity: 50,
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {

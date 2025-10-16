@@ -225,6 +225,10 @@ function IndexContent() {
               onEnableArtisticMergeChange={(v) => studio.updateSettings({ enableArtisticMerge: v })}
               smartPalette={studio.settings.smartPalette}
               onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
+              paintEffect={studio.settings.paintEffect}
+              onPaintEffectChange={(effect) => studio.updateSettings({ paintEffect: effect })}
+              paintIntensity={studio.settings.paintIntensity}
+              onPaintIntensityChange={(intensity) => studio.updateSettings({ paintIntensity: intensity })}
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />
