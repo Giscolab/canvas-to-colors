@@ -6,6 +6,7 @@ import { useStudio } from "@/contexts/StudioContext";
 import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
 import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
+import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -42,10 +43,16 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     };
   }, []);
 
-  // Clear cache when processed data or paint settings change
+  // Clear cache when processed data or paint/artistic settings change
   useEffect(() => {
     canvasCache.current.clear();
-  }, [processedData, studio.settings.paintEffect, studio.settings.paintIntensity]);
+  }, [
+    processedData, 
+    studio.settings.paintEffect, 
+    studio.settings.paintIntensity,
+    studio.settings.artisticEffect,
+    studio.settings.artisticIntensity
+  ]);
 
   const contoursUrl = useMemo(() => 
     getCanvasDataUrl(processedData?.contours || null, 'contours'),
@@ -60,19 +67,37 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   const colorizedUrl = useMemo(() => {
     if (!processedData?.colorized) return null;
     
-    // Apply paint effect if enabled
+    // Apply effects pipeline: Paint -> Artistic
     let finalImageData = processedData.colorized;
     
+    // 1. Apply paint effect if enabled
     if (studio.settings.paintEffect !== 'none') {
-      const effect: PaintEffect = {
+      const paintEffect: PaintEffect = {
         type: studio.settings.paintEffect,
         intensity: studio.settings.paintIntensity,
       };
-      finalImageData = applyPaintEffect(finalImageData, effect);
+      finalImageData = applyPaintEffect(finalImageData, paintEffect);
     }
     
-    return getCanvasDataUrl(finalImageData, `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}`);
-  }, [processedData?.colorized, studio.settings.paintEffect, studio.settings.paintIntensity, getCanvasDataUrl]);
+    // 2. Apply artistic effect if enabled
+    if (studio.settings.artisticEffect !== 'none') {
+      const artisticEffect: ArtisticEffect = {
+        type: studio.settings.artisticEffect,
+        intensity: studio.settings.artisticIntensity,
+      };
+      finalImageData = applyArtisticEffect(finalImageData, artisticEffect);
+    }
+    
+    const cacheKey = `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}-${studio.settings.artisticEffect}-${studio.settings.artisticIntensity}`;
+    return getCanvasDataUrl(finalImageData, cacheKey);
+  }, [
+    processedData?.colorized, 
+    studio.settings.paintEffect, 
+    studio.settings.paintIntensity,
+    studio.settings.artisticEffect,
+    studio.settings.artisticIntensity,
+    getCanvasDataUrl
+  ]);
 
   return (
     <Tabs 

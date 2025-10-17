@@ -43,7 +43,7 @@ function IndexContent() {
   const width = windowSize?.width ?? 0;
   const height = windowSize?.height ?? 0;
   const { saveJob } = useImageHistory();
-  const { exportPNG, exportJSON } = useExport();
+  const { exportPNG, exportJSON, exportSVG } = useExport();
   const { user } = useAuth();
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
@@ -176,6 +176,8 @@ function IndexContent() {
   
   const handleExportJSON = () => exportJSON(studio.result, studio.settings);
 
+  const handleExportSVG = () => exportSVG(studio.result);
+
   return (
     <div className="min-h-screen flex flex-col">
       {showConfetti && (
@@ -229,6 +231,10 @@ function IndexContent() {
               onPaintEffectChange={(effect) => studio.updateSettings({ paintEffect: effect })}
               paintIntensity={studio.settings.paintIntensity}
               onPaintIntensityChange={(intensity) => studio.updateSettings({ paintIntensity: intensity })}
+              artisticEffect={studio.settings.artisticEffect}
+              onArtisticEffectChange={(effect) => studio.updateSettings({ artisticEffect: effect })}
+              artisticIntensity={studio.settings.artisticIntensity}
+              onArtisticIntensityChange={(intensity) => studio.updateSettings({ artisticIntensity: intensity })}
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />
@@ -272,6 +278,7 @@ function IndexContent() {
             processedData={studio.result}
             onExportPNG={handleExportPNG}
             onExportJSON={handleExportJSON}
+            onExportSVG={handleExportSVG}
           />
         }
       />

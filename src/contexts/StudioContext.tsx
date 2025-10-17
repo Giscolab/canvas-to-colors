@@ -12,6 +12,8 @@ export interface StudioSettings {
   smartPalette: boolean;
   paintEffect: 'none' | 'watercolor' | 'brush';
   paintIntensity: number;
+  artisticEffect: 'none' | 'oil' | 'pencil';
+  artisticIntensity: number;
 }
 
 export interface UserPreferences {
@@ -69,6 +71,8 @@ const DEFAULT_SETTINGS: StudioSettings = {
   smartPalette: false,
   paintEffect: 'none',
   paintIntensity: 50,
+  artisticEffect: 'none',
+  artisticIntensity: 50,
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {

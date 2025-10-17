@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Wand2, Sparkles, Gauge, Layers, Palette, Paintbrush } from "lucide-react";
+import { Wand2, Sparkles, Gauge, Layers, Palette, Paintbrush, PaintBucket, Pencil } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -24,6 +24,10 @@ interface ParametersPanelProps {
   onPaintEffectChange: (effect: 'none' | 'watercolor' | 'brush') => void;
   paintIntensity: number;
   onPaintIntensityChange: (intensity: number) => void;
+  artisticEffect: 'none' | 'oil' | 'pencil';
+  onArtisticEffectChange: (effect: 'none' | 'oil' | 'pencil') => void;
+  artisticIntensity: number;
+  onArtisticIntensityChange: (intensity: number) => void;
   onProcess: () => void;
   isProcessing: boolean;
 }
@@ -45,6 +49,10 @@ export const ParametersPanel = ({
   onPaintEffectChange,
   paintIntensity,
   onPaintIntensityChange,
+  artisticEffect,
+  onArtisticEffectChange,
+  artisticIntensity,
+  onArtisticIntensityChange,
   onProcess,
   isProcessing,
 }: ParametersPanelProps) => {
@@ -245,6 +253,56 @@ export const ParametersPanel = ({
                 step={5}
                 value={[paintIntensity]}
                 onValueChange={(v) => onPaintIntensityChange(v[0])}
+                className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* --- Effets artistiques (AI) --- */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <Label className="flex items-center gap-2 text-sm">
+            <PaintBucket className="h-3.5 w-3.5 text-primary" />
+            Effets artistiques (AI)
+          </Label>
+          
+          <Select value={artisticEffect} onValueChange={onArtisticEffectChange}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Aucun</SelectItem>
+              <SelectItem value="oil">
+                <span className="flex items-center gap-2">
+                  <PaintBucket className="h-3.5 w-3.5" />
+                  Huile
+                </span>
+              </SelectItem>
+              <SelectItem value="pencil">
+                <span className="flex items-center gap-2">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Crayon
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {artisticEffect !== 'none' && (
+            <div className="space-y-2 pl-6">
+              <div className="flex justify-between items-center">
+                <Label className="text-xs text-muted-foreground">
+                  Intensité
+                </Label>
+                <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {artisticIntensity}%
+                </span>
+              </div>
+              <Slider
+                min={0}
+                max={100}
+                step={5}
+                value={[artisticIntensity]}
+                onValueChange={(v) => onArtisticIntensityChange(v[0])}
                 className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
               />
             </div>

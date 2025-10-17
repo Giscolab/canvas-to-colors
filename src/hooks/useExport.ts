@@ -1,12 +1,15 @@
 import { toast } from "sonner";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { EXPORT } from "@/config/constants";
+import { exportToSvg, SvgExportOptions } from "@/lib/exportSvg";
 
 interface ExportParams {
   numColors: number;
   minRegionSize: number;
   smoothness: number;
 }
+
+type ExportFormat = 'png' | 'json' | 'svg';
 
 export function useExport() {
   const exportPNG = (processedData: ProcessedResult | null) => {
@@ -63,5 +66,33 @@ export function useExport() {
     toast.success("✅ Export JSON réussi !");
   };
 
-  return { exportPNG, exportJSON };
+  const exportSVG = (processedData: ProcessedResult | null) => {
+    if (!processedData) {
+      toast.error("Aucune donnée à exporter");
+      return;
+    }
+
+    try {
+      const options: SvgExportOptions = {
+        simplifyTolerance: 1,
+        includeMetadata: true,
+        groupByColor: true,
+        optimizeAttributes: true,
+      };
+
+      const blob = exportToSvg(processedData, options);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pbn-${Date.now()}.svg`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("✅ Export SVG réussi !");
+    } catch (error) {
+      console.error('SVG export error:', error);
+      toast.error("Erreur lors de l'export SVG");
+    }
+  };
+
+  return { exportPNG, exportJSON, exportSVG };
 }
