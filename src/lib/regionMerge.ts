@@ -63,32 +63,50 @@ function cloneZone(zone: Zone): Zone {
   };
 }
 
-function collectNeighborIds(
-  zone: Zone,
+function buildNeighborMap(
+  zones: Zone[],
   labels: Int32Array,
   width: number,
   height: number
-): number[] {
-  const neighbors = new Set<number>();
-  for (let i = 0; i < zone.pixels.length; i++) {
-    const pixel = zone.pixels[i];
-    const x = pixel % width;
-    const y = Math.floor(pixel / width);
+): Map<number, Set<number>> {
+  const neighborsByZone = new Map<number, Set<number>>();
 
-    const candidates: number[] = [];
-    if (x > 0) candidates.push(pixel - 1);
-    if (x < width - 1) candidates.push(pixel + 1);
-    if (y > 0) candidates.push(pixel - width);
-    if (y < height - 1) candidates.push(pixel + width);
+  for (const zone of zones) {
+    const neighbors = new Set<number>();
+    for (let i = 0; i < zone.pixels.length; i++) {
+      const pixel = zone.pixels[i];
+      const x = pixel % width;
+      const y = Math.floor(pixel / width);
 
-    for (const candidate of candidates) {
-      const neighborId = labels[candidate];
-      if (neighborId !== -1 && neighborId !== zone.id) {
-        neighbors.add(neighborId);
+      const candidateOffsets = [
+        -1,
+        1,
+        -width,
+        width,
+      ];
+
+      for (const offset of candidateOffsets) {
+        if (offset === -1 && x === 0) continue;
+        if (offset === 1 && x === width - 1) continue;
+        if (offset === -width && y === 0) continue;
+        if (offset === width && y === height - 1) continue;
+
+        const candidateIndex = pixel + offset;
+        if (candidateIndex < 0 || candidateIndex >= labels.length) {
+          continue;
+        }
+
+        const neighborId = labels[candidateIndex];
+        if (neighborId !== -1 && neighborId !== zone.id) {
+          neighbors.add(neighborId);
+        }
       }
     }
+
+    neighborsByZone.set(zone.id, neighbors);
   }
-  return Array.from(neighbors);
+
+  return neighborsByZone;
 }
 
 export function artisticMerge(
@@ -106,6 +124,8 @@ export function artisticMerge(
   for (const zone of zones) {
     zoneMap.set(zone.id, cloneZone(zone));
   }
+
+  const neighborsByZone = buildNeighborMap(zones, workingLabels, width, height);
 
   const paletteLab = palette.map((hex) => {
     const [r, g, b] = hexToRgb(hex);
@@ -140,21 +160,31 @@ export function artisticMerge(
 
   while (iterations < maxIterations) {
     iterations++;
-    let mergedThisIteration = false;
+
+    const scheduled = new Set<number>();
+    const mergePairs: Array<{ recipientId: number; donorId: number; deltaE: number }> = [];
 
     for (const zoneId of zoneIds()) {
+      if (scheduled.has(zoneId)) {
+        continue;
+      }
+
       const zone = zoneMap.get(zoneId);
       if (!zone) continue;
 
-      const neighborIds = collectNeighborIds(zone, workingLabels, width, height);
-      if (neighborIds.length === 0) {
+      const neighborSet = neighborsByZone.get(zoneId);
+      if (!neighborSet || neighborSet.size === 0) {
         continue;
       }
 
       let bestNeighborId: number | null = null;
       let bestDeltaE = Number.POSITIVE_INFINITY;
 
-      for (const neighborId of neighborIds) {
+      for (const neighborId of neighborSet) {
+        if (scheduled.has(neighborId)) {
+          continue;
+        }
+
         const neighborZone = zoneMap.get(neighborId);
         if (!neighborZone) continue;
 
@@ -180,11 +210,31 @@ export function artisticMerge(
         continue;
       }
 
-      // Merge smaller zone into the neighbor by default
       const recipient = targetZone.area >= zone.area ? targetZone : zone;
       const donor = recipient === targetZone ? zone : targetZone;
 
       if (recipient.id === donor.id) {
+        continue;
+      }
+
+      mergePairs.push({
+        recipientId: recipient.id,
+        donorId: donor.id,
+        deltaE: bestDeltaE,
+      });
+
+      scheduled.add(recipient.id);
+      scheduled.add(donor.id);
+    }
+
+    if (mergePairs.length === 0) {
+      break;
+    }
+
+    for (const { recipientId, donorId, deltaE } of mergePairs) {
+      const recipient = zoneMap.get(recipientId);
+      const donor = zoneMap.get(donorId);
+      if (!recipient || !donor) {
         continue;
       }
 
@@ -199,9 +249,6 @@ export function artisticMerge(
         centroid: computeCentroid(mergedPixels, width),
       };
 
-      // Update labels: assign donor pixels to recipient id
-      const donorId = donor.id;
-      const recipientId = recipient.id;
       for (let i = 0; i < donor.pixels.length; i++) {
         const pixel = donor.pixels[i];
         workingLabels[pixel] = recipientId;
@@ -210,17 +257,26 @@ export function artisticMerge(
       zoneMap.set(recipientId, mergedZone);
       zoneMap.delete(donorId);
 
-      mergedCount++;
-      if (isFinite(bestDeltaE)) {
-        totalDeltaE += bestDeltaE;
+      const recipientNeighbors = neighborsByZone.get(recipientId) ?? new Set<number>();
+      const donorNeighbors = neighborsByZone.get(donorId) ?? new Set<number>();
+      const mergedNeighbors = new Set<number>([...recipientNeighbors, ...donorNeighbors]);
+      mergedNeighbors.delete(recipientId);
+      mergedNeighbors.delete(donorId);
+      neighborsByZone.set(recipientId, mergedNeighbors);
+      neighborsByZone.delete(donorId);
+
+      for (const neighborId of mergedNeighbors) {
+        const neighborSet = neighborsByZone.get(neighborId);
+        if (!neighborSet) continue;
+        neighborSet.delete(donorId);
+        neighborSet.delete(recipientId);
+        neighborSet.add(recipientId);
       }
 
-      mergedThisIteration = true;
-      break; // Restart iteration after each merge for stability
-    }
-
-    if (!mergedThisIteration) {
-      break;
+      mergedCount++;
+      if (isFinite(deltaE)) {
+        totalDeltaE += deltaE;
+      }
     }
   }
 
