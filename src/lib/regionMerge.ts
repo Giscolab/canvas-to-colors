@@ -112,6 +112,26 @@ export function artisticMerge(
     return rgbToLab(r, g, b);
   });
 
+  const deltaCache = new Map<string, number>();
+  const getDeltaCached = (indexA: number, indexB: number) => {
+    const [minIndex, maxIndex] = indexA <= indexB ? [indexA, indexB] : [indexB, indexA];
+    const key = `${minIndex}-${maxIndex}`;
+    const cached = deltaCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const labA = paletteLab[minIndex];
+    const labB = paletteLab[maxIndex];
+    if (!labA || !labB) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    const distance = deltaE2000(labA, labB);
+    deltaCache.set(key, distance);
+    return distance;
+  };
+
   let iterations = 0;
   let mergedCount = 0;
   let totalDeltaE = 0;
@@ -138,11 +158,8 @@ export function artisticMerge(
         const neighborZone = zoneMap.get(neighborId);
         if (!neighborZone) continue;
 
-        const zoneLab = paletteLab[zone.colorIdx];
-        const neighborLab = paletteLab[neighborZone.colorIdx];
-        if (!zoneLab || !neighborLab) continue;
-
-        const distance = deltaE2000(zoneLab, neighborLab);
+        const distance = getDeltaCached(zone.colorIdx, neighborZone.colorIdx);
+        if (!isFinite(distance)) continue;
         if (distance < bestDeltaE) {
           bestDeltaE = distance;
           bestNeighborId = neighborId;
