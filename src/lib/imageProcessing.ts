@@ -652,9 +652,10 @@ function labelConnectedComponents(
   let currentLabel = 0;
   
   // Use BFS queue instead of stack for better memory stability
-  const MAX_QUEUE_SIZE = Math.min(width * height, 1000000);
-  const queueX = new Int32Array(MAX_QUEUE_SIZE);
-  const queueY = new Int32Array(MAX_QUEUE_SIZE);
+  const INITIAL_QUEUE_CAPACITY = Math.max(64, Math.min(width * height, 1024));
+  let queueX = new Uint32Array(INITIAL_QUEUE_CAPACITY);
+  let queueY = new Uint32Array(INITIAL_QUEUE_CAPACITY);
+  let queueCapacity = INITIAL_QUEUE_CAPACITY;
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -669,10 +670,56 @@ function labelConnectedComponents(
         // BFS queue-based flood fill
         let queueHead = 0;
         let queueTail = 0;
-        
-        queueX[queueTail] = x;
-        queueY[queueTail] = y;
-        queueTail++;
+
+        const compactQueue = () => {
+          if (queueHead > 0) {
+            if (queueTail > queueHead) {
+              queueX.copyWithin(0, queueHead, queueTail);
+              queueY.copyWithin(0, queueHead, queueTail);
+            }
+            queueTail -= queueHead;
+            queueHead = 0;
+          }
+        };
+
+        const ensureQueueSpace = (additionalSlots: number) => {
+          if (queueTail + additionalSlots <= queueCapacity) {
+            return;
+          }
+
+          compactQueue();
+
+          if (queueTail + additionalSlots <= queueCapacity) {
+            return;
+          }
+
+          let newCapacity = queueCapacity;
+          const requiredCapacity = queueTail + additionalSlots;
+          while (newCapacity < requiredCapacity) {
+            newCapacity *= 2;
+          }
+
+          const newQueueX = new Uint32Array(newCapacity);
+          const newQueueY = new Uint32Array(newCapacity);
+
+          if (queueTail > 0) {
+            newQueueX.set(queueX.subarray(0, queueTail));
+            newQueueY.set(queueY.subarray(0, queueTail));
+          }
+
+          queueX = newQueueX;
+          queueY = newQueueY;
+          queueCapacity = newCapacity;
+        };
+
+        const enqueue = (qx: number, qy: number) => {
+          ensureQueueSpace(1);
+          queueX[queueTail] = qx;
+          queueY[queueTail] = qy;
+          queueTail++;
+        };
+
+        enqueue(x, y);
         
         let iterations = 0;
         const MAX_ITERATIONS = 2000000;
@@ -695,53 +742,35 @@ function labelConnectedComponents(
           sumX += cx;
           sumY += cy;
           
-          // Add 8-neighbors to queue (check bounds and queue capacity)
-          if (queueTail + 8 < MAX_QUEUE_SIZE) {
-            // 4-connected neighbors
-            if (cx > 0 && labels[cy * width + (cx - 1)] === -1 && colorMap[cy * width + (cx - 1)] === colorIdx) {
-              queueX[queueTail] = cx - 1;
-              queueY[queueTail] = cy;
-              queueTail++;
-            }
-            if (cx < width - 1 && labels[cy * width + (cx + 1)] === -1 && colorMap[cy * width + (cx + 1)] === colorIdx) {
-              queueX[queueTail] = cx + 1;
-              queueY[queueTail] = cy;
-              queueTail++;
-            }
-            if (cy > 0 && labels[(cy - 1) * width + cx] === -1 && colorMap[(cy - 1) * width + cx] === colorIdx) {
-              queueX[queueTail] = cx;
-              queueY[queueTail] = cy - 1;
-              queueTail++;
-            }
-            if (cy < height - 1 && labels[(cy + 1) * width + cx] === -1 && colorMap[(cy + 1) * width + cx] === colorIdx) {
-              queueX[queueTail] = cx;
-              queueY[queueTail] = cy + 1;
-              queueTail++;
-            }
-            // Diagonal neighbors
-            if (cx > 0 && cy > 0 && labels[(cy - 1) * width + (cx - 1)] === -1 && colorMap[(cy - 1) * width + (cx - 1)] === colorIdx) {
-              queueX[queueTail] = cx - 1;
-              queueY[queueTail] = cy - 1;
-              queueTail++;
-            }
-            if (cx < width - 1 && cy > 0 && labels[(cy - 1) * width + (cx + 1)] === -1 && colorMap[(cy - 1) * width + (cx + 1)] === colorIdx) {
-              queueX[queueTail] = cx + 1;
-              queueY[queueTail] = cy - 1;
-              queueTail++;
-            }
-            if (cx > 0 && cy < height - 1 && labels[(cy + 1) * width + (cx - 1)] === -1 && colorMap[(cy + 1) * width + (cx - 1)] === colorIdx) {
-              queueX[queueTail] = cx - 1;
-              queueY[queueTail] = cy + 1;
-              queueTail++;
-            }
-            if (cx < width - 1 && cy < height - 1 && labels[(cy + 1) * width + (cx + 1)] === -1 && colorMap[(cy + 1) * width + (cx + 1)] === colorIdx) {
-              queueX[queueTail] = cx + 1;
-              queueY[queueTail] = cy + 1;
-              queueTail++;
-            }
-          } else {
-            console.warn(`Queue capacity reached for zone at (${x}, ${y}). Zone may be incomplete.`);
-            break;
+          // Add 8-neighbors to queue (check bounds)
+          ensureQueueSpace(8);
+
+          // 4-connected neighbors
+          if (cx > 0 && labels[cy * width + (cx - 1)] === -1 && colorMap[cy * width + (cx - 1)] === colorIdx) {
+            enqueue(cx - 1, cy);
+          }
+          if (cx < width - 1 && labels[cy * width + (cx + 1)] === -1 && colorMap[cy * width + (cx + 1)] === colorIdx) {
+            enqueue(cx + 1, cy);
+          }
+          if (cy > 0 && labels[(cy - 1) * width + cx] === -1 && colorMap[(cy - 1) * width + cx] === colorIdx) {
+            enqueue(cx, cy - 1);
+          }
+          if (cy < height - 1 && labels[(cy + 1) * width + cx] === -1 && colorMap[(cy + 1) * width + cx] === colorIdx) {
+            enqueue(cx, cy + 1);
+          }
+
+          // Diagonal neighbors
+          if (cx > 0 && cy > 0 && labels[(cy - 1) * width + (cx - 1)] === -1 && colorMap[(cy - 1) * width + (cx - 1)] === colorIdx) {
+            enqueue(cx - 1, cy - 1);
+          }
+          if (cx < width - 1 && cy > 0 && labels[(cy - 1) * width + (cx + 1)] === -1 && colorMap[(cy - 1) * width + (cx + 1)] === colorIdx) {
+            enqueue(cx + 1, cy - 1);
+          }
+          if (cx > 0 && cy < height - 1 && labels[(cy + 1) * width + (cx - 1)] === -1 && colorMap[(cy + 1) * width + (cx - 1)] === colorIdx) {
+            enqueue(cx - 1, cy + 1);
+          }
+          if (cx < width - 1 && cy < height - 1 && labels[(cy + 1) * width + (cx + 1)] === -1 && colorMap[(cy + 1) * width + (cx + 1)] === colorIdx) {
+            enqueue(cx + 1, cy + 1);
           }
         }
 
