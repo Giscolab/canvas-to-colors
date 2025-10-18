@@ -1051,100 +1051,112 @@ function mergeSmallZones(
 ): { mergedLabels: Int32Array; mergedZones: Zone[] } {
   const mergedLabels = new Int32Array(labels);
   const minAreaThreshold = Math.max(minRegionSize, 20);
-  const zonesToMerge = zones.filter(z => z.area < minAreaThreshold);
-  
-  // Build zone map for O(1) lookups instead of O(n) find()
-  const zoneMap = new Map<number, Zone>();
-  for (const zone of zones) {
-    zoneMap.set(zone.id, zone);
-  }
 
-  // Helper: calculate zone compactness (perimeter^2 / area)
-  const calculateCompactness = (zone: Zone): number => {
-    const pixelSet = new Set(zone.pixels);
-    let perimeter = 0;
-    
-    for (const pixelIdx of zone.pixels) {
-      const x = pixelIdx % width;
-      const y = Math.floor(pixelIdx / width);
-      
-      // Check 4-neighbors
-      const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dx, dy] of deltas) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const nidx = ny * width + nx;
-          if (!pixelSet.has(nidx)) {
-            perimeter++;
-          }
-        } else {
-          perimeter++;
-        }
-      }
-    }
-    
-    return zone.area > 0 ? (perimeter * perimeter) / zone.area : Infinity;
+  const zoneMap = new Map<number, Zone>();
+  for (const z of zones) zoneMap.set(z.id, z);
+
+  // Cache ΔE entre couleurs
+  const colorCache = new Map<string, number>();
+  const getColorDistance = (idxA: number, idxB: number) => {
+    const key = `${idxA}-${idxB}`;
+    if (colorCache.has(key)) return colorCache.get(key)!;
+    const [r1, g1, b1] = hexToRgb(palette[idxA]);
+    const [r2, g2, b2] = hexToRgb(palette[idxB]);
+    const d = Math.sqrt(
+      (r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2
+    );
+    colorCache.set(key, d);
+    return d;
   };
 
-  // Pre-calculate and normalize compactness for all zones to merge
-  const compactnessValues = zonesToMerge.map(z => calculateCompactness(z));
-  const maxCompactness = Math.max(...compactnessValues, 1);
+  // 🔹 Construire une carte de voisinage persistante
+  const neighborsByZone = new Map<number, Set<number>>();
+  for (const zone of zones) {
+    const set = new Set<number>();
+    for (const p of zone.pixels) {
+      const x = p % width;
+      const y = Math.floor(p / width);
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+        const neighborId = mergedLabels[ny * width + nx];
+        if (neighborId !== zone.id && neighborId !== -1) set.add(neighborId);
+      }
+    }
+    neighborsByZone.set(zone.id, set);
+  }
 
-  // Build adjacency for small zones
-  for (const smallZone of zonesToMerge) {
-    const neighbors = new Set<number>();
-    
-    for (const pixelIdx of smallZone.pixels) {
-      const x = pixelIdx % width;
-      const y = Math.floor(pixelIdx / width);
-      
-      // Check 4-neighbors
-      const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dx, dy] of deltas) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-          const nidx = ny * width + nx;
-          const nlabel = mergedLabels[nidx];
-          if (nlabel !== smallZone.id && nlabel !== -1) {
-            neighbors.add(nlabel);
-          }
+  // 🔹 Pré-calcul de la compacité de chaque zone
+  const compactnessCache = new Map<number, number>();
+  const calcCompactness = (zone: Zone): number => {
+    if (compactnessCache.has(zone.id)) return compactnessCache.get(zone.id)!;
+    const pixelSet = new Set(zone.pixels);
+    let perim = 0;
+    for (const idx of zone.pixels) {
+      const x = idx % width, y = Math.floor(idx / width);
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height || !pixelSet.has(ny * width + nx)) {
+          perim++;
         }
       }
     }
+    const compact = zone.area > 0 ? (perim * perim) / zone.area : Infinity;
+    compactnessCache.set(zone.id, compact);
+    return compact;
+  };
 
-    // Find nearest neighbor by color and normalized compactness using zoneMap
-    let bestNeighbor = -1;
-    let minScore = Infinity;
-    const smallColor = hexToRgb(palette[smallZone.colorIdx]);
+  // 🔹 Fusion par batch
+  const smallZones = zones.filter(z => z.area < minAreaThreshold);
+  const merges: Array<{ donor: number; recipient: number }> = [];
 
-    for (const neighborId of neighbors) {
-      const neighborZone = zoneMap.get(neighborId);
-      if (!neighborZone) continue;
-      
-      const neighborColor = hexToRgb(palette[neighborZone.colorIdx]);
-      const colorDist = colorDistance(smallColor, neighborColor);
-      const compactness = calculateCompactness(neighborZone);
-      
-      // Normalize compactness to [0-1] range for stable weighting
-      const normalizedCompactness = maxCompactness > 0 ? compactness / maxCompactness : 0;
-      
-      // Combined score: prioritize color similarity (80%), penalize non-compact zones (20%)
-      const score = colorDist * 0.8 + normalizedCompactness * 20;
-      
-      if (score < minScore) {
-        minScore = score;
-        bestNeighbor = neighborId;
+  for (const z of smallZones) {
+    const neighbors = neighborsByZone.get(z.id);
+    if (!neighbors || neighbors.size === 0) continue;
+
+    let bestId = -1, bestScore = Infinity;
+    const zColor = z.colorIdx;
+    const zCompact = calcCompactness(z);
+
+    for (const nId of neighbors) {
+      const nZone = zoneMap.get(nId);
+      if (!nZone) continue;
+      const colorDist = getColorDistance(zColor, nZone.colorIdx);
+      const nCompact = calcCompactness(nZone);
+      const score = colorDist * 0.8 + nCompact * 0.2;
+      if (score < bestScore) {
+        bestScore = score;
+        bestId = nId;
       }
     }
 
-    // Merge into best neighbor
-    if (bestNeighbor !== -1) {
-      for (const pixelIdx of smallZone.pixels) {
-        mergedLabels[pixelIdx] = bestNeighbor;
-      }
-    }
+    if (bestId !== -1) merges.push({ donor: z.id, recipient: bestId });
+  }
+
+  // 🔹 Appliquer les fusions
+  for (const { donor, recipient } of merges) {
+    const donorZone = zoneMap.get(donor);
+    const recZone = zoneMap.get(recipient);
+    if (!donorZone || !recZone) continue;
+
+    for (const p of donorZone.pixels) mergedLabels[p] = recipient;
+
+    // Fusionner les pixels
+    const newPixels = new Uint32Array(recZone.pixels.length + donorZone.pixels.length);
+    newPixels.set(recZone.pixels);
+    newPixels.set(donorZone.pixels, recZone.pixels.length);
+    recZone.pixels = newPixels;
+    recZone.area = newPixels.length;
+
+    // Mise à jour des voisins
+    const mergedNeighbors = new Set([
+      ...(neighborsByZone.get(recipient) ?? []),
+      ...(neighborsByZone.get(donor) ?? []),
+    ]);
+    mergedNeighbors.delete(donor);
+    mergedNeighbors.delete(recipient);
+    neighborsByZone.set(recipient, mergedNeighbors);
+    neighborsByZone.delete(donor);
   }
 
   const mergedZones = buildZonesFromLabels(mergedLabels, palette, width, height, zones);
