@@ -1,98 +1,152 @@
 # 🎨 Canvas to Colors
 
-Canvas to Colors est un studio web professionnel qui convertit n'importe quelle photo en planche de peinture numérotée prête à l'emploi. L'application marie un pipeline d'analyse colorimétrique avancé, un traitement d'image hautes performances exécuté dans un Web Worker et une interface pilotée par shadcn/ui pour accompagner illustrateurs, ateliers loisirs créatifs et imprimeurs d'art personnalisable.
+![Canvas to Colors](https://img.shields.io/badge/Canvas_to_Colors-Professional_Web_Studio-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
+![React](https://img.shields.io/badge/react-18.2.0-blue?style=for-the-badge&logo=react)
+![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue?style=for-the-badge&logo=typescript)
 
-## 🎯 Objectif & public cible
-- **Objectif** : générer un kit complet (zones, numéros, palette, exports) à partir d'une photo en quelques minutes tout en conservant le contrôle fin des paramètres.
-- **Public visé** : studios créatifs, boutiques d'impression à la demande, artistes souhaitant préparer des ateliers paint-by-numbers et équipes produit explorant la conversion d'images en artefacts physiques.
+*Transformez n'importe quelle photo en planche de peinture numérotée prête à l'emploi*
 
-## ✨ Fonctionnalités principales
-- **Analyse intelligente des couleurs** : estimation de la complexité, recommandations automatiques et détection des dominantes via `analyzeImageColors` avant tout traitement lourd.【F:src/lib/imageProcessing.ts†L204-L274】
-- **Pipeline paramétrable** : contrôle du nombre de couleurs, taille minimale des zones, lissage, tolérance ΔE pour la fusion artistique, palette « smart » et effets de post-traitement aquarelle/huile/pencil.【F:src/contexts/StudioContext.tsx†L7-L108】【F:src/components/ParametersPanel.tsx†L1-L160】
-- **Studio interactif** : panneaux redimensionnables, navigation multi-vues, inspection des zones, zoom/pan fluide et surbrillance animée grâce à `useCanvasInteractions` et `EnhancedViewTabs`.【F:src/hooks/useCanvasInteractions.ts†L1-L304】【F:src/components/studio/EnhancedViewTabs.tsx†L1-L160】
-- **Gestion de projets** : sauvegarde locale, auto-save optionnel, import/export `.pbnproj`, préférences persistées et historique Supabase des traitements avec pagination.【F:src/components/studio/EnhancedProjectManager.tsx†L1-L200】【F:src/hooks/useAutoSave.ts†L1-L40】【F:src/hooks/useImageHistory.ts†L1-L96】
-- **Exports multi-formats** : génération directe PNG, JSON structuré et SVG optimisé avec groupement par couleur et métadonnées enrichies.【F:src/hooks/useExport.ts†L1-L84】【F:src/lib/exportSvg.ts†L1-L208】
-- **Profiling & monitoring** : timeline des étapes mesurées, indicateurs de cache LRU et statistiques mémoire via le panel de profilage dédié.【F:src/hooks/useProfiler.ts†L1-L204】【F:src/components/studio/ProfilerPanel.tsx†L1-L200】
+[🚀 Démarrer](#-installation--configuration) • [📖 Documentation](#-pipeline-de-traitement-dimage) • [🎯 Fonctionnalités](#-fonctionnalités-principales) • [🤝 Contribuer](#-contribuer)
 
-## 🧪 Pipeline de traitement d'image
-1. **Normalisation & cache** – Décodage de l'image, correction EXIF, redimensionnement max 1200px et génération d'un hash pour la clé LRU.【F:src/lib/imageProcessing.ts†L210-L248】【F:src/lib/imageProcessing.ts†L292-L347】
-2. **Quantification perceptuelle** – K-means++ sur échantillonnage adaptatif avec distance ΔE2000 et consolidation des palettes proches.【F:src/lib/imageProcessing.ts†L400-L533】【F:src/lib/imageProcessing.ts†L340-L399】
-3. **Segmentation des zones** – Flood fill optimisé qui bâtit labels/zones et calcule centroïdes et surfaces.【F:src/lib/imageProcessing.ts†L980-L1203】
-4. **Fusion artistique** – Regroupement de régions voisines selon ΔE et surface minimum configurable (`artisticMerge`).【F:src/lib/regionMerge.ts†L1-L212】
-5. **Contours & labels** – Marching Squares, union polygonale et placement optimisé des numéros avec `polylabel` pour garantir la lisibilité.【F:src/lib/imageProcessing.ts†L1504-L1702】
-6. **Effets optionnels** – Application non destructive d'effets aquarelle/pinceau/huile/pencil sur le rendu final en fonction des réglages utilisateur.【F:src/lib/postProcessing.ts†L1-L196】【F:src/lib/artisticEffects.ts†L1-L200】
-7. **Exports & légende** – Fusion preview, génération des légendes, export JSON/SVG/PNG et mise en cache structurée des résultats.【F:src/lib/imageProcessing.ts†L1703-L1849】【F:src/hooks/useExport.ts†L1-L84】
+---
+## ✨ À propos
 
-## 🗂️ Architecture du projet
+**Canvas to Colors** est une application web professionnelle qui convertit automatiquement vos photos en planches de peinture numérotées personnalisables. Notre technologie combine un pipeline d'analyse colorimétrique avancé, un traitement d'image haute performance exécuté dans un Web Worker, et une interface moderne conçue avec shadcn/ui.
+
+---
+
+## 🎯 Objectif & Public Cible
+
+| Objectif | Public Cible |
+|----------|--------------|
+| Génération de kits complets (zones, numéros, palette, exports) à partir d'une photo en quelques minutes | Studios créatifs |
+| Contrôle fin des paramètres pour un résultat personnalisé | Boutiques d'impression à la demande |
+| Interface intuitive pour une expérience utilisateur fluide | Artistes préparant des ateliers paint-by-numbers |
+| Outils d'exportation variés pour une intégration facile | Équipes produit explorant la conversion d'images en artefacts physiques |
+
+---
+
+## 🌟 Fonctionnalités Principales
+
+### 🎨 Analyse Intelligente des Couleurs
+- Estimation de la complexité de l'image
+- Recommandations automatiques de palette
+- Détection des couleurs dominantes
+- Analyse préliminaire avant tout traitement lourd
+
+### ⚙️ Pipeline Paramétrable
+- Contrôle précis du nombre de couleurs
+- Configuration de la taille minimale des zones
+- Options de lissage et de tolérance ΔE
+- Palette "smart" avec effets de post-traitement (aquarelle, huile, crayon)
+
+### 🖼️ Studio Interactif
+- Panneaux redimensionnables pour une flexibilité maximale
+- Navigation multi-vues (Original, Colorisé, Contours, Numéroté, Comparer)
+- Inspection interactive des zones avec zoom/pan fluide
+- Surbrillance animée des zones sélectionnées
+
+### 💾 Gestion de Projets Avancée
+- Sauvegarde locale avec auto-save optionnel
+- Import/export de projets au format `.pbnproj`
+- Historique cloud avec pagination via Supabase
+- Préférences utilisateur persistées
+
+### 📤 Exports Multi-Formats
+- Génération directe en PNG haute qualité
+- Export JSON structuré pour intégration
+- Export SVG optimisé avec groupement par couleur
+- Métadonnées enrichies pour chaque export
+
+### 📊 Profiling & Monitoring
+- Timeline détaillée des étapes de traitement
+- Indicateurs de performance du cache LRU
+- Statistiques mémoire en temps réel
+- Panel de profilage dédié pour l'optimisation
+---
+## 🧪 Pipeline de Traitement d'Image
+1. **Normalisation & Cache** – Décodage, correction EXIF, redimensionnement et génération de hash
+2. **Quantification Perceptuelle** – K-means++ avec distance ΔE2000 et consolidation de palette
+3. **Segmentation des Zones** – Flood fill optimisé avec calcul de centroïdes et surfaces
+4. **Fusion Artistique** – Regroupement de régions selon ΔE et surface minimum
+5. **Contours & Labels** – Marching Squares, union polygonale et placement optimisé des numéros
+6. **Effets Optionnels** – Application non destructive d'effets artistiques
+7. **Exports & Légende** – Génération des exports et mise en cache des résultats
+---
+## 🏗️ Architecture du Projet
 ```
 src/
-├─ components/             # UI métier (upload, palettes, studio, auth)
-│  ├─ studio/              # Layout redimensionnable, tabs, export, debug, profiler
-│  └─ ui/                  # Primitives shadcn/ui mutualisées
-├─ contexts/               # `StudioContext` (état global & projets)
-├─ hooks/                  # Auth, Supabase, canvas, export, auto-save, profiler
-├─ lib/                    # Traitement d'image, effets, cache, export SVG
-├─ workers/                # Worker `imageProcessor.worker.ts` orchestré par `imageProcessingWorker.ts`
-├─ integrations/supabase/  # Client typé et définitions de schéma
-├─ config/                 # Constantes (timeouts, limites, UI)
-├─ pages/                  # Pages routées (Index, NotFound)
-└─ main.tsx / App.tsx      # Entrées React & routing
+├─ components/             # UI métier
+│  ├─ studio/              # Layout redimensionnable, onglets, export
+│  └─ ui/                  # Composants shadcn/ui mutualisés
+├─ contexts/               # État global (StudioContext)
+├─ hooks/                  # Hooks personnalisés (auth, canvas, export)
+├─ lib/                    # Traitement d'image, effets, cache
+├─ workers/                # Web Workers pour le traitement d'image
+├─ integrations/supabase/  # Client Supabase typé
+├─ config/                 # Constantes de configuration
+├─ pages/                  # Pages routées
+└─ main.tsx / App.tsx      # Points d'entrée React
 ```
-Les styles globaux sont gérés via Tailwind (`tailwind.config.ts`, `index.css`) et shadcn/ui (`components.json`).【F:src/components/studio/ResizableStudioLayout.tsx†L1-L88】【F:src/lib/imageProcessingWorker.ts†L1-L188】
+## 🛠️ Stack Technique
+| Front-end | Traitement d'image | Backend |
+|-----------|-------------------|---------|
+| ![React](https://img.shields.io/badge/React-18-blue?style=flat-square&logo=react) | ![Canvas API](https://img.shields.io/badge/Canvas_API-FF6B6B?style=flat-square) | ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase) |
+| ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?style=flat-square&logo=typescript) | ![ΔE2000](https://img.shields.io/badge/ΔE2000-Purple?style=flat-square) | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql) |
+| ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite) | ![Marching Squares](https://img.shields.io/badge/Marching_Squares-FF6B6B?style=flat-square) | ![RLS](https://img.shields.io/badge/Row_Level_Security-3FCF8E?style=flat-square) |
+| ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss) | ![Martinez Polygon](https://img.shields.io/badge/Martinez_Polygon-FF6B6B?style=flat-square) | |
+| ![shadcn/ui](https://img.shields.io/badge/shadcn/ui-000000?style=flat-square) | ![Polylabel](https://img.shields.io/badge/Polylabel-FF6B6B?style=flat-square) | |
+---
+## 🎬 Expérience Utilisateur
 
-## 🧰 Stack technique
-| Domaine | Technologies |
-|---------|--------------|
-| Front-end | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui |
-| Traitement d'image | Canvas API, marchingsquares, martinez-polygon-clipping, simplify-js, polylabel, ΔE2000 custom | 
-| États & hooks | Contexte React, hooks maison (auto-save, profiler, canvas) |
-| Notifications & UI | sonner, Toaster shadcn, lucide-react |
-| Backend-as-a-service | Supabase (Auth, Postgres, RLS, migrations) |
+1. **📤 Importer** une image (drag & drop) avec vérification automatique
+2. **🔍 Analyser** automatiquement la palette et la complexité
+3. **⚙️ Configurer** finement le pipeline via l'interface intuitive
+4. **⚡ Traiter** l'image dans le Web Worker avec suivi de progression
+5. **👁️ Explorer** le rendu avec les différentes vues disponibles
+6. **💾 Sauvegarder & Partager** vos projets et exports
+7. **📊 Profiler** les performances pour optimiser vos traitements
+---
+## 🚀 Installation & Configuration
 
-## 🧑‍💻 Expérience utilisateur
-1. **Importer** une image (drag & drop) avec vérification de format et dimension max, preview immédiate et fiche technique.【F:src/components/ImageUpload.tsx†L1-L120】
-2. **Analyser** automatiquement la palette : complexité, recommandations et mode vectoriel/photo appliqués aux réglages.【F:src/pages/Index.tsx†L33-L108】
-3. **Configurer** finement le pipeline via sliders/toggles (palette intelligente, fusion artistique, effets, profilage).【F:src/components/ParametersPanel.tsx†L1-L200】
-4. **Traiter** l'image dans le Web Worker avec suivi de progression, timeout adaptatif et confettis de succès.【F:src/lib/imageProcessingWorker.ts†L1-L188】【F:src/pages/Index.tsx†L109-L208】
-5. **Explorer** le rendu : onglets Original/Colorisé/Contours/Numéroté/Comparer, inspection interactive et panel debug.【F:src/components/studio/EnhancedViewTabs.tsx†L1-L200】【F:src/components/studio/DebugPanel.tsx†L1-L160】
-6. **Sauvegarder & partager** : auto-save, projets locaux, export `.pbnproj`, historique cloud et exports PNG/JSON/SVG.【F:src/components/studio/EnhancedProjectManager.tsx†L1-L200】【F:src/hooks/useExport.ts†L1-L84】
-7. **Profiler** les performances : timeline par étape, ratio de cache hit et nettoyage de l'historique dans le panel dédié.【F:src/components/studio/ProfilerPanel.tsx†L1-L200】
+### Prérequis
 
-## 🚀 Installation & configuration
-1. **Cloner le dépôt**
-   ```bash
-   git clone <repo-url>
-   cd canvas-to-colors
-   ```
-2. **Installer les dépendances**
-   ```bash
-   npm install
-   ```
-3. **Configurer l'environnement**
-   - Créer un fichier `.env.local` :
-     ```env
-     VITE_SUPABASE_URL=... // URL du projet Supabase
-     VITE_SUPABASE_PUBLISHABLE_KEY=... // clé anonyme
-     ```
-   - (Optionnel) Démarrer Supabase en local : `supabase start` puis `supabase db reset` pour appliquer les migrations fournies.
-4. **Lancer le serveur de développement**
-   ```bash
-   npm run dev
-   ```
-   L'application est disponible sur [http://localhost:5173](http://localhost:5173).
-5. **Build production**
-   ```bash
-   npm run build
-   npm run preview
-   ```
+- Node.js 18+ 
+- npm ou yarn
+- Compte Supabase (optionnel)
 
-## 🗃️ Fonctionnalités Supabase
-- **Authentification** : email/mot de passe avec persistance de session locale et toasts de feedback (`useAuth`).【F:src/hooks/useAuth.ts†L1-L84】
-- **Profils utilisateurs** : table `profiles` (avatar, username) accessible via `useUserProfile` et protégée par RLS.【F:src/hooks/useUserProfile.ts†L1-L92】【F:src/integrations/supabase/types.ts†L1-L64】
-- **Historique des traitements** : table `image_jobs` sauvegardant paramètres, temps de calcul et palette ; filtrage par utilisateur connecté et fallback pour anonymes.【F:src/hooks/useImageHistory.ts†L1-L96】【F:src/components/HistoryPanel.tsx†L1-L72】
-- **Client typé** : `supabase` exposé via `integrations/supabase/client.ts` pour bénéficier de l'autocomplétion TypeScript.【F:src/integrations/supabase/client.ts†L1-L15】
+### Installation
 
-## 📜 Commandes npm
+```bash
+# Cloner le dépôt
+git clone <repo-url>
+cd canvas-to-colors
+
+# Installer les dépendances
+npm install
+
+# Configurer l'environnement
+cp .env.example .env.local
+# Éditer .env.local avec vos configurations Supabase
+
+# Démarrer le serveur de développement
+npm run dev
+```
+L'application sera disponible sur [http://localhost:5173](http://localhost:5173).
+
+### Configuration Supabase (Optionnel)
+
+```bash
+# Démarrer Supabase en local
+supabase start
+
+# Appliquer les migrations
+supabase db reset
+```
+## 📜 Commandes Disponibles
+
 | Commande | Description |
 |----------|-------------|
 | `npm run dev` | Lance Vite en mode développement |
@@ -101,14 +155,8 @@ Les styles globaux sont gérés via Tailwind (`tailwind.config.ts`, `index.css`)
 | `npm run preview` | Sert la build production localement |
 | `npm run lint` | Analyse le code avec ESLint |
 
-## ✅ Bonnes pratiques
-- Reposer les opérations lourdes sur le Web Worker (`processImageWithWorker`) pour préserver la fluidité UI.【F:src/lib/imageProcessingWorker.ts†L1-L188】
-- Tirer parti du `StudioContext` et des hooks utilitaires plutôt que du prop-drilling pour garder un état cohérent.【F:src/contexts/StudioContext.tsx†L37-L189】
-- Exploiter la palette d'effets via `applyPaintEffect` / `applyArtisticEffect` uniquement sur des `ImageData` clonées afin de rester non destructif.【F:src/lib/postProcessing.ts†L1-L196】【F:src/lib/artisticEffects.ts†L1-L200】
-- Utiliser les composants UI shadcn mutualisés (`@/components/ui`) pour conserver un design système homogène.【F:src/components/ParametersPanel.tsx†L1-L80】
-- Profiler régulièrement grâce au panel dédié pour calibrer les tolérances et tailles de zones selon les cas d'usage.【F:src/components/studio/ProfilerPanel.tsx†L1-L200】
+---
 
-## 🔮 Prochaines phases
-- **Build desktop** (Tauri/Electron) pour permettre une exécution hors-ligne.
-- **Traitement batch** de plusieurs visuels avec file d'attente et notifications.
-- **Automatisation d'impression** : export PDF multi-pages calibré pour ateliers.
+
+**[⬆ Retour en haut](#-canvas-to-colors)**
+
