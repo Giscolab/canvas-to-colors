@@ -1,12 +1,14 @@
 import { useMemo, useRef, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Image, Grid3x3, Hash, Palette, ArrowLeftRight } from "lucide-react";
+import { Image, Grid3x3, Hash, Palette, ArrowLeftRight, Activity } from "lucide-react";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { useStudio } from "@/contexts/StudioContext";
 import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
+import { ProfilerPanel } from "./ProfilerPanel";
 import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
 import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
+import { useProfiler } from "@/hooks/useProfiler";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -16,6 +18,7 @@ interface EnhancedViewTabsProps {
 export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewTabsProps) {
   const studio = useStudio();
   const canvasCache = useRef<Map<string, string>>(new Map());
+  const profiler = useProfiler();
 
   const getCanvasDataUrl = useMemo(() => {
     return (imageData: ImageData | null, key: string): string | null => {
@@ -43,6 +46,11 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     };
   }, []);
 
+  // Sync profiler enabled state with studio settings
+  useEffect(() => {
+    profiler.setEnabled(studio.settings.profilingEnabled);
+  }, [studio.settings.profilingEnabled, profiler]);
+
   // Clear cache when processed data or paint/artistic settings change
   useEffect(() => {
     canvasCache.current.clear();
@@ -67,6 +75,8 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   const colorizedUrl = useMemo(() => {
     if (!processedData?.colorized) return null;
     
+    profiler.startProfiling();
+    
     // Apply effects pipeline: Paint -> Artistic
     let finalImageData = processedData.colorized;
     
@@ -76,7 +86,10 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         type: studio.settings.paintEffect,
         intensity: studio.settings.paintIntensity,
       };
-      finalImageData = applyPaintEffect(finalImageData, paintEffect);
+      finalImageData = profiler.measureSync(
+        `Paint Effect (${studio.settings.paintEffect})`,
+        () => applyPaintEffect(finalImageData, paintEffect)
+      );
     }
     
     // 2. Apply artistic effect if enabled
@@ -85,18 +98,26 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         type: studio.settings.artisticEffect,
         intensity: studio.settings.artisticIntensity,
       };
-      finalImageData = applyArtisticEffect(finalImageData, artisticEffect);
+      finalImageData = profiler.measureSync(
+        `Artistic Effect (${studio.settings.artisticEffect})`,
+        () => applyArtisticEffect(finalImageData, artisticEffect)
+      );
     }
     
     const cacheKey = `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}-${studio.settings.artisticEffect}-${studio.settings.artisticIntensity}`;
-    return getCanvasDataUrl(finalImageData, cacheKey);
+    const result = getCanvasDataUrl(finalImageData, cacheKey);
+    
+    profiler.endProfiling(false);
+    
+    return result;
   }, [
     processedData?.colorized, 
     studio.settings.paintEffect, 
     studio.settings.paintIntensity,
     studio.settings.artisticEffect,
     studio.settings.artisticIntensity,
-    getCanvasDataUrl
+    getCanvasDataUrl,
+    profiler
   ]);
 
   return (
@@ -106,7 +127,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
       className="h-full flex flex-col"
     >
       <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-card/30 backdrop-blur-sm">
-        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+        <TabsList className="grid w-full grid-cols-6 max-w-4xl">
           <TabsTrigger value="original" className="flex items-center gap-2">
             <Image className="w-4 h-4" />
             Original
@@ -126,6 +147,10 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
           <TabsTrigger value="compare" className="flex items-center gap-2" disabled={!processedData}>
             <ArrowLeftRight className="w-4 h-4" />
             Comparer
+          </TabsTrigger>
+          <TabsTrigger value="profiler" className="flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Profiler
           </TabsTrigger>
         </TabsList>
       </div>
@@ -223,6 +248,20 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
               Traitez l'image pour comparer les versions
             </div>
           )}
+        </TabsContent>
+
+        {/* Profiler Tab */}
+        <TabsContent value="profiler" className="h-full mt-0 data-[state=active]:flex">
+          <div className="w-full h-full overflow-auto">
+            <ProfilerPanel
+              enabled={profiler.stats.enabled}
+              currentProfile={profiler.stats.currentProfile}
+              history={profiler.stats.history}
+              cacheHitRatio={profiler.getCacheHitRatio()}
+              onToggleEnabled={(enabled) => studio.updateSettings({ profilingEnabled: enabled })}
+              onClearHistory={profiler.clearHistory}
+            />
+          </div>
         </TabsContent>
       </div>
     </Tabs>

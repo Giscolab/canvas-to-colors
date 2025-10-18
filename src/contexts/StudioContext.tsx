@@ -14,6 +14,7 @@ export interface StudioSettings {
   paintIntensity: number;
   artisticEffect: 'none' | 'oil' | 'pencil';
   artisticIntensity: number;
+  profilingEnabled: boolean;
 }
 
 export interface UserPreferences {
@@ -73,6 +74,7 @@ const DEFAULT_SETTINGS: StudioSettings = {
   paintIntensity: 50,
   artisticEffect: 'none',
   artisticIntensity: 50,
+  profilingEnabled: false,
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {

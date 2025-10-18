@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Wand2, Sparkles, Gauge, Layers, Palette, Paintbrush, PaintBucket, Pencil } from "lucide-react";
+import { Wand2, Sparkles, Gauge, Layers, Palette, Paintbrush, PaintBucket, Pencil, Activity } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
@@ -28,6 +28,8 @@ interface ParametersPanelProps {
   onArtisticEffectChange: (effect: 'none' | 'oil' | 'pencil') => void;
   artisticIntensity: number;
   onArtisticIntensityChange: (intensity: number) => void;
+  profilingEnabled: boolean;
+  onProfilingEnabledChange: (enabled: boolean) => void;
   onProcess: () => void;
   isProcessing: boolean;
 }
@@ -53,6 +55,8 @@ export const ParametersPanel = ({
   onArtisticEffectChange,
   artisticIntensity,
   onArtisticIntensityChange,
+  profilingEnabled,
+  onProfilingEnabledChange,
   onProcess,
   isProcessing,
 }: ParametersPanelProps) => {
@@ -307,6 +311,27 @@ export const ParametersPanel = ({
               />
             </div>
           )}
+        </div>
+
+        {/* --- Performance Profiler --- */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="profiling" className="flex items-center gap-2 text-sm cursor-pointer">
+              <Activity className="h-3.5 w-3.5 text-primary" />
+              <div className="flex flex-col">
+                <span>Activer le profileur</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  Mesure les performances du pipeline
+                </span>
+              </div>
+            </Label>
+            <Switch
+              id="profiling"
+              checked={profilingEnabled}
+              onCheckedChange={onProfilingEnabledChange}
+              aria-label="Activer le profileur de performance"
+            />
+          </div>
         </div>
       </div>
 

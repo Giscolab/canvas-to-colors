@@ -235,6 +235,8 @@ function IndexContent() {
               onArtisticEffectChange={(effect) => studio.updateSettings({ artisticEffect: effect })}
               artisticIntensity={studio.settings.artisticIntensity}
               onArtisticIntensityChange={(intensity) => studio.updateSettings({ artisticIntensity: intensity })}
+              profilingEnabled={studio.settings.profilingEnabled}
+              onProfilingEnabledChange={(enabled) => studio.updateSettings({ profilingEnabled: enabled })}
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />
