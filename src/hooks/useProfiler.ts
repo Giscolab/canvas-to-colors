@@ -3,7 +3,7 @@
  * Measures execution time of async operations and tracks pipeline metrics
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 
 export interface ProfileStage {
   stage: string;
@@ -38,11 +38,18 @@ export function useProfiler() {
   
   const stagesRef = useRef<ProfileStage[]>([]);
   const startTimeRef = useRef<number>(0);
+  const enabledRef = useRef<boolean>(false);
+
+  // Synchronise la valeur de enabled avec la ref (stable)
+  useEffect(() => {
+    enabledRef.current = stats.enabled;
+  }, [stats.enabled]);
 
   /**
    * Enable or disable profiling
    */
   const setEnabled = useCallback((enabled: boolean) => {
+    enabledRef.current = enabled; // Garde la valeur à jour
     setStats(prev => ({ ...prev, enabled }));
   }, []);
 
@@ -72,7 +79,7 @@ export function useProfiler() {
    */
   const measureAsync = useCallback(
     async <T,>(label: string, fn: () => Promise<T>): Promise<T> => {
-      if (!stats.enabled) {
+      if (!enabledRef.current) {
         return await fn();
       }
 
@@ -88,7 +95,7 @@ export function useProfiler() {
         throw error;
       }
     },
-    [stats.enabled, recordStage]
+    [recordStage]
   );
 
   /**
@@ -96,7 +103,7 @@ export function useProfiler() {
    */
   const measureSync = useCallback(
     <T,>(label: string, fn: () => T): T => {
-      if (!stats.enabled) {
+      if (!enabledRef.current) {
         return fn();
       }
 
@@ -112,7 +119,7 @@ export function useProfiler() {
         throw error;
       }
     },
-    [stats.enabled, recordStage]
+    [recordStage]
   );
 
   /**

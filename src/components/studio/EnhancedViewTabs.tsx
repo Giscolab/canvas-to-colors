@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Image, Grid3x3, Hash, Palette, ArrowLeftRight, Activity } from "lucide-react";
 import { ProcessedResult } from "@/lib/imageProcessing";
@@ -18,7 +18,18 @@ interface EnhancedViewTabsProps {
 export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewTabsProps) {
   const studio = useStudio();
   const canvasCache = useRef<Map<string, string>>(new Map());
-  const profiler = useProfiler();
+  const { 
+    stats: profilerStats, 
+    setEnabled: setProfilerEnabled, 
+    startProfiling, 
+    endProfiling, 
+    measureSync,
+    getCacheHitRatio,
+    clearHistory
+  } = useProfiler();
+
+  // Utiliser une ref pour suivre si nous avons déjà profilé ce traitement
+  const hasProfiledRef = useRef(false);
 
   const getCanvasDataUrl = useMemo(() => {
     return (imageData: ImageData | null, key: string): string | null => {
@@ -46,10 +57,38 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     };
   }, []);
 
-  // Sync profiler enabled state with studio settings
+  // Synchronise le profiler avec les settings, mais uniquement si changement réel
   useEffect(() => {
-    profiler.setEnabled(studio.settings.profilingEnabled);
-  }, [studio.settings.profilingEnabled, profiler]);
+    if (profilerStats.enabled !== studio.settings.profilingEnabled) {
+      setProfilerEnabled(studio.settings.profilingEnabled);
+    }
+  }, [studio.settings.profilingEnabled, profilerStats.enabled, setProfilerEnabled]);
+
+  // Effet pour profiler le traitement complet quand les données changent
+  useEffect(() => {
+    if (processedData && profilerStats.enabled && !hasProfiledRef.current) {
+      console.log("[Profiler] ▶️ Début du profilage complet du pipeline");
+      startProfiling();
+      
+      // Marquer que nous avons commencé le profilage pour cette session
+      hasProfiledRef.current = true;
+      
+      // Fin du profilage après un court délai pour s'assurer que tout est rendu
+      const timeoutId = setTimeout(() => {
+        console.log("[Profiler] ✅ Fin du profilage complet du pipeline");
+        endProfiling(false);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [processedData, profilerStats.enabled, startProfiling, endProfiling]);
+
+  // Réinitialiser le flag de profilage quand les données changent
+  useEffect(() => {
+    if (!processedData) {
+      hasProfiledRef.current = false;
+    }
+  }, [processedData]);
 
   // Clear cache when processed data or paint/artistic settings change
   useEffect(() => {
@@ -75,8 +114,6 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   const colorizedUrl = useMemo(() => {
     if (!processedData?.colorized) return null;
     
-    profiler.startProfiling();
-    
     // Apply effects pipeline: Paint -> Artistic
     let finalImageData = processedData.colorized;
     
@@ -86,7 +123,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         type: studio.settings.paintEffect,
         intensity: studio.settings.paintIntensity,
       };
-      finalImageData = profiler.measureSync(
+      finalImageData = measureSync(
         `Paint Effect (${studio.settings.paintEffect})`,
         () => applyPaintEffect(finalImageData, paintEffect)
       );
@@ -98,7 +135,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         type: studio.settings.artisticEffect,
         intensity: studio.settings.artisticIntensity,
       };
-      finalImageData = profiler.measureSync(
+      finalImageData = measureSync(
         `Artistic Effect (${studio.settings.artisticEffect})`,
         () => applyArtisticEffect(finalImageData, artisticEffect)
       );
@@ -106,8 +143,6 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     
     const cacheKey = `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}-${studio.settings.artisticEffect}-${studio.settings.artisticIntensity}`;
     const result = getCanvasDataUrl(finalImageData, cacheKey);
-    
-    profiler.endProfiling(false);
     
     return result;
   }, [
@@ -117,8 +152,18 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     studio.settings.artisticEffect,
     studio.settings.artisticIntensity,
     getCanvasDataUrl,
-    profiler
+    measureSync
   ]);
+
+  // Callback pour gérer le toggle du profiler
+  const handleToggleProfiler = useCallback(
+    (enabled: boolean) => {
+      studio.updateSettings({ profilingEnabled: enabled });
+      // Réinitialiser le flag quand on active/désactive le profiler
+      hasProfiledRef.current = false;
+    },
+    [studio]
+  );
 
   return (
     <Tabs 
@@ -254,12 +299,12 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         <TabsContent value="profiler" className="h-full mt-0 data-[state=active]:flex">
           <div className="w-full h-full overflow-auto">
             <ProfilerPanel
-              enabled={profiler.stats.enabled}
-              currentProfile={profiler.stats.currentProfile}
-              history={profiler.stats.history}
-              cacheHitRatio={profiler.getCacheHitRatio()}
-              onToggleEnabled={(enabled) => studio.updateSettings({ profilingEnabled: enabled })}
-              onClearHistory={profiler.clearHistory}
+              enabled={profilerStats.enabled}
+              currentProfile={profilerStats.currentProfile}
+              history={profilerStats.history}
+              cacheHitRatio={getCacheHitRatio()}
+              onToggleEnabled={handleToggleProfiler}
+              onClearHistory={clearHistory}
             />
           </div>
         </TabsContent>
