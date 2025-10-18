@@ -59,10 +59,8 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
 
   // Synchronise le profiler avec les settings, mais uniquement si changement réel
   useEffect(() => {
-    if (profilerStats.enabled !== studio.settings.profilingEnabled) {
-      setProfilerEnabled(studio.settings.profilingEnabled);
-    }
-  }, [studio.settings.profilingEnabled, profilerStats.enabled, setProfilerEnabled]);
+    setProfilerEnabled(studio.settings.profilingEnabled);
+  }, [studio.settings.profilingEnabled, setProfilerEnabled]);
 
   // Effet pour profiler le traitement complet quand les données changent
   useEffect(() => {

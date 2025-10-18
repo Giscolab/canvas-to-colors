@@ -48,10 +48,22 @@ export function useProfiler() {
   /**
    * Enable or disable profiling
    */
-  const setEnabled = useCallback((enabled: boolean) => {
-    enabledRef.current = enabled; // Garde la valeur à jour
-    setStats(prev => ({ ...prev, enabled }));
-  }, []);
+  const setEnabled = useCallback(
+    (nextEnabled: boolean | ((prevEnabled: boolean) => boolean)) => {
+      setStats(prev => {
+        const resolvedEnabled =
+          typeof nextEnabled === 'function' ? nextEnabled(prev.enabled) : nextEnabled;
+
+        if (prev.enabled === resolvedEnabled) {
+          return prev;
+        }
+
+        enabledRef.current = resolvedEnabled; // Garde la valeur à jour
+        return { ...prev, enabled: resolvedEnabled };
+      });
+    },
+    []
+  );
 
   /**
    * Start a new profiling session
