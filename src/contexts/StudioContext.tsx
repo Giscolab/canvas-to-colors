@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
+import { useProfiler } from "@/hooks/useProfiler";
 
 export type ViewMode = "original" | "contours" | "numbered" | "colorized" | "compare";
 
@@ -59,6 +60,9 @@ interface StudioContextValue {
   loadProject: (projectId: string) => void;
   deleteProject: (projectId: string) => void;
   getSavedProjects: () => Project[];
+
+  // Performance profiler
+  profiler: ReturnType<typeof useProfiler>;
 }
 
 const StudioContext = createContext<StudioContextValue | undefined>(undefined);
@@ -109,6 +113,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [result, setResult] = useState<ProcessedResult | null>(null);
   const [settings, setSettings] = useState<StudioSettings>(DEFAULT_SETTINGS);
   const [isProcessing, setIsProcessing] = useState(false);
+  const profiler = useProfiler();
+
+  // Keep profiler state aligned with studio settings
+  useEffect(() => {
+    profiler.setEnabled(settings.profilingEnabled);
+  }, [settings.profilingEnabled, profiler.setEnabled]);
 
   // Auto-save preferences when they change
   useEffect(() => {
@@ -197,6 +207,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     loadProject,
     deleteProject,
     getSavedProjects,
+    profiler,
   };
 
   return (

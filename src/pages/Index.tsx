@@ -29,6 +29,7 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 
 function IndexContent() {
   const studio = useStudio();
+  const { startProfiling, recordStage, endProfiling, clearHistory } = studio.profiler;
   
   // Initialize auto-save
   useAutoSave();
@@ -115,6 +116,16 @@ function IndexContent() {
     toast.info("Traitement de l'image en cours... ⚡");
 
     const startTime = Date.now();
+    const profilingEnabled = studio.settings.profilingEnabled;
+    let profilingActive = false;
+    let lastStageLabel: string | null = profilingEnabled ? "Initialisation" : null;
+    let lastStageTimestamp = 0;
+
+    if (profilingEnabled) {
+      profilingActive = true;
+      startProfiling();
+      lastStageTimestamp = performance.now();
+    }
 
     try {
       // Process image in Web Worker with progress updates
@@ -132,11 +143,20 @@ function IndexContent() {
         (stage, progress) => {
           setProcessingStage(stage);
           setProcessingProgress(progress);
+
+          if (profilingActive) {
+            const now = performance.now();
+            if (lastStageLabel) {
+              recordStage(lastStageLabel, now - lastStageTimestamp);
+            }
+            lastStageLabel = stage;
+            lastStageTimestamp = now;
+          }
         },
         studio.settings.smartPalette,
         studio.settings.enableArtisticMerge
       );
-      
+
       const processingTime = Date.now() - startTime;
       
       studio.setResult(result);
@@ -161,10 +181,30 @@ function IndexContent() {
         zones_count: result.zones.length,
         palette: result.palette
       });
+
+      if (profilingActive) {
+        const finalize = () => {
+          const now = performance.now();
+          if (lastStageLabel) {
+            recordStage(lastStageLabel, now - lastStageTimestamp);
+          }
+          endProfiling(Boolean(result.metadata?.wasCached));
+        };
+
+        if (typeof requestAnimationFrame !== "undefined") {
+          requestAnimationFrame(finalize);
+        } else {
+          setTimeout(finalize, 0);
+        }
+      }
     } catch (error) {
       console.error("Processing error:", error);
       const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
       toast.error(errorMessage);
+
+      if (profilingActive) {
+        clearHistory();
+      }
     } finally {
       studio.setIsProcessing(false);
       setProcessingProgress(0);
