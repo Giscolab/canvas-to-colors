@@ -40,9 +40,12 @@ export const Header = () => {
            */}
         </nav>
 
-        {/* Zone droite : actions (placeholder visuel, garde ta logique ailleurs pour l’instant) */}
+        {/* Zone centrale (tabs/modes) */}
+        <div id="topbar-tabs" className="flex-1 flex justify-center" />
+
+        {/* Zone droite : actions (placeholder visuel, garde ta logique ailleurs pour l'instant) */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Exemple d’emplacements :
+          {/* Exemple d'emplacements :
               <button className="h-9 px-3 rounded-md hover:bg-accent/60">Undo</button>
               <div className="text-xs text-muted-foreground tabular-nums">100%</div>
               <button className="h-9 px-4 rounded-md bg-primary text-primary-foreground shadow hover:opacity-90">

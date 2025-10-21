@@ -60,7 +60,7 @@ All colors MUST be HSL.
     --shadow-card: 0 2px 8px hsl(260 40% 12% / 0.08);
     --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.3);
     --shadow-premium: 0 20px 60px -10px hsl(260 40% 12% / 0.12);
-    
+ 
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
     

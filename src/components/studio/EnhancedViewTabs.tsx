@@ -1,4 +1,5 @@
-import { useMemo, useRef, useEffect, useCallback } from "react";
+import { useMemo, useRef, useEffect, useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Image, Grid3x3, Hash, Palette, ArrowLeftRight, Activity } from "lucide-react";
 import { ProcessedResult } from "@/lib/imageProcessing";
@@ -8,6 +9,7 @@ import { InspectionOverlay } from "./InspectionOverlay";
 import { ProfilerPanel } from "./ProfilerPanel";
 import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
 import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
+import { CanvasHUD } from "@/components/studio/CanvasHUD";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -25,66 +27,64 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     clearHistory,
   } = studio.profiler;
 
+  // --- Portal vers la TopBar (si #topbar-tabs existe) ---
+  const [tabsHost, setTabsHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    const el = document.getElementById("topbar-tabs");
+    setTabsHost(el);
+  }, []);
+
   const getCanvasDataUrl = useMemo(() => {
     return (imageData: ImageData | null, key: string): string | null => {
       if (!imageData) return null;
-      
-      // Check cache first
       if (canvasCache.current.has(key)) {
         return canvasCache.current.get(key)!;
       }
-
-      // Create canvas and cache result
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = imageData.width;
       canvas.height = imageData.height;
-      const ctx = canvas.getContext('2d');
-      
+      const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.putImageData(imageData, 0, 0);
         const dataUrl = canvas.toDataURL();
         canvasCache.current.set(key, dataUrl);
         return dataUrl;
       }
-      
       return null;
     };
   }, []);
 
-  // Synchronise le profiler avec les settings, mais uniquement si changement réel
+  // Sync profiler toggle
   useEffect(() => {
     setProfilerEnabled(studio.settings.profilingEnabled);
   }, [studio.settings.profilingEnabled, setProfilerEnabled]);
 
-  // Clear cache when processed data or paint/artistic settings change
+  // Clear cache when inputs/effects change
   useEffect(() => {
     canvasCache.current.clear();
   }, [
-    processedData, 
-    studio.settings.paintEffect, 
+    processedData,
+    studio.settings.paintEffect,
     studio.settings.paintIntensity,
     studio.settings.artisticEffect,
-    studio.settings.artisticIntensity
+    studio.settings.artisticIntensity,
   ]);
 
-  const contoursUrl = useMemo(() => 
-    getCanvasDataUrl(processedData?.contours || null, 'contours'),
+  const contoursUrl = useMemo(
+    () => getCanvasDataUrl(processedData?.contours || null, "contours"),
     [processedData?.contours, getCanvasDataUrl]
   );
 
-  const numberedUrl = useMemo(() => 
-    getCanvasDataUrl(processedData?.numbered || null, 'numbered'),
+  const numberedUrl = useMemo(
+    () => getCanvasDataUrl(processedData?.numbered || null, "numbered"),
     [processedData?.numbered, getCanvasDataUrl]
   );
 
   const colorizedUrl = useMemo(() => {
     if (!processedData?.colorized) return null;
-    
-    // Apply effects pipeline: Paint -> Artistic
     let finalImageData = processedData.colorized;
-    
-    // 1. Apply paint effect if enabled
-    if (studio.settings.paintEffect !== 'none') {
+
+    if (studio.settings.paintEffect !== "none") {
       const paintEffect: PaintEffect = {
         type: studio.settings.paintEffect,
         intensity: studio.settings.paintIntensity,
@@ -94,9 +94,8 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         () => applyPaintEffect(finalImageData, paintEffect)
       );
     }
-    
-    // 2. Apply artistic effect if enabled
-    if (studio.settings.artisticEffect !== 'none') {
+
+    if (studio.settings.artisticEffect !== "none") {
       const artisticEffect: ArtisticEffect = {
         type: studio.settings.artisticEffect,
         intensity: studio.settings.artisticIntensity,
@@ -106,22 +105,19 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         () => applyArtisticEffect(finalImageData, artisticEffect)
       );
     }
-    
+
     const cacheKey = `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}-${studio.settings.artisticEffect}-${studio.settings.artisticIntensity}`;
-    const result = getCanvasDataUrl(finalImageData, cacheKey);
-    
-    return result;
+    return getCanvasDataUrl(finalImageData, cacheKey);
   }, [
-    processedData?.colorized, 
-    studio.settings.paintEffect, 
+    processedData?.colorized,
+    studio.settings.paintEffect,
     studio.settings.paintIntensity,
     studio.settings.artisticEffect,
     studio.settings.artisticIntensity,
     getCanvasDataUrl,
-    measureSync
+    measureSync,
   ]);
 
-  // Callback pour gérer le toggle du profiler
   const handleToggleProfiler = useCallback(
     (enabled: boolean) => {
       studio.updateSettings({ profilingEnabled: enabled });
@@ -129,49 +125,101 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     [studio]
   );
 
+  // --- Onglets (UI) : styles Figma-like, tokens Tailwind ---
+  const TabsBar = (
+    <TabsList
+      className="
+        hidden md:grid grid-cols-6 w-full max-w-4xl
+        bg-transparent p-0 gap-1
+      "
+      aria-label="Modes d’affichage"
+    >
+      <TabsTrigger
+        value="original"
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60"
+      >
+        <Image className="w-4 h-4 mr-2" aria-hidden="true" />
+        Original
+      </TabsTrigger>
+
+      <TabsTrigger
+        value="colorized"
+        disabled={!processedData}
+        aria-disabled={!processedData}
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
+      >
+        <Palette className="w-4 h-4 mr-2" aria-hidden="true" />
+        Colorisé
+      </TabsTrigger>
+
+      <TabsTrigger
+        value="contours"
+        disabled={!processedData}
+        aria-disabled={!processedData}
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
+      >
+        <Grid3x3 className="w-4 h-4 mr-2" aria-hidden="true" />
+        Contours
+      </TabsTrigger>
+
+      <TabsTrigger
+        value="numbered"
+        disabled={!processedData}
+        aria-disabled={!processedData}
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
+      >
+        <Hash className="w-4 h-4 mr-2" aria-hidden="true" />
+        Numéroté
+      </TabsTrigger>
+
+      <TabsTrigger
+        value="compare"
+        disabled={!processedData}
+        aria-disabled={!processedData}
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
+      >
+        <ArrowLeftRight className="w-4 h-4 mr-2" aria-hidden="true" />
+        Comparer
+      </TabsTrigger>
+
+      <TabsTrigger
+        value="profiler"
+        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60"
+      >
+        <Activity className="w-4 h-4 mr-2" aria-hidden="true" />
+        Profiler
+      </TabsTrigger>
+    </TabsList>
+  );
+
   return (
-    <Tabs 
-      value={studio.viewMode} 
-      onValueChange={(v) => studio.setViewMode(v as any)} 
+    <Tabs
+      value={studio.viewMode}
+      onValueChange={(v) => studio.setViewMode(v as any)}
       className="h-full flex flex-col"
     >
-      <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-card/30 backdrop-blur-sm">
-        <TabsList className="grid w-full grid-cols-6 max-w-4xl">
-          <TabsTrigger value="original" className="flex items-center gap-2">
-            <Image className="w-4 h-4" />
-            Original
-          </TabsTrigger>
-          <TabsTrigger value="colorized" className="flex items-center gap-2" disabled={!processedData}>
-            <Palette className="w-4 h-4" />
-            Colorisé
-          </TabsTrigger>
-          <TabsTrigger value="contours" className="flex items-center gap-2" disabled={!processedData}>
-            <Grid3x3 className="w-4 h-4" />
-            Contours
-          </TabsTrigger>
-          <TabsTrigger value="numbered" className="flex items-center gap-2" disabled={!processedData}>
-            <Hash className="w-4 h-4" />
-            Numéroté
-          </TabsTrigger>
-          <TabsTrigger value="compare" className="flex items-center gap-2" disabled={!processedData}>
-            <ArrowLeftRight className="w-4 h-4" />
-            Comparer
-          </TabsTrigger>
-          <TabsTrigger value="profiler" className="flex items-center gap-2">
-            <Activity className="w-4 h-4" />
-            Profiler
-          </TabsTrigger>
-        </TabsList>
-      </div>
+      {/* --- Barre d’onglets --- 
+           1) Si #topbar-tabs existe, on monte la barre dans la TopBar via portal
+           2) Sinon, fallback inline sous forme de bandeau (comme avant)
+      */}
+      {tabsHost
+        ? createPortal(TabsBar, tabsHost)
+        : (
+          <div className="px-6 pt-4 pb-2 border-b border-border/40 bg-card/30 backdrop-blur-sm">
+            {TabsBar}
+          </div>
+        )
+      }
 
+      {/* --- Contenu des onglets --- */}
       <div className="flex-1 overflow-auto bg-muted/20">
         <TabsContent value="original" className="h-full mt-0 data-[state=active]:flex">
           {originalImage ? (
             <div className="w-full h-full flex items-center justify-center p-8">
-              <img 
-                src={originalImage} 
+              <img
+                src={originalImage}
                 alt="Original"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-elegant"
+                className="max-w-full max-h-full object-contain rounded-lg shadow"
               />
             </div>
           ) : (
@@ -182,28 +230,47 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         </TabsContent>
 
         <TabsContent value="colorized" className="h-full mt-0 data-[state=active]:flex">
-          {colorizedUrl ? (
-            <div className="w-full h-full flex items-center justify-center p-8">
-              <img 
-                src={colorizedUrl} 
-                alt="Colorisé"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-elegant"
-              />
-            </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              Traitez l'image pour voir le rendu colorisé
-            </div>
-          )}
-        </TabsContent>
+  {colorizedUrl ? (
+    <div className="w-full h-full flex items-center justify-center p-8">
+      <div className="relative w-full h-full max-w-5xl">
+        <img
+          src={colorizedUrl}
+          alt="Colorisé"
+          className="max-w-full max-h-full object-contain rounded-lg shadow"
+        />
+
+        {/* === HUD posé par-dessus l'image === */}
+        <CanvasHUD
+          zoomPercent={studio.zoomPercent}                // voir Étape 3 ci-dessous
+          canZoomIn={studio.zoomPercent < 800}
+          canZoomOut={studio.zoomPercent > 10}
+          onZoomIn={studio.zoomIn}
+          onZoomOut={studio.zoomOut}
+          onTogglePan={studio.togglePanTool}
+          onPickColor={studio.pickColor}                 // si tu as une pipette ; sinon enlève cette prop
+          numberedVisible={studio.overlay.numbered}      // si tu as cet état ; sinon voir Étape 3
+          onToggleNumbered={(v) => studio.setOverlay({ ...studio.overlay, numbered: v })}
+          overlayOpacity={studio.overlay.opacity}        // 0..100
+          onChangeOverlayOpacity={(v) => studio.setOverlay({ ...studio.overlay, opacity: v })}
+          onFindNumber={(n) => studio.findZoneByNumber?.(n)} // si tu as cette méthode
+        />
+      </div>
+    </div>
+  ) : (
+    <div className="h-full flex items-center justify-center text-muted-foreground">
+      Traitez l'image pour voir le rendu colorisé
+    </div>
+  )}
+</TabsContent>
+
 
         <TabsContent value="contours" className="h-full mt-0 data-[state=active]:flex">
           {contoursUrl ? (
             <div className="w-full h-full flex items-center justify-center p-8">
-              <img 
-                src={contoursUrl} 
+              <img
+                src={contoursUrl}
                 alt="Contours"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-elegant"
+                className="max-w-full max-h-full object-contain rounded-lg shadow"
               />
             </div>
           ) : (
@@ -227,10 +294,10 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
             </div>
           ) : numberedUrl ? (
             <div className="w-full h-full flex items-center justify-center p-8">
-              <img 
-                src={numberedUrl} 
+              <img
+                src={numberedUrl}
                 alt="Numéroté"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-elegant"
+                className="max-w-full max-h-full object-contain rounded-lg shadow"
               />
             </div>
           ) : (
@@ -259,7 +326,6 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
           )}
         </TabsContent>
 
-        {/* Profiler Tab */}
         <TabsContent value="profiler" className="h-full mt-0 data-[state=active]:flex">
           <div className="w-full h-full overflow-auto">
             <ProfilerPanel
