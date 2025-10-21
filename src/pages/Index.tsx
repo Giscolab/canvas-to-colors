@@ -219,7 +219,7 @@ function IndexContent() {
   const handleExportSVG = () => exportSVG(studio.result);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col pt-16"> {/* réserve 64px pour la TopBar sticky */}
       {showConfetti && (
         <Confetti
           width={width}

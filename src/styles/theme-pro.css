@@ -1,0 +1,66 @@
+/* src/styles/theme-pro.css */
+
+/* --- Overrides de tokens, SCOPÉS --- */
+@layer base {
+  .theme-pro {
+    /* coins + densité Figma */
+    --radius: 0.625rem;
+
+    /* tons clairs inspirés Figma (restent en HSL) */
+    --card: 0 0% 100%;
+    --card-foreground: 260 40% 12%;
+    --muted: 240 10% 94%;
+    --muted-foreground: 240 10% 47%;
+    --accent: 220 12% 93%;
+    --accent-foreground: 260 40% 12%;
+    --border: 240 15% 90%;
+    --input: 240 15% 90%;
+
+    /* sidebar */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-border: 220 13% 91%;
+  }
+
+  .theme-pro.dark {
+    /* palette sombre Figma-like */
+    --card: 260 35% 12%;
+    --card-foreground: 240 20% 98%;
+    --muted: 260 30% 18%;
+    --muted-foreground: 240 15% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 240 5% 96%;
+
+    --sidebar-background: 240 6% 10%;
+    --sidebar-foreground: 240 5% 96%;
+    --sidebar-border: 240 4% 16%;
+  }
+}
+
+/* --- Utilitaires HUD du globals.css (sélection utile) --- */
+@layer utilities {
+  .hud-bg { background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%); }
+  .hud-panel {
+    background: rgba(15,23,42,0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 217, 255, 0.2);
+    box-shadow: 0 0 20px rgba(0, 217, 255, 0.1), inset 0 0 20px rgba(0, 217, 255, 0.05);
+  }
+  .hud-panel-orange { border-color: rgba(255,107,53,0.3); box-shadow: 0 0 20px rgba(255,107,53,0.15), inset 0 0 20px rgba(255,107,53,0.05); }
+  .neon-border { border: 1px solid rgba(0,217,255,0.4); box-shadow: 0 0 10px rgba(0,217,255,0.3); }
+  .neon-border-orange { border: 1px solid rgba(255,107,53,0.4); box-shadow: 0 0 10px rgba(255,107,53,0.3); }
+  .neon-text-teal { color: #00D9FF; text-shadow: 0 0 10px rgba(0,217,255,0.5); }
+  .neon-text-orange { color: #FF6B35; text-shadow: 0 0 10px rgba(255,107,53,0.5); }
+  .grid-pattern {
+    background-image: linear-gradient(rgba(0,217,255,0.1) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0,217,255,0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .scanline { background: linear-gradient(transparent 50%, rgba(0,217,255,0.05) 50%); background-size: 100% 4px; animation: scanline 8s linear infinite; }
+  @keyframes scanline { 0% { background-position: 0 0; } 100% { background-position: 0 100%; } }
+  .glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+  @keyframes glow-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .hud-corner { position: relative; }
+  .hud-corner::before { content: ''; position: absolute; top: 0; left: 0; width: 12px; height: 12px; border-top: 2px solid #00D9FF; border-left: 2px solid #00D9FF; }
+  .hud-corner::after  { content: ''; position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; border-bottom: 2px solid #00D9FF; border-right: 2px solid #00D9FF; }
+}
