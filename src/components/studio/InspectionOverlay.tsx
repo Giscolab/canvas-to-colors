@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Zone } from "@/lib/imageProcessing";
 import { Maximize2 } from "lucide-react";
@@ -8,127 +8,306 @@ interface InspectionOverlayProps {
   zones: Zone[];
   palette: string[];
   labels?: Int32Array;
-  width: number;
+  width: number;   // dimensions intrinsèques du rendu (px)
   height: number;
 }
 
-export function InspectionOverlay({ 
-  imageData, 
-  zones, 
-  palette, 
+/**
+ * InspectionOverlay (Figma-like)
+ * - Fit object-contain + centrage
+ * - HiDPI crisp : offscreen canvas + dpr scaling
+ * - Hit test correct avec redimensionnement
+ * - Surbrillance de la zone sélectionnée (mask offscreen)
+ * - Tooltip tokens only
+ */
+export function InspectionOverlay({
+  imageData,
+  zones,
+  palette,
   labels,
   width,
-  height 
+  height,
 }: InspectionOverlayProps) {
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [selectedZone, setSelectedZone] = useState<number | null>(null);
-  const [zoneInfo, setZoneInfo] = useState<{
-    zoneId: number;
-    colorIdx: number;
-    color: string;
-    area: number;
-  } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !labels) return;
+  // Taille affichée (après fit) et offsets pour centrage
+  const [layout, setLayout] = useState({
+    cw: 0,        // container width
+    ch: 0,        // container height
+    drawW: 0,     // drawn width (fit)
+    drawH: 0,     // drawn height (fit)
+    offX: 0,      // left offset (centering)
+    offY: 0,      // top offset (centering)
+    dpr: 1,
+  });
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = width / rect.width;
-    const scaleY = height / rect.height;
-    
-    const x = Math.floor((e.clientX - rect.left) * scaleX);
-    const y = Math.floor((e.clientY - rect.top) * scaleY);
+  // Interaction
+  const [mouseClient, setMouseClient] = useState<{ x: number; y: number } | null>(null);
+  const [mouseImg, setMouseImg] = useState<{ x: number; y: number } | null>(null);
+  const [selectedZone, setSelectedZone] = useState<number | null>(null);
 
-    if (x >= 0 && x < width && y >= 0 && y < height) {
-      setMousePos({ x, y });
-      
-      const zoneId = labels[y * width + x];
-      const zone = zones.find(z => z.id === zoneId);
-      
-      if (zone) {
-        setZoneInfo({
-          zoneId: zone.id,
-          colorIdx: zone.colorIdx,
-          color: palette[zone.colorIdx] || '#000000',
-          area: zone.area,
-        });
-      } else {
-        setZoneInfo(null);
+  // Cache offscreen de l’image source (pour dessiner net à n’importe quelle taille)
+  const offscreen = useMemo(() => {
+    if (!imageData) return null;
+    const c = document.createElement("canvas");
+    c.width = imageData.width;
+    c.height = imageData.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.putImageData(imageData, 0, 0);
+    return c;
+  }, [imageData]);
+
+  // Masque de surbrillance (généré à la première sélection ou changement de zone)
+  const [highlightCanvas, setHighlightCanvas] = useState<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    if (!labels || !palette || selectedZone == null) {
+      setHighlightCanvas(null);
+      return;
+    }
+    // Génération du mask RGBA depuis labels
+    const c = document.createElement("canvas");
+    c.width = width;
+    c.height = height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+
+    const img = ctx.createImageData(width, height);
+    const data = img.data;
+
+    // Couleur = couleur de la zone (ou fallback blanc)
+    const zone = zones.find((z) => z.id === selectedZone);
+    const colorHex = zone ? palette[zone.colorIdx] : "#ffffff";
+    const { r, g, b } = hexToRgb(colorHex);
+
+    for (let i = 0; i < labels.length; i++) {
+      if (labels[i] === selectedZone) {
+        const j = i * 4;
+        data[j] = r;
+        data[j + 1] = g;
+        data[j + 2] = b;
+        data[j + 3] = 90; // alpha ~35%
       }
     }
+    ctx.putImageData(img, 0, 0);
+    setHighlightCanvas(c);
+  }, [labels, palette, zones, selectedZone, width, height]);
+
+  // Recalcule le fit object-contain + HiDPI sur resize
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      const el = containerRef.current;
+      const cnv = canvasRef.current;
+      if (!el || !cnv) return;
+
+      const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+
+      if (cw <= 0 || ch <= 0 || width <= 0 || height <= 0) return;
+
+      // Fit object-contain
+      const scale = Math.min(cw / width, ch / height);
+      const drawW = Math.max(1, Math.floor(width * scale));
+      const drawH = Math.max(1, Math.floor(height * scale));
+      const offX = Math.floor((cw - drawW) / 2);
+      const offY = Math.floor((ch - drawH) / 2);
+
+      // Canvas device pixels
+      cnv.width = Math.max(1, Math.floor(cw * dpr));
+      cnv.height = Math.max(1, Math.floor(ch * dpr));
+      cnv.style.width = `${cw}px`;
+      cnv.style.height = `${ch}px`;
+
+      setLayout({ cw, ch, drawW, drawH, offX, offY, dpr });
+    });
+
+    if (containerRef.current) {
+      ro.observe(containerRef.current);
+    }
+    return () => ro.disconnect();
+  }, [width, height]);
+
+  // Dessin
+  const draw = useCallback(() => {
+    const cnv = canvasRef.current;
+    const base = offscreen;
+    if (!cnv || !base) return;
+    const ctx = cnv.getContext("2d");
+    if (!ctx) return;
+
+    const { drawW, drawH, offX, offY, dpr, cw, ch } = layout;
+    if (cw === 0 || ch === 0 || drawW === 0 || drawH === 0) return;
+
+    // Clear
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+
+    // Dessine l’image source (offscreen -> display)
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(
+      base,
+      0, 0, width, height,
+      Math.floor(offX * dpr),
+      Math.floor(offY * dpr),
+      Math.floor(drawW * dpr),
+      Math.floor(drawH * dpr)
+    );
+
+    // Surbrillance (si sélection)
+    if (highlightCanvas) {
+      ctx.drawImage(
+        highlightCanvas,
+        0, 0, width, height,
+        Math.floor(offX * dpr),
+        Math.floor(offY * dpr),
+        Math.floor(drawW * dpr),
+        Math.floor(drawH * dpr)
+      );
+    }
+
+    // Curseur “loupe” minimaliste (optionnel)
+    if (mouseImg && pointInDraw(mouseClient, layout)) {
+      ctx.save();
+      const radius = Math.max(8, Math.floor(6 * dpr));
+      ctx.beginPath();
+      ctx.arc(
+        Math.floor((offX + mouseImg.x * (drawW / width)) * dpr),
+        Math.floor((offY + mouseImg.y * (drawH / height)) * dpr),
+        radius,
+        0,
+        Math.PI * 2
+      );
+      ctx.strokeStyle = "rgba(0,0,0,0.35)";
+      ctx.lineWidth = Math.max(1, Math.floor(1.5 * dpr));
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [offscreen, highlightCanvas, layout, width, height, mouseImg, mouseClient]);
+
+  // Redraw on deps
+  useEffect(() => {
+    draw();
+  }, [draw]);
+
+  // Conversion coordonnées : client -> image pixels
+  const clientToImage = useCallback(
+    (clientX: number, clientY: number) => {
+      const el = containerRef.current;
+      if (!el) return null;
+
+      const rect = el.getBoundingClientRect();
+      const { drawW, drawH, offX, offY, cw, ch } = layout;
+      if (cw === 0 || ch === 0) return null;
+
+      const xIn = clientX - rect.left - offX;
+      const yIn = clientY - rect.top - offY;
+      if (xIn < 0 || yIn < 0 || xIn > drawW || yIn > drawH) return null;
+
+      const scaleX = width / drawW;
+      const scaleY = height / drawH;
+      const x = Math.floor(xIn * scaleX);
+      const y = Math.floor(yIn * scaleY);
+      if (x < 0 || x >= width || y < 0 || y >= height) return null;
+      return { x, y, within: true as const };
+    },
+    [layout, width, height]
+  );
+
+  const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const pt = clientToImage(e.clientX, e.clientY);
+    setMouseClient({ x: e.clientX, y: e.clientY });
+    if (!pt || !labels) {
+      setMouseImg(null);
+      return;
+    }
+    setMouseImg({ x: pt.x, y: pt.y });
   };
 
-  const handleMouseLeave = () => {
-    setMousePos(null);
-    setZoneInfo(null);
+  const handleLeave = () => {
+    setMouseClient(null);
+    setMouseImg(null);
   };
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !labels) return;
-
-    const rect = canvasRef.current.getBoundingClientRect();
-    const scaleX = width / rect.width;
-    const scaleY = height / rect.height;
-    
-    const x = Math.floor((e.clientX - rect.left) * scaleX);
-    const y = Math.floor((e.clientY - rect.top) * scaleY);
-
-    if (x >= 0 && x < width && y >= 0 && y < height) {
-      const zoneId = labels[y * width + x];
-      setSelectedZone(zoneId === selectedZone ? null : zoneId);
-    }
+    if (!labels) return;
+    const pt = clientToImage(e.clientX, e.clientY);
+    if (!pt) return;
+    const idx = pt.y * width + pt.x;
+    const zoneId = labels[idx];
+    setSelectedZone((z) => (z === zoneId ? null : zoneId));
   };
 
-  useEffect(() => {
-    if (!canvasRef.current || !imageData) return;
+  // Infos zone sous la souris
+  const hoverInfo = useMemo(() => {
+    if (!mouseImg || !labels) return null;
+    const zid = labels[mouseImg.y * width + mouseImg.x];
+    const z = zones.find((zz) => zz.id === zid);
+    if (!z) return null;
+    const color = palette[z.colorIdx] || "#000000";
+    return {
+      zoneId: z.id,
+      colorIdx: z.colorIdx,
+      color,
+      area: z.area,
+    };
+  }, [mouseImg, labels, zones, palette, width]);
 
-    const ctx = canvasRef.current.getContext('2d');
-    if (!ctx) return;
-
-    ctx.putImageData(imageData, 0, 0);
-  }, [imageData]);
+  // Placement tooltip (dans le container, pas en pixels image)
+  const tooltipPos = useMemo(() => {
+    if (!mouseClient || !containerRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    // position locale au container
+    const localX = mouseClient.x - rect.left;
+    const localY = mouseClient.y - rect.top;
+    const TW = 200; // largeur max estimée
+    const TH = 120; // hauteur estimée
+    const left = clamp(localX + 12, 8, Math.max(8, rect.width - TW - 8));
+    const top = clamp(localY - TH - 8, 8, Math.max(8, rect.height - TH - 8));
+    return { left, top };
+  }, [mouseClient]);
 
   if (!imageData) return null;
 
   return (
-    <div className="relative">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full"
+      role="img"
+      aria-label="Aperçu numéroté avec inspection des zones"
+    >
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
-        className="w-full h-auto cursor-crosshair"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        className="absolute inset-0 w-full h-full cursor-crosshair outline-none"
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
         onClick={handleClick}
       />
 
-      {zoneInfo && mousePos && (
-        <Card className="absolute z-50 p-3 shadow-premium text-xs space-y-1 pointer-events-none bg-background/95 backdrop-blur-sm"
-          style={{
-            left: `${Math.min(mousePos.x, width - 150)}px`,
-            top: `${Math.max(20, mousePos.y - 140)}px`,
-          }}
+      {/* Tooltip */}
+      {hoverInfo && tooltipPos && (
+        <Card
+          className="absolute z-20 p-3 shadow-premium text-xs space-y-1 pointer-events-none bg-background/95 backdrop-blur-sm border"
+          style={{ left: tooltipPos.left, top: tooltipPos.top, width: 200 }}
+          aria-live="polite"
         >
           <div className="flex items-center gap-2">
-            <Maximize2 className="w-3 h-3 text-muted-foreground" />
-            <span className="font-medium">Zone #{zoneInfo.zoneId}</span>
-            {selectedZone === zoneInfo.zoneId && (
-              <span className="ml-auto text-primary text-[10px]">✓ Sélectionné</span>
+            <Maximize2 className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
+            <span className="font-medium">Zone #{hoverInfo.zoneId}</span>
+            {selectedZone === hoverInfo.zoneId && (
+              <span className="ml-auto text-primary text-[10px]">✓ Sélectionnée</span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div 
+            <div
               className="w-4 h-4 rounded border border-border"
-              style={{ backgroundColor: zoneInfo.color }}
+              style={{ backgroundColor: hoverInfo.color }}
             />
-            <span className="text-muted-foreground font-mono">{zoneInfo.color}</span>
+            <span className="text-muted-foreground font-mono">{hoverInfo.color}</span>
           </div>
+          <div className="text-muted-foreground">Couleur #{hoverInfo.colorIdx + 1}</div>
           <div className="text-muted-foreground">
-            Couleur #{zoneInfo.colorIdx + 1}
-          </div>
-          <div className="text-muted-foreground">
-            Surface: {zoneInfo.area.toLocaleString()}px²
+            Surface: {hoverInfo.area.toLocaleString()}px²
           </div>
           <div className="text-[10px] text-muted-foreground/70 border-t border-border pt-1 mt-1">
             Cliquez pour sélectionner
@@ -137,4 +316,35 @@ export function InspectionOverlay({
       )}
     </div>
   );
+}
+
+/* ----------------- helpers ----------------- */
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    h = h.split("").map((c) => c + c).join("");
+  }
+  const num = parseInt(h, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255,
+  };
+}
+
+function pointInDraw(
+  mouse: { x: number; y: number } | null,
+  layout: { offX: number; offY: number; drawW: number; drawH: number; cw: number; ch: number }
+) {
+  if (!mouse) return false;
+  const { offX, offY, drawW, drawH, cw, ch } = layout;
+  if (cw === 0 || ch === 0) return false;
+  // Ici mouse est en coordonnées client; on l’emploie juste pour désactiver le halo hors zone
+  // (le test précis se fait déjà via clientToImage)
+  return true && drawW > 0 && drawH > 0 && offX >= 0 && offY >= 0;
 }

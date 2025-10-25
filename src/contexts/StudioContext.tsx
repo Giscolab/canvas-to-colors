@@ -1,8 +1,24 @@
-import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  ReactNode,
+  useEffect,
+} from "react";
 import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
 import { useProfiler } from "@/hooks/useProfiler";
 
-export type ViewMode = "original" | "contours" | "numbered" | "colorized" | "compare";
+// ---------------------------------------------
+// Types principaux
+// ---------------------------------------------
+
+export type ViewMode =
+  | "original"
+  | "contours"
+  | "numbered"
+  | "colorized"
+  | "compare";
 
 export interface StudioSettings {
   numColors: number;
@@ -11,9 +27,9 @@ export interface StudioSettings {
   mergeTolerance: number;
   enableArtisticMerge: boolean;
   smartPalette: boolean;
-  paintEffect: 'none' | 'watercolor' | 'brush';
+  paintEffect: "none" | "watercolor" | "brush";
   paintIntensity: number;
-  artisticEffect: 'none' | 'oil' | 'pencil';
+  artisticEffect: "none" | "oil" | "pencil";
   artisticIntensity: number;
   profilingEnabled: boolean;
 }
@@ -21,7 +37,7 @@ export interface StudioSettings {
 export interface UserPreferences {
   lastViewMode: ViewMode;
   autoSave: boolean;
-  theme: 'light' | 'dark' | 'system';
+  theme: "light" | "dark" | "system";
   lastProjectId?: string;
 }
 
@@ -36,8 +52,21 @@ export interface Project {
   result?: ProcessedResult;
 }
 
-interface StudioContextValue {
-  // State
+// ---------------------------------------------
+// Nouveaux types HUD / Overlay
+// ---------------------------------------------
+
+export type OverlayState = {
+  numbered: boolean; // afficher les numéros sur l’overlay
+  opacity: number; // 0..100
+};
+
+// ---------------------------------------------
+// Interface principale du contexte
+// ---------------------------------------------
+
+export interface StudioContextValue {
+  // --- État général ---
   currentProject: Project | null;
   viewMode: ViewMode;
   analysis: ColorAnalysis | null;
@@ -45,8 +74,8 @@ interface StudioContextValue {
   settings: StudioSettings;
   isProcessing: boolean;
   preferences: UserPreferences;
-  
-  // Actions
+
+  // --- Actions principales ---
   setCurrentProject: (project: Project | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setAnalysis: (analysis: ColorAnalysis | null) => void;
@@ -54,18 +83,34 @@ interface StudioContextValue {
   updateSettings: (settings: Partial<StudioSettings>) => void;
   setIsProcessing: (processing: boolean) => void;
   updatePreferences: (prefs: Partial<UserPreferences>) => void;
-  
-  // Project actions
+
+  // --- Gestion projets ---
   saveProject: (name: string) => void;
   loadProject: (projectId: string) => void;
   deleteProject: (projectId: string) => void;
   getSavedProjects: () => Project[];
 
-  // Performance profiler
+  // --- Performance profiler ---
   profiler: ReturnType<typeof useProfiler>;
+
+  // --- AJOUT : état/handlers HUD ---
+  zoomPercent: number;
+  setZoomPercent: (v: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  togglePanTool: () => void; // mode “main” (pan) visuel
+  pickColor?: () => void; // pipette (optionnel)
+
+  overlay: OverlayState;
+  setOverlay: (s: OverlayState) => void;
+
+  // Aller à la zone numérotée N (si dispo)
+  findZoneByNumber?: (n: number) => void;
 }
 
-const StudioContext = createContext<StudioContextValue | undefined>(undefined);
+// ---------------------------------------------
+// Défauts
+// ---------------------------------------------
 
 const DEFAULT_SETTINGS: StudioSettings = {
   numColors: 20,
@@ -74,9 +119,9 @@ const DEFAULT_SETTINGS: StudioSettings = {
   mergeTolerance: 12,
   enableArtisticMerge: true,
   smartPalette: false,
-  paintEffect: 'none',
+  paintEffect: "none",
   paintIntensity: 50,
-  artisticEffect: 'none',
+  artisticEffect: "none",
   artisticIntensity: 50,
   profilingEnabled: false,
 };
@@ -84,14 +129,19 @@ const DEFAULT_SETTINGS: StudioSettings = {
 const DEFAULT_PREFERENCES: UserPreferences = {
   lastViewMode: "original",
   autoSave: false,
-  theme: 'system',
+  theme: "system",
 };
 
-// Helper functions for localStorage
+// ---------------------------------------------
+// LocalStorage helpers
+// ---------------------------------------------
+
 const loadPreferences = (): UserPreferences => {
   try {
-    const stored = localStorage.getItem('pbn-preferences');
-    return stored ? { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) } : DEFAULT_PREFERENCES;
+    const stored = localStorage.getItem("pbn-preferences");
+    return stored
+      ? { ...DEFAULT_PREFERENCES, ...JSON.parse(stored) }
+      : DEFAULT_PREFERENCES;
   } catch {
     return DEFAULT_PREFERENCES;
   }
@@ -99,15 +149,26 @@ const loadPreferences = (): UserPreferences => {
 
 const savePreferences = (prefs: UserPreferences) => {
   try {
-    localStorage.setItem('pbn-preferences', JSON.stringify(prefs));
+    localStorage.setItem("pbn-preferences", JSON.stringify(prefs));
   } catch (error) {
-    console.error('Failed to save preferences:', error);
+    console.error("Failed to save preferences:", error);
   }
 };
 
+// ---------------------------------------------
+// Contexte
+// ---------------------------------------------
+
+const StudioContext = createContext<StudioContextValue | undefined>(undefined);
+
+// ---------------------------------------------
+// Provider
+// ---------------------------------------------
+
 export function StudioProvider({ children }: { children: ReactNode }) {
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [preferences, setPreferences] = useState<UserPreferences>(loadPreferences);
+  const [preferences, setPreferences] =
+    useState<UserPreferences>(loadPreferences);
   const [viewMode, setViewMode] = useState<ViewMode>(preferences.lastViewMode);
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
@@ -115,78 +176,133 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const profiler = useProfiler();
 
-  // Keep profiler state aligned with studio settings
+  // --- AJOUT HUD ---
+  const [zoomPercent, _setZoomPercent] = useState<number>(100);
+  const clampZoom = (v: number) => Math.max(10, Math.min(800, Math.round(v)));
+
+  const setZoomPercent = useCallback((v: number) => {
+    _setZoomPercent(clampZoom(v));
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    _setZoomPercent((z) => clampZoom(z + 10));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    _setZoomPercent((z) => clampZoom(z - 10));
+  }, []);
+
+  const [isPanMode, setIsPanMode] = useState(false);
+  const togglePanTool = useCallback(() => setIsPanMode((v) => !v), []);
+  const pickColor = undefined; // hook pipette si tu veux plus tard
+
+  const [overlay, setOverlay] = useState<OverlayState>({
+    numbered: true,
+    opacity: 60,
+  });
+
+  const findZoneByNumber = useCallback(
+    (n: number) => {
+      const labels = result?.labels;
+      if (!labels) return;
+      const target = labels.find((l: any) => l?.number === n);
+      if (target) {
+        console.info("[Studio] Zone trouvée:", target);
+      }
+    },
+    [result]
+  );
+
+  // ---------------------------------------------
+  // Effets
+  // ---------------------------------------------
+
   useEffect(() => {
     profiler.setEnabled(settings.profilingEnabled);
   }, [settings.profilingEnabled, profiler.setEnabled]);
 
-  // Auto-save preferences when they change
   useEffect(() => {
     savePreferences(preferences);
   }, [preferences]);
 
-  // Update view mode preference when it changes
   useEffect(() => {
     if (viewMode !== preferences.lastViewMode) {
-      setPreferences(prev => ({ ...prev, lastViewMode: viewMode }));
+      setPreferences((prev) => ({ ...prev, lastViewMode: viewMode }));
     }
   }, [viewMode]);
 
+  // ---------------------------------------------
+  // Actions
+  // ---------------------------------------------
+
   const updatePreferences = useCallback((newPrefs: Partial<UserPreferences>) => {
-    setPreferences(prev => ({ ...prev, ...newPrefs }));
+    setPreferences((prev) => ({ ...prev, ...newPrefs }));
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<StudioSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
   const getSavedProjects = useCallback((): Project[] => {
     try {
-      const stored = localStorage.getItem('pbn-projects');
+      const stored = localStorage.getItem("pbn-projects");
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('Error loading projects:', error);
+      console.error("Error loading projects:", error);
       return [];
     }
   }, []);
 
-  const saveProject = useCallback((name: string) => {
-    if (!currentProject?.imageUrl || !result) {
-      throw new Error("No project to save");
-    }
+  const saveProject = useCallback(
+    (name: string) => {
+      if (!currentProject?.imageUrl || !result) {
+        throw new Error("No project to save");
+      }
 
-    const project: Project = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      timestamp: Date.now(),
-      imageUrl: currentProject.imageUrl,
-      settings,
-      analysis: analysis || undefined,
-      result,
-    };
+      const project: Project = {
+        id: Date.now().toString(),
+        name: name.trim(),
+        timestamp: Date.now(),
+        imageUrl: currentProject.imageUrl,
+        settings,
+        analysis: analysis || undefined,
+        result,
+      };
 
-    const projects = getSavedProjects();
-    const updated = [...projects, project];
-    localStorage.setItem('pbn-projects', JSON.stringify(updated));
-  }, [currentProject, result, settings, analysis, getSavedProjects]);
+      const projects = getSavedProjects();
+      const updated = [...projects, project];
+      localStorage.setItem("pbn-projects", JSON.stringify(updated));
+    },
+    [currentProject, result, settings, analysis, getSavedProjects]
+  );
 
-  const loadProject = useCallback((projectId: string) => {
-    const projects = getSavedProjects();
-    const project = projects.find(p => p.id === projectId);
-    
-    if (project) {
-      setCurrentProject(project);
-      setSettings({ ...DEFAULT_SETTINGS, ...project.settings });
-      setAnalysis(project.analysis || null);
-      setResult(project.result || null);
-    }
-  }, [getSavedProjects]);
+  const loadProject = useCallback(
+    (projectId: string) => {
+      const projects = getSavedProjects();
+      const project = projects.find((p) => p.id === projectId);
 
-  const deleteProject = useCallback((projectId: string) => {
-    const projects = getSavedProjects();
-    const updated = projects.filter(p => p.id !== projectId);
-    localStorage.setItem('pbn-projects', JSON.stringify(updated));
-  }, [getSavedProjects]);
+      if (project) {
+        setCurrentProject(project);
+        setSettings({ ...DEFAULT_SETTINGS, ...project.settings });
+        setAnalysis(project.analysis || null);
+        setResult(project.result || null);
+      }
+    },
+    [getSavedProjects]
+  );
+
+  const deleteProject = useCallback(
+    (projectId: string) => {
+      const projects = getSavedProjects();
+      const updated = projects.filter((p) => p.id !== projectId);
+      localStorage.setItem("pbn-projects", JSON.stringify(updated));
+    },
+    [getSavedProjects]
+  );
+
+  // ---------------------------------------------
+  // Valeur exposée
+  // ---------------------------------------------
 
   const value: StudioContextValue = {
     currentProject,
@@ -208,19 +324,32 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     deleteProject,
     getSavedProjects,
     profiler,
+
+    // HUD
+    zoomPercent,
+    setZoomPercent,
+    zoomIn,
+    zoomOut,
+    togglePanTool,
+    pickColor,
+    overlay,
+    setOverlay,
+    findZoneByNumber,
   };
 
   return (
-    <StudioContext.Provider value={value}>
-      {children}
-    </StudioContext.Provider>
+    <StudioContext.Provider value={value}>{children}</StudioContext.Provider>
   );
 }
+
+// ---------------------------------------------
+// Hook
+// ---------------------------------------------
 
 export function useStudio() {
   const context = useContext(StudioContext);
   if (context === undefined) {
-    throw new Error('useStudio must be used within a StudioProvider');
+    throw new Error("useStudio must be used within a StudioProvider");
   }
   return context;
 }

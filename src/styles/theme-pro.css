@@ -1,66 +1,344 @@
 /* src/styles/theme-pro.css */
 
-/* --- Overrides de tokens, SCOPÉS --- */
-@layer base {
-  .theme-pro {
-    /* coins + densité Figma */
-    --radius: 0.625rem;
+/* ===========================
+   THEME PRO – Tokens & ergonomie
+   Scope strict: `.theme-pro` (dark via `.theme-pro.dark`)
+   =========================== */
+.theme-pro {
+  /* Rayons & densité Figma-like */
+  --radius: 0.625rem;
 
-    /* tons clairs inspirés Figma (restent en HSL) */
-    --card: 0 0% 100%;
-    --card-foreground: 260 40% 12%;
-    --muted: 240 10% 94%;
-    --muted-foreground: 240 10% 47%;
-    --accent: 220 12% 93%;
-    --accent-foreground: 260 40% 12%;
-    --border: 240 15% 90%;
-    --input: 240 15% 90%;
+  /* Palette claire (HSL) */
+  --background: var(--background, 240 20% 99%);
+  --foreground: 260 40% 12%;
 
-    /* sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5% 26%;
-    --sidebar-border: 220 13% 91%;
-  }
+  --card: 0 0% 100%;
+  --card-foreground: 260 40% 12%;
 
-  .theme-pro.dark {
-    /* palette sombre Figma-like */
-    --card: 260 35% 12%;
-    --card-foreground: 240 20% 98%;
-    --muted: 260 30% 18%;
-    --muted-foreground: 240 15% 65%;
-    --accent: 240 4% 16%;
-    --accent-foreground: 240 5% 96%;
+  --muted: 240 10% 94%;
+  --muted-foreground: 240 10% 47%;
 
-    --sidebar-background: 240 6% 10%;
-    --sidebar-foreground: 240 5% 96%;
-    --sidebar-border: 240 4% 16%;
+  --accent: 220 12% 93%;
+  --accent-foreground: 260 40% 12%;
+
+  --border: 240 15% 90%;
+  --input: 240 15% 90%;
+  --ring: 262 83% 58%;
+
+  /* Sidebar */
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5% 26%;
+  --sidebar-border: 220 13% 91%;
+
+  /* Élévations & motion */
+  --elev-1: 0 1px 2px hsl(260 40% 12% / 0.06);
+  --elev-2: 0 4px 12px hsl(260 40% 12% / 0.08);
+  --elev-3: 0 10px 24px hsl(260 40% 12% / 0.10);
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+
+  /* Ring accessible */
+  --ring-color: hsl(var(--ring) / 0.8);
+  --ring-offset: 2px;
+
+  /* Scrollbar (clair) */
+  --scrollbar-track: hsl(240 10% 96%);
+  --scrollbar-thumb: hsl(240 6% 80%);
+  --scrollbar-thumb-hover: hsl(240 6% 72%);
+}
+
+.theme-pro.dark {
+  --background: 260 40% 8%;
+  --foreground: 240 20% 98%;
+
+  --card: 260 35% 12%;
+  --card-foreground: 240 20% 98%;
+
+  --muted: 260 30% 18%;
+  --muted-foreground: 240 15% 65%;
+
+  --accent: 240 4% 16%;
+  --accent-foreground: 240 5% 96%;
+
+  --sidebar-background: 240 6% 10%;
+  --sidebar-foreground: 240 5% 96%;
+  --sidebar-border: 240 4% 16%;
+
+  --elev-1: 0 1px 2px hsl(0 0% 0% / 0.25);
+  --elev-2: 0 4px 14px hsl(0 0% 0% / 0.35);
+  --elev-3: 0 14px 36px hsl(0 0% 0% / 0.45);
+
+  /* Scrollbar (sombre) */
+  --scrollbar-track: hsl(260 20% 12%);
+  --scrollbar-thumb: hsl(260 8% 26%);
+  --scrollbar-thumb-hover: hsl(260 10% 32%);
+}
+
+/* ===========================
+   UX polish: focus rings, hover, scrollbars
+   =========================== */
+.theme-pro :where(*):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 var(--ring-offset) hsl(var(--background) / 1),
+    0 0 0 calc(var(--ring-offset) + 2px) var(--ring-color);
+  transition: box-shadow var(--dur-fast) var(--ease-standard);
+  border-radius: max(2px, var(--radius));
+}
+
+.theme-pro :where(button, [role="button"], a, input, select, textarea) {
+  transition:
+    box-shadow var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard),
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+
+/* Cartes/elevations par défaut */
+.theme-pro .elev-1 { box-shadow: var(--elev-1); }
+.theme-pro .elev-2 { box-shadow: var(--elev-2); }
+.theme-pro .elev-3 { box-shadow: var(--elev-3); }
+
+/* Scrollbars subtils (webkit) */
+.theme-pro *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.theme-pro *::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 8px;
+}
+.theme-pro *::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid var(--scrollbar-track);
+}
+.theme-pro *::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Respect du prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .theme-pro * {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* --- Utilitaires HUD du globals.css (sélection utile) --- */
+/* ===========================
+   HUD Utilities (scopés)
+   =========================== */
+.theme-pro .hud-bg {
+  background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+}
+
+.theme-pro .hud-panel {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 217, 255, 0.2);
+  box-shadow:
+    0 0 20px rgba(0, 217, 255, 0.1),
+    inset 0 0 20px rgba(0, 217, 255, 0.05);
+}
+
+.theme-pro .hud-panel-orange {
+  border-color: rgba(255, 107, 53, 0.3);
+  box-shadow:
+    0 0 20px rgba(255, 107, 53, 0.15),
+    inset 0 0 20px rgba(255, 107, 53, 0.05);
+}
+
+.theme-pro .neon-border {
+  border: 1px solid rgba(0, 217, 255, 0.4);
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
+.theme-pro .neon-border-orange {
+  border: 1px solid rgba(255, 107, 53, 0.4);
+  box-shadow: 0 0 10px rgba(255, 107, 53, 0.3);
+}
+
+.theme-pro .neon-text-teal {
+  color: #00D9FF;
+  text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.theme-pro .neon-text-orange {
+  color: #FF6B35;
+  text-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+}
+
+.theme-pro .grid-pattern {
+  background-image:
+    linear-gradient(rgba(0, 217, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 217, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.theme-pro .scanline {
+  background: linear-gradient(transparent 50%, rgba(0, 217, 255, 0.05) 50%);
+  background-size: 100% 4px;
+  animation: scanline 8s linear infinite;
+}
+@keyframes scanline {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 100%; }
+}
+
+.theme-pro .glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+@keyframes glow-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.theme-pro .hud-corner { position: relative; }
+.theme-pro .hud-corner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 12px; height: 12px;
+  border-top: 2px solid #00D9FF;
+  border-left: 2px solid #00D9FF;
+}
+.theme-pro .hud-corner::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 12px; height: 12px;
+  border-bottom: 2px solid #00D9FF;
+  border-right: 2px solid #00D9FF;
+}
+
+/* === Surfaces normalisées (Figma-like) === */
 @layer utilities {
-  .hud-bg { background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%); }
-  .hud-panel {
-    background: rgba(15,23,42,0.8);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 217, 255, 0.2);
-    box-shadow: 0 0 20px rgba(0, 217, 255, 0.1), inset 0 0 20px rgba(0, 217, 255, 0.05);
+  .app-surface {
+    /* très léger dégradé et grain doux, pas de blur */
+    background:
+      radial-gradient(1200px 600px at 20% -10%, hsl(var(--accent) / .35), transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, hsl(var(--primary) / .10), transparent 55%);
   }
-  .hud-panel-orange { border-color: rgba(255,107,53,0.3); box-shadow: 0 0 20px rgba(255,107,53,0.15), inset 0 0 20px rgba(255,107,53,0.05); }
-  .neon-border { border: 1px solid rgba(0,217,255,0.4); box-shadow: 0 0 10px rgba(0,217,255,0.3); }
-  .neon-border-orange { border: 1px solid rgba(255,107,53,0.4); box-shadow: 0 0 10px rgba(255,107,53,0.3); }
-  .neon-text-teal { color: #00D9FF; text-shadow: 0 0 10px rgba(0,217,255,0.5); }
-  .neon-text-orange { color: #FF6B35; text-shadow: 0 0 10px rgba(255,107,53,0.5); }
-  .grid-pattern {
-    background-image: linear-gradient(rgba(0,217,255,0.1) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(0,217,255,0.1) 1px, transparent 1px);
-    background-size: 20px 20px;
+
+  .sidebar-surface {
+    background: hsl(var(--sidebar-background) / .9);
+    backdrop-filter: blur(8px);
+    border-right: 1px solid hsl(var(--sidebar-border));
   }
-  .scanline { background: linear-gradient(transparent 50%, rgba(0,217,255,0.05) 50%); background-size: 100% 4px; animation: scanline 8s linear infinite; }
-  @keyframes scanline { 0% { background-position: 0 0; } 100% { background-position: 0 100%; } }
-  .glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
-  @keyframes glow-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-  .hud-corner { position: relative; }
-  .hud-corner::before { content: ''; position: absolute; top: 0; left: 0; width: 12px; height: 12px; border-top: 2px solid #00D9FF; border-left: 2px solid #00D9FF; }
-  .hud-corner::after  { content: ''; position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; border-bottom: 2px solid #00D9FF; border-right: 2px solid #00D9FF; }
+
+  .panel-surface {
+    background: hsl(var(--card) / .85);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 0 hsl(var(--border) / .6) inset,
+                0 6px 20px hsl(var(--foreground) / .06);
+  }
+}
+
+/* === Tabs “pill” (Figma) === */
+@layer utilities {
+  .pill-tabs {
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 9999px;
+    background: hsl(var(--muted));
+    gap: 4px;
+  }
+  .pill-tab {
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 9999px;
+    font-size: 13px;
+    line-height: 34px;
+    color: hsl(var(--muted-foreground));
+  }
+  .pill-tab[data-state="active"] {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+    box-shadow: 0 1px 0 hsl(var(--border)) inset;
+  }
+}
+
+/* === Scrollbars discrets (Figma desktop) === */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / .35) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--muted-foreground) / .25),
+      hsl(var(--muted-foreground) / .35)
+    );
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / .5);
+    background-clip: content-box;
+  }
+}
+
+/* === Focus ring subtil partout === */
+@layer base {
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+/* === Slider plus fin par défaut (tu peux l’ajouter où tu veux) === */
+@layer utilities {
+  .slider-thin {
+    /* track */
+    --tw-slider-track-h: 6px;
+  }
+  .slider-thin .relative { height: var(--tw-slider-track-h) !important; }
+  .slider-thin [role="slider"] { width: 16px !important; height: 16px !important; }
+}
+
+/* === Figma-like helpers =================================== */
+
+/* Surface centrale (dégradé très subtil + mesh optionnel) */
+.app-surface{
+  position: relative;
+  background:
+    radial-gradient(1200px 700px at 30% -10%, hsl(var(--primary)/0.06), transparent 60%),
+    linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted)/0.35));
+}
+.app-surface::after{
+  content:""; pointer-events:none; position:absolute; inset:0;
+  background:
+    radial-gradient(600px 300px at 80% 10%, hsl(var(--accent)/0.15), transparent 60%);
+  opacity:.35;
+}
+
+/* Chrome des panneaux latéraux (Figma sidebar) */
+.sidebar-surface{
+  background: hsl(var(--card)/0.60);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid hsl(var(--border));
+}
+.sidebar-surface[data-side="right"]{ border-right:0; border-left:1px solid hsl(var(--border)); }
+
+/* “Chip tabs” (onglets pills de la TopBar) */
+.chip-tabs{ display:grid; grid-auto-flow:column; gap:.25rem; }
+.chip-tab{
+  height: 36px; padding: 0 .75rem; border-radius: 999px;
+  border:1px solid hsl(var(--border)); background:hsl(var(--card));
+  color:hsl(var(--muted-foreground)); font-weight:500;
+}
+.chip-tab[data-active="true"]{
+  background: hsl(var(--accent)); color:hsl(var(--foreground));
+  border-color: transparent;
+}
+
+/* Barre d’état (bas d’écran) */
+.status-bar{
+  background: hsl(var(--card)/0.85);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid hsl(var(--border));
+  height: 48px;
 }

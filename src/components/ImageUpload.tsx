@@ -15,6 +15,11 @@ const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
 
 export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Empêche les doubles .click() qui rouvrent la boîte (clé du bug)
+  const openingRef = useRef(false);
+  const [openLock, setOpenLock] = useState(false);
+
   const [isDragging, setIsDragging] = useState(false);
   const [actualFile, setActualFile] = useState<File | null>(null);
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string; name?: string } | null>(null);
@@ -56,7 +61,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     [onImageSelect, toast]
   );
 
-  // Analyse dimensions & taille une fois l'aperçu dispo
+  // Analyse dimensions & taille une fois l’aperçu dispo
   useEffect(() => {
     if (selectedImage && actualFile) {
       const img = new Image();
@@ -69,7 +74,6 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
         });
       };
       img.src = selectedImage;
-
       return () => {
         img.onload = null;
       };
@@ -78,19 +82,51 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     }
   }, [selectedImage, actualFile]);
 
+  // Protège l’ouverture de la boîte de dialogue
+  const openFileDialog = useCallback(() => {
+    if (openingRef.current || openLock) return;
+    openingRef.current = true;
+    setOpenLock(true);
+    // petit délai de déverrouillage pour laisser le navigateur “respirer”
+    const unlock = () => {
+      openingRef.current = false;
+      setTimeout(() => setOpenLock(false), 250);
+    };
+
+    const input = fileInputRef.current;
+    if (!input) {
+      unlock();
+      return;
+    }
+
+    // Écoute l’événement "cancel" natif (Chrome/Edge/Safari)
+    const onCancel = () => unlock();
+    input.addEventListener("cancel", onCancel, { once: true });
+
+    // Sur certains navigateurs, “cancel” n’existe pas — on met un filet de sécurité
+    const safety = setTimeout(unlock, 1500);
+
+    input.click();
+
+    // Quand on aura un change, on clean
+    const onChange = () => {
+      clearTimeout(safety);
+      input.removeEventListener("cancel", onCancel);
+      unlock();
+    };
+    input.addEventListener("change", onChange, { once: true });
+  }, [openLock]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     validateAndAccept(e.target.files?.[0]);
     // reset input pour autoriser re-sélection du même fichier
     e.currentTarget.value = "";
   };
 
-  const handleClick = () => fileInputRef.current?.click();
-
   // DnD
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    // si plusieurs fichiers, on prend le premier image/*
     const fileList = Array.from(e.dataTransfer.files || []);
     const firstImage = fileList.find((f) => ACCEPTED_TYPES.includes(f.type));
     validateAndAccept(firstImage);
@@ -107,7 +143,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      handleClick();
+      openFileDialog();
     }
   };
 
@@ -138,10 +174,15 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
         <div
           tabIndex={0}
           onKeyDown={handleKeyDown}
-          onClick={handleClick}
+          // ⚠️ zone cliquable — protégée par openLock/openingRef
+          onClick={(e) => {
+            if (openLock) return; // empêche les relances
+            openFileDialog();
+          }}
           className={[
             "flex flex-col items-center justify-center py-8 space-y-4",
-            "outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg cursor-pointer",
+            "outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg",
+            openLock ? "pointer-events-none opacity-70" : "cursor-pointer",
           ].join(" ")}
         >
           <div className={`p-4 rounded-full bg-primary/10 transition-transform ${isDragging ? "scale-125 animate-pulse" : ""}`}>
@@ -162,7 +203,11 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
 
           <Button
             type="button"
-            onClick={handleClick}
+            onClick={(e) => {
+              e.stopPropagation();
+              openFileDialog();
+            }}
+            disabled={openLock}
             className="bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-sm"
           >
             <Upload className="mr-2 h-4 w-4" />
@@ -215,8 +260,12 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              onClick={handleClick}
+              onClick={(e) => {
+                e.stopPropagation();
+                openFileDialog();
+              }}
               variant="outline"
+              disabled={openLock}
               className="flex-1 hover:border-primary"
             >
               <ImageIcon className="mr-2 h-4 w-4" />
@@ -224,10 +273,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
             </Button>
             <Button
               type="button"
-              onClick={() => {
-                // reset local uniquement ; le parent gère selectedImage via onImageSelect -> charge une autre image pour écraser
-                setActualFile(null);
-              }}
+              onClick={() => setActualFile(null)}
               variant="ghost"
               className="text-xs text-muted-foreground"
               title="Réinitialiser l’info locale (nom/taille)"

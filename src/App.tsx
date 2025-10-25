@@ -6,7 +6,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const App = () => (
-  <div className="theme-pro min-h-dvh flex flex-col">   {/* <-- active le thème Figma */}
+  <div className="theme-pro dark min-h-dvh flex flex-col">
     <BrowserRouter>
       <Toaster />
       <Sonner />

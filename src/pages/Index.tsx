@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/Header";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
@@ -13,7 +13,7 @@ import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
 import { EnhancedProjectManager } from "@/components/studio/EnhancedProjectManager";
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
-import { ProcessedResult, ColorAnalysis, analyzeImageColors } from "@/lib/imageProcessing";
+import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
 import { toast } from "sonner";
@@ -30,90 +30,114 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 function IndexContent() {
   const studio = useStudio();
   const { startProfiling, recordStage, endProfiling, clearHistory } = studio.profiler;
-  
-  // Initialize auto-save
   useAutoSave();
-  
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // REF sûre du dernier file pour fallback
+  const lastFileRef = useRef<File | null>(null);
+
+  // UI state (non source de vérité)
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const windowSize = useWindowSize();
-  const width = windowSize?.width ?? 0;
-  const height = windowSize?.height ?? 0;
-  const { saveJob } = useImageHistory();
-  const { exportPNG, exportJSON, exportSVG } = useExport();
-  const { user } = useAuth();
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
 
-  // Sync with studio context
+  const { width = 0, height = 0 } = useWindowSize() ?? {};
+  const { saveJob } = useImageHistory();
+  const { exportPNG, exportJSON, exportSVG } = useExport();
+  const { user } = useAuth();
+
   useEffect(() => {
     if (studio.result) {
-      // Sync local state when studio result changes
+      // si tu veux recalculer zonesByColor depuis studio.result
     }
   }, [studio.result]);
 
+  // ============== SÉLECTION D’IMAGE : projet créé immédiatement ==============
   const handleImageSelect = async (file: File) => {
     try {
-      setSelectedFile(file);
-      // Normalize image with EXIF correction and resize
-      const normalizedUrl = await resizeForDisplay(file, IMAGE_PROCESSING.MAX_DISPLAY_WIDTH);
-      setSelectedImageUrl(normalizedUrl);
-      studio.setResult(null);
-      studio.setCurrentProject({ 
-        id: Date.now().toString(), 
-        name: file.name, 
+      lastFileRef.current = file;
+
+      // anti-race pour sélections rapides
+      const selectionId = Date.now();
+      (handleImageSelect as any)._lastSelectionId = selectionId;
+
+      // 1) Aperçu instantané (temp blob)
+      const tempUrl = URL.createObjectURL(file);
+      setSelectedImageUrl(tempUrl);
+
+      // 2) Crée le projet IMMÉDIATEMENT (imageFile dispo pour le traitement)
+      const initialProject = {
+        id: Date.now().toString(),
+        name: file.name,
         timestamp: Date.now(),
-        imageUrl: normalizedUrl,
-        imageFile: file,
-        settings: studio.settings 
-      });
+        imageUrl: tempUrl,   // on met le blob tout de suite
+        imageFile: file,     // ← **clé** : prêt pour handleProcess dès maintenant
+        settings: studio.settings,
+      };
+      studio.setResult(null);
+      studio.setCurrentProject(initialProject);
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
-      toast.success("Image chargée avec succès ! 🎨");
-      
-      // Launch color analysis automatically
+      toast.success("Image chargée (aperçu)", { description: "Normalisation en cours…" });
+
+      // 3) Normalisation en arrière-plan, puis on remplace uniquement l’URL
+      const normalizedUrl = await resizeForDisplay(file, IMAGE_PROCESSING.MAX_DISPLAY_WIDTH);
+
+      if ((handleImageSelect as any)._lastSelectionId !== selectionId) {
+        // une autre image a été choisie entre-temps
+        URL.revokeObjectURL(tempUrl);
+        return;
+      }
+
+      setSelectedImageUrl(normalizedUrl);
+      // on RE-sauve le projet avec la même imageFile mais une URL propre
+      studio.setCurrentProject({
+        ...initialProject,
+        imageUrl: normalizedUrl,
+      });
+      URL.revokeObjectURL(tempUrl);
+
+      // 4) Analyse des couleurs (recommendations)
       setIsAnalyzing(true);
       try {
-        const analysis = await analyzeImageColors(file, (progress) => {
-          console.log(`Analyse: ${progress.toFixed(0)}%`);
-        });
+        const analysis = await analyzeImageColors(file, () => {});
         studio.setAnalysis(analysis);
-
-        // Apply recommendations automatically
         studio.updateSettings({
           numColors: analysis.recommendedNumColors,
           minRegionSize: analysis.recommendedMinRegionSize,
           mergeTolerance: analysis.mode === "vector" ? 10 : 5,
-          smoothness: analysis.mode === "vector" ? 0 : 50
+          smoothness: analysis.mode === "vector" ? 0 : 50,
         });
-        
-        toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées — Recommandations appliquées`);
-      } catch (error) {
-        console.error("Color analysis error:", error);
+        toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées — recommandations appliquées`);
+      } catch (err) {
+        console.error("Color analysis error:", err);
         toast.error("Erreur lors de l'analyse des couleurs");
       } finally {
         setIsAnalyzing(false);
       }
-    } catch (error) {
-      console.error("Image normalization error:", error);
+    } catch (err) {
+      console.error("Image selection error:", err);
       toast.error("Erreur lors du chargement de l'image");
     }
   };
 
+  // =================== TRAITEMENT : lit toujours imageFile ===================
   const handleProcess = async () => {
-    if (!selectedFile) {
-      toast.error("Veuillez d'abord charger une image");
+    const file = studio.currentProject?.imageFile ?? lastFileRef.current;
+    if (!file) {
+      toast.error("Aucun fichier à traiter", {
+        description: "Charge une image d’abord (imageFile manquant).",
+      });
       return;
     }
 
     studio.setIsProcessing(true);
     setProcessingProgress(0);
-    setProcessingStage("Initialisation...");
-    toast.info("Traitement de l'image en cours... ⚡");
+    setProcessingStage("Initialisation…");
+    toast.info("Traitement de l'image en cours… ⚡");
 
     const startTime = Date.now();
     const profilingEnabled = studio.settings.profilingEnabled;
@@ -128,14 +152,18 @@ function IndexContent() {
     }
 
     try {
-      // Process image in Web Worker with progress updates
       const vectorMode = studio.analysis?.mode === "vector";
-      const effectiveMinRegionSize = Math.max(studio.settings.minRegionSize, vectorMode ? 20 : studio.settings.minRegionSize);
+      const effectiveMinRegionSize = Math.max(
+        studio.settings.minRegionSize,
+        vectorMode ? 20 : studio.settings.minRegionSize
+      );
       const effectiveSmoothness = vectorMode ? 0 : studio.settings.smoothness;
-      const effectiveMergeTolerance = vectorMode ? Math.max(studio.settings.mergeTolerance, 10) : studio.settings.mergeTolerance;
+      const effectiveMergeTolerance = vectorMode
+        ? Math.max(studio.settings.mergeTolerance, 10)
+        : studio.settings.mergeTolerance;
 
       const result = await processImageWithWorker(
-        selectedFile,
+        file,
         studio.settings.numColors,
         effectiveMinRegionSize,
         effectiveSmoothness,
@@ -146,9 +174,7 @@ function IndexContent() {
 
           if (profilingActive) {
             const now = performance.now();
-            if (lastStageLabel) {
-              recordStage(lastStageLabel, now - lastStageTimestamp);
-            }
+            if (lastStageLabel) recordStage(lastStageLabel, now - lastStageTimestamp);
             lastStageLabel = stage;
             lastStageTimestamp = now;
           }
@@ -158,53 +184,45 @@ function IndexContent() {
       );
 
       const processingTime = Date.now() - startTime;
-      
+
       studio.setResult(result);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), UI.CONFETTI_DURATION_MS);
       toast.success("🎉 Modèle généré avec succès !");
-      
-      // Save to history
-      const img = new Image();
-      img.src = selectedImageUrl!;
-      await img.decode();
-      
-      await saveJob({
-        image_name: selectedFile.name,
-        image_size: selectedFile.size,
-        width: img.width,
-        height: img.height,
-        num_colors: studio.settings.numColors,
-        min_region_size: effectiveMinRegionSize,
-        smoothness: effectiveSmoothness,
-        processing_time_ms: processingTime,
-        zones_count: result.zones.length,
-        palette: result.palette
-      });
+
+      // Historique (dimensions affichage à partir de selectedImageUrl)
+      if (selectedImageUrl) {
+        const img = new Image();
+        img.src = selectedImageUrl;
+        await img.decode();
+
+        await saveJob({
+          image_name: file.name,
+          image_size: file.size,
+          width: img.width,
+          height: img.height,
+          num_colors: studio.settings.numColors,
+          min_region_size: effectiveMinRegionSize,
+          smoothness: effectiveSmoothness,
+          processing_time_ms: processingTime,
+          zones_count: result.zones.length,
+          palette: result.palette,
+        });
+      }
 
       if (profilingActive) {
         const finalize = () => {
           const now = performance.now();
-          if (lastStageLabel) {
-            recordStage(lastStageLabel, now - lastStageTimestamp);
-          }
+          if (lastStageLabel) recordStage(lastStageLabel, now - lastStageTimestamp);
           endProfiling(Boolean(result.metadata?.wasCached));
         };
-
-        if (typeof requestAnimationFrame !== "undefined") {
-          requestAnimationFrame(finalize);
-        } else {
-          setTimeout(finalize, 0);
-        }
+        if (typeof requestAnimationFrame !== "undefined") requestAnimationFrame(finalize);
+        else setTimeout(finalize, 0);
       }
-    } catch (error) {
-      console.error("Processing error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erreur lors du traitement de l'image";
-      toast.error(errorMessage);
-
-      if (profilingActive) {
-        clearHistory();
-      }
+    } catch (err) {
+      console.error("Processing error:", err);
+      toast.error("Erreur lors du traitement de l'image");
+      if (profilingActive) clearHistory();
     } finally {
       studio.setIsProcessing(false);
       setProcessingProgress(0);
@@ -212,14 +230,13 @@ function IndexContent() {
     }
   };
 
+  // ======================== EXPORT ========================
   const handleExportPNG = () => exportPNG(studio.result);
-  
   const handleExportJSON = () => exportJSON(studio.result, studio.settings);
-
   const handleExportSVG = () => exportSVG(studio.result);
 
   return (
-    <div className="min-h-screen flex flex-col pt-16"> {/* réserve 64px pour la TopBar sticky */}
+    <div className="min-h-screen flex flex-col pt-16">
       {showConfetti && (
         <Confetti
           width={width}
@@ -229,31 +246,28 @@ function IndexContent() {
           gravity={UI.CONFETTI_GRAVITY}
         />
       )}
-      
+
       <Header />
-      
+
       <ProcessingProgress
         stage={processingStage}
         progress={processingProgress}
         isVisible={studio.isProcessing}
       />
-      
+
       <ResizableStudioLayout
         leftPanel={
           <>
-            <ImageUpload 
-              onImageSelect={handleImageSelect}
-              selectedImage={selectedImageUrl}
-            />
-            
+            <ImageUpload onImageSelect={handleImageSelect} selectedImage={selectedImageUrl} />
+
             {(studio.analysis || isAnalyzing) && (
-              <ColorAnalysisPanel 
+              <ColorAnalysisPanel
                 analysis={studio.analysis}
                 isAnalyzing={isAnalyzing}
                 processedResult={studio.result}
               />
             )}
-            
+
             <ParametersPanel
               numColors={studio.settings.numColors}
               onNumColorsChange={(v) => studio.updateSettings({ numColors: v })}
@@ -274,30 +288,26 @@ function IndexContent() {
               artisticEffect={studio.settings.artisticEffect}
               onArtisticEffectChange={(effect) => studio.updateSettings({ artisticEffect: effect })}
               artisticIntensity={studio.settings.artisticIntensity}
-              onArtisticIntensityChange={(intensity) => studio.updateSettings({ artisticIntensity: intensity })}
+              onArtisticIntensityChange={(intensity) =>
+                studio.updateSettings({ artisticIntensity: intensity })
+              }
               profilingEnabled={studio.settings.profilingEnabled}
-              onProfilingEnabledChange={(enabled) => studio.updateSettings({ profilingEnabled: enabled })}
+              onProfilingEnabledChange={(enabled) =>
+                studio.updateSettings({ profilingEnabled: enabled })
+              }
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />
-            
+
             <EnhancedProjectManager />
           </>
         }
-        
-        centerPanel={
-          <EnhancedViewTabs
-            originalImage={selectedImageUrl}
-            processedData={studio.result}
-          />
-        }
-        
+        centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
         rightPanel={
           <>
             {studio.result && (
               <>
                 <ColorPalette colors={studio.result.palette} />
-                
                 {zonesByColor.size > 0 && (
                   <PalettePanel
                     zonesByColor={zonesByColor}
@@ -305,16 +315,13 @@ function IndexContent() {
                     onColorSelect={setSelectedColorIdx}
                   />
                 )}
-                
                 <DebugPanel processedData={studio.result} />
               </>
             )}
-            
             {user && <HistoryPanel />}
             <AuthPanel />
           </>
         }
-        
         bottomBar={
           <ExportBar
             processedData={studio.result}
@@ -328,12 +335,10 @@ function IndexContent() {
   );
 }
 
-const Index = () => {
-  return (
-    <StudioProvider>
-      <IndexContent />
-    </StudioProvider>
-  );
-};
+const Index = () => (
+  <StudioProvider>
+    <IndexContent />
+  </StudioProvider>
+);
 
 export default Index;

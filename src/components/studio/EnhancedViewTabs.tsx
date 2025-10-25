@@ -126,71 +126,32 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   );
 
   // --- Onglets (UI) : styles Figma-like, tokens Tailwind ---
-  const TabsBar = (
-    <TabsList
-      className="
-        hidden md:grid grid-cols-6 w-full max-w-4xl
-        bg-transparent p-0 gap-1
-      "
-      aria-label="Modes d’affichage"
-    >
-      <TabsTrigger
-        value="original"
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60"
-      >
-        <Image className="w-4 h-4 mr-2" aria-hidden="true" />
-        Original
-      </TabsTrigger>
+const TabsBar = (
+  <TabsList
+    className="pill-tabs"
+    aria-label="Modes d'affichage"
+  >
+    <TabsTrigger value="original" className="pill-tab">
+      <Image className="w-4 h-4 mr-2" aria-hidden="true" /> Original
+    </TabsTrigger>
+    <TabsTrigger value="colorized" disabled={!processedData} className="pill-tab">
+      <Palette className="w-4 h-4 mr-2" aria-hidden="true" /> Colorisé
+    </TabsTrigger>
+    <TabsTrigger value="contours" disabled={!processedData} className="pill-tab">
+      <Grid3x3 className="w-4 h-4 mr-2" aria-hidden="true" /> Contours
+    </TabsTrigger>
+    <TabsTrigger value="numbered" disabled={!processedData} className="pill-tab">
+      <Hash className="w-4 h-4 mr-2" aria-hidden="true" /> Numéroté
+    </TabsTrigger>
+    <TabsTrigger value="compare" disabled={!processedData} className="pill-tab">
+      <ArrowLeftRight className="w-4 h-4 mr-2" aria-hidden="true" /> Comparer
+    </TabsTrigger>
+    <TabsTrigger value="profiler" className="pill-tab">
+      <Activity className="w-4 h-4 mr-2" aria-hidden="true" /> Profiler
+    </TabsTrigger>
+  </TabsList>
+);
 
-      <TabsTrigger
-        value="colorized"
-        disabled={!processedData}
-        aria-disabled={!processedData}
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
-      >
-        <Palette className="w-4 h-4 mr-2" aria-hidden="true" />
-        Colorisé
-      </TabsTrigger>
-
-      <TabsTrigger
-        value="contours"
-        disabled={!processedData}
-        aria-disabled={!processedData}
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
-      >
-        <Grid3x3 className="w-4 h-4 mr-2" aria-hidden="true" />
-        Contours
-      </TabsTrigger>
-
-      <TabsTrigger
-        value="numbered"
-        disabled={!processedData}
-        aria-disabled={!processedData}
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
-      >
-        <Hash className="w-4 h-4 mr-2" aria-hidden="true" />
-        Numéroté
-      </TabsTrigger>
-
-      <TabsTrigger
-        value="compare"
-        disabled={!processedData}
-        aria-disabled={!processedData}
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60 disabled:opacity-50"
-      >
-        <ArrowLeftRight className="w-4 h-4 mr-2" aria-hidden="true" />
-        Comparer
-      </TabsTrigger>
-
-      <TabsTrigger
-        value="profiler"
-        className="h-9 px-3 rounded-md data-[state=active]:bg-accent data-[state=active]:text-foreground hover:bg-accent/60"
-      >
-        <Activity className="w-4 h-4 mr-2" aria-hidden="true" />
-        Profiler
-      </TabsTrigger>
-    </TabsList>
-  );
 
   return (
     <Tabs

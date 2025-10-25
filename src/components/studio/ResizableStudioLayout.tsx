@@ -44,8 +44,8 @@ export function ResizableStudioLayout({
 
   const handleLayoutChange = (sizesArr: number[]) => {
     const newSizes: LayoutSizes = {
-      leftWidth: sizesArr[0] || DEFAULT_SIZES.leftWidth,
-      rightWidth: rightPanel ? sizesArr[2] || DEFAULT_SIZES.rightWidth : 0,
+      leftWidth: sizesArr[0] ?? DEFAULT_SIZES.leftWidth,
+      rightWidth: rightPanel ? sizesArr[2] ?? DEFAULT_SIZES.rightWidth : 0,
     };
     setSizes(newSizes);
     try {
@@ -55,75 +55,71 @@ export function ResizableStudioLayout({
     }
   };
 
-  return (
-    // 64px (4rem) = hauteur de la TopBar sticky
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
-      <div className="flex-1 overflow-hidden">
-        <ResizablePanelGroup
-          direction="horizontal"
-          onLayout={handleLayoutChange}
-          className="h-full"
+return (
+  <div className="h-[calc(100vh-4rem)] flex flex-col" aria-label="Studio layout">
+    {/* 64px = hauteur TopBar sticky */}
+    <div className="flex-1 overflow-hidden">
+      <ResizablePanelGroup
+        direction="horizontal"
+        onLayout={handleLayoutChange}
+        className="h-full"
+      >
+        {/* LEFT SIDEBAR */}
+        <ResizablePanel
+          defaultSize={sizes.leftWidth}
+          minSize={20}
+          maxSize={40}
+          className="sidebar-surface"
         >
-          {/* LEFT ASIDE */}
-          <ResizablePanel
-            defaultSize={sizes.leftWidth}
-            minSize={20}
-            maxSize={40}
-            className="bg-card/60 backdrop-blur-sm border-r"
-          >
-            <aside aria-label="Panneau paramètres" className="h-full">
-              <ScrollArea className="h-full">
-                <div className="p-6 space-y-6">{leftPanel}</div>
-              </ScrollArea>
-            </aside>
-          </ResizablePanel>
+          <aside aria-label="Panneau paramètres" className="h-full">
+            <ScrollArea className="h-full">
+              <div className="p-6 space-y-6">{leftPanel}</div>
+            </ScrollArea>
+          </aside>
+        </ResizablePanel>
 
-          <ResizableHandle
-            withHandle
-            className="bg-border/50 hover:bg-border transition-colors"
-          />
+        <ResizableHandle
+          withHandle
+          className="bg-border/50 hover:bg-border transition-colors"
+        />
 
-          {/* CENTER / MAIN CANVAS */}
-          <ResizablePanel defaultSize={rightPanel ? 50 : 75} minSize={30}>
-            <main
-              role="main"
-              className="relative h-full bg-background /* pas de blur au centre */ overflow-hidden"
+        {/* CENTER / MAIN CANVAS */}
+        <ResizablePanel defaultSize={rightPanel ? 50 : 75} minSize={30}>
+          <main role="main" className="relative h-full app-surface overflow-hidden">
+            {centerPanel}
+          </main>
+        </ResizablePanel>
+
+        {/* RIGHT SIDEBAR (optional) */}
+        {rightPanel && (
+          <>
+            <ResizableHandle
+              withHandle
+              className="bg-border/50 hover:bg-border transition-colors"
+            />
+            <ResizablePanel
+              defaultSize={sizes.rightWidth}
+              minSize={20}
+              maxSize={40}
+              className="sidebar-surface"
             >
-              {centerPanel}
-            </main>
-          </ResizablePanel>
-
-          {/* RIGHT ASIDE (optional) */}
-          {rightPanel && (
-            <>
-              <ResizableHandle
-                withHandle
-                className="bg-border/50 hover:bg-border transition-colors"
-              />
-
-              <ResizablePanel
-                defaultSize={sizes.rightWidth}
-                minSize={20}
-                maxSize={40}
-                className="bg-card/60 backdrop-blur-sm border-l"
-              >
-                <aside aria-label="Panneau palette et debug" className="h-full">
-                  <ScrollArea className="h-full">
-                    <div className="p-6 space-y-6">{rightPanel}</div>
-                  </ScrollArea>
-                </aside>
-              </ResizablePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
-      </div>
-
-      {/* BOTTOM BAR */}
-      {bottomBar && (
-        <footer className="border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-          {bottomBar}
-        </footer>
-      )}
+              <aside aria-label="Panneau palette et debug" className="h-full">
+                <ScrollArea className="h-full">
+                  <div className="p-6 space-y-6">{rightPanel}</div>
+                </ScrollArea>
+              </aside>
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
     </div>
-  );
+
+    {/* BOTTOM BAR */}
+    {bottomBar && (
+      <footer className="border-t border-border/40 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        {bottomBar}
+      </footer>
+    )}
+  </div>
+);
 }
