@@ -192,26 +192,39 @@ function IndexContent() {
                 processedResult={studio.result}
               />
             )}
-            <ParametersPanel
-              numColors={studio.settings.numColors}
-              onNumColorsChange={(v) => studio.updateSettings({ numColors: v })}
-              minRegionSize={studio.settings.minRegionSize}
-              onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
-              smoothness={studio.settings.smoothness}
-              onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
-              mergeTolerance={studio.settings.mergeTolerance}
-              onMergeToleranceChange={(v) => studio.updateSettings({ mergeTolerance: v })}
-              enableArtisticMerge={studio.settings.enableArtisticMerge}
-              onEnableArtisticMergeChange={(v) => studio.updateSettings({ enableArtisticMerge: v })}
-              smartPalette={studio.settings.smartPalette}
-              onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
-              profilingEnabled={studio.settings.profilingEnabled}
-              onProfilingEnabledChange={(enabled) =>
-                studio.updateSettings({ profilingEnabled: enabled })
-              }
-              onProcess={handleProcess}
-              isProcessing={studio.isProcessing}
-            />
+ <ParametersPanel
+  numColors={studio.settings.numColors}
+  onNumColorsChange={(v) => studio.updateSettings({ numColors: v })}
+  minRegionSize={studio.settings.minRegionSize}
+  onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
+  smoothness={studio.settings.smoothness}
+  onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
+  mergeTolerance={studio.settings.mergeTolerance}
+  onMergeToleranceChange={(v) => studio.updateSettings({ mergeTolerance: v })}
+  enableArtisticMerge={studio.settings.enableArtisticMerge}
+  onEnableArtisticMergeChange={(v) => studio.updateSettings({ enableArtisticMerge: v })}
+  smartPalette={studio.settings.smartPalette}
+  onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
+  
+  paintEffect={studio.settings.paintEffect}
+  onPaintEffectChange={(effect) => studio.updateSettings({ paintEffect: effect })}
+  paintIntensity={studio.settings.paintIntensity}
+  onPaintIntensityChange={(intensity) => studio.updateSettings({ paintIntensity: intensity })}
+  artisticEffect={studio.settings.artisticEffect}
+  onArtisticEffectChange={(effect) => studio.updateSettings({ artisticEffect: effect })}
+  artisticIntensity={studio.settings.artisticIntensity}
+  onArtisticIntensityChange={(intensity) =>
+    studio.updateSettings({ artisticIntensity: intensity })
+  }
+
+  profilingEnabled={studio.settings.profilingEnabled}
+  onProfilingEnabledChange={(enabled) =>
+    studio.updateSettings({ profilingEnabled: enabled })
+  }
+  onProcess={handleProcess}
+  isProcessing={studio.isProcessing}
+/>
+
             <EnhancedProjectManager />
           </>
         }
