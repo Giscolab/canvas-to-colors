@@ -50,6 +50,7 @@ export interface Project {
   settings: StudioSettings;
   analysis?: ColorAnalysis;
   result?: ProcessedResult;
+	favorite?: boolean;
 }
 
 // ---------------------------------------------

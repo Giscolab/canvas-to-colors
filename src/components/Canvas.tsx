@@ -7,6 +7,7 @@ import { Download, FileCode, ZoomIn, Maximize2, RefreshCw } from "lucide-react";
 import { useCanvasInteractions, Zone } from "@/hooks/useCanvasInteractions";
 import { CanvasHUD } from "@/components/studio/CanvasHUD";
 import { cn } from "@/lib/utils";
+import { useStudio } from "@/contexts/StudioContext";
 
 /* ===========================================================
    Canvas principal du Studio (Figma-like / Adobe-grade)
@@ -40,6 +41,7 @@ export const Canvas = ({
   const contoursCanvasRef = useRef<HTMLCanvasElement>(null);
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+const studio = useStudio();
 
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -266,18 +268,23 @@ export const Canvas = ({
       {/* --- HUD --- */}
       {activeInteractions && activeTab !== "original" && (
         <CanvasHUD
-          zoomPercent={Math.round(activeInteractions.scale * 100)}
-          canZoomIn={true}
-          canZoomOut={true}
-          onZoomIn={() => activeInteractions.zoom(1.1)}
-          onZoomOut={() => activeInteractions.zoom(0.9)}
-          onTogglePan={() => activeInteractions.togglePanMode()}
-          numberedVisible={true}
-          onToggleNumbered={() => {}}
-          overlayOpacity={80}
-          onChangeOverlayOpacity={() => {}}
+          zoomPercent={studio.zoomPercent}
+          canZoomIn={studio.zoomPercent < 800}
+          canZoomOut={studio.zoomPercent > 10}
+          onZoomIn={studio.zoomIn}
+          onZoomOut={studio.zoomOut}
+          onTogglePan={studio.togglePanTool}
+          numberedVisible={studio.overlay.numbered}
+          onToggleNumbered={(v) =>
+            studio.setOverlay({ ...studio.overlay, numbered: v })
+          }
+          overlayOpacity={studio.overlay.opacity}
+          onChangeOverlayOpacity={(v) =>
+            studio.setOverlay({ ...studio.overlay, opacity: v })
+          }
         />
       )}
+
     </Card>
   );
 };
