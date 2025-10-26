@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Zone } from "@/lib/imageProcessing";
 import { Maximize2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface InspectionOverlayProps {
   imageData: ImageData | null;
@@ -47,7 +48,7 @@ export function InspectionOverlay({
   const [mouseImg, setMouseImg] = useState<{ x: number; y: number } | null>(null);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
 
-  // Cache offscreen de l’image source (pour dessiner net à n’importe quelle taille)
+  // Cache offscreen de l'image source (pour dessiner net à n'importe quelle taille)
   const offscreen = useMemo(() => {
     if (!imageData) return null;
     const c = document.createElement("canvas");
@@ -88,6 +89,7 @@ export function InspectionOverlay({
         data[j + 1] = g;
         data[j + 2] = b;
         data[j + 3] = 90; // alpha ~35%
+				if (Math.random() < 0.01) data[j + 3] = 110;
       }
     }
     ctx.putImageData(img, 0, 0);
@@ -143,7 +145,7 @@ export function InspectionOverlay({
     // Clear
     ctx.clearRect(0, 0, cnv.width, cnv.height);
 
-    // Dessine l’image source (offscreen -> display)
+    // Dessine l'image source (offscreen -> display)
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(
       base,
@@ -166,7 +168,7 @@ export function InspectionOverlay({
       );
     }
 
-    // Curseur “loupe” minimaliste (optionnel)
+    // Curseur "loupe" minimaliste (optionnel)
     if (mouseImg && pointInDraw(mouseClient, layout)) {
       ctx.save();
       const radius = Math.max(8, Math.floor(6 * dpr));
@@ -272,47 +274,53 @@ export function InspectionOverlay({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full"
+      className="relative w-full h-full bg-studio-canvas-pattern overflow-hidden rounded-md shadow-studio-image"
       role="img"
       aria-label="Aperçu numéroté avec inspection des zones"
     >
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full cursor-crosshair outline-none"
-        onMouseMove={handleMove}
-        onMouseLeave={handleLeave}
-        onClick={handleClick}
-      />
+<canvas
+  ref={canvasRef}
+  className={cn(
+    "absolute inset-0 w-full h-full outline-none studio-transition studio-image-container",
+    selectedZone ? "cursor-pointer" : "cursor-crosshair"
+  )}
+  onMouseMove={handleMove}
+  onMouseLeave={handleLeave}
+  onClick={handleClick}
+/>
+
 
       {/* Tooltip */}
       {hoverInfo && tooltipPos && (
-        <Card
-          className="absolute z-20 p-3 shadow-premium text-xs space-y-1 pointer-events-none bg-background/95 backdrop-blur-sm border"
-          style={{ left: tooltipPos.left, top: tooltipPos.top, width: 200 }}
-          aria-live="polite"
-        >
+<div
+  className="absolute z-30 p-3 rounded-md shadow-studio-panel-right bg-studio-panel/85 backdrop-blur-md border border-studio-border/50 text-xs space-y-1 pointer-events-none studio-fade-in"
+  style={{ left: tooltipPos.left, top: tooltipPos.top, width: 200 }}
+  aria-live="polite"
+>
+
           <div className="flex items-center gap-2">
-            <Maximize2 className="w-3 h-3 text-muted-foreground" aria-hidden="true" />
-            <span className="font-medium">Zone #{hoverInfo.zoneId}</span>
+            <Maximize2 className="w-3 h-3 text-studio-foreground/60" aria-hidden="true" />
+            <span className="font-medium text-studio-foreground">Zone #{hoverInfo.zoneId}</span>
             {selectedZone === hoverInfo.zoneId && (
-              <span className="ml-auto text-primary text-[10px]">✓ Sélectionnée</span>
+              <span className="ml-auto studio-status-badge studio-status-badge--success text-[10px]">✓ Sélectionnée</span>
+
             )}
           </div>
           <div className="flex items-center gap-2">
             <div
-              className="w-4 h-4 rounded border border-border"
-              style={{ backgroundColor: hoverInfo.color }}
+              className="w-4 h-4 rounded border border-studio-border shadow-inner"
+              style={{ backgroundColor: hoverInfo.color, transition: 'background-color 0.2s ease' }}
             />
-            <span className="text-muted-foreground font-mono">{hoverInfo.color}</span>
+            <span className="text-studio-foreground/80 font-mono">{hoverInfo.color}</span>
           </div>
-          <div className="text-muted-foreground">Couleur #{hoverInfo.colorIdx + 1}</div>
-          <div className="text-muted-foreground">
+          <div className="text-studio-foreground/70">Couleur #{hoverInfo.colorIdx + 1}</div>
+          <div className="text-studio-foreground/70">
             Surface: {hoverInfo.area.toLocaleString()}px²
           </div>
-          <div className="text-[10px] text-muted-foreground/70 border-t border-border pt-1 mt-1">
+          <div className="text-[10px] text-studio-foreground/50 border-t border-studio-border/40 pt-1 mt-1 font-mono">
             Cliquez pour sélectionner
           </div>
-        </Card>
+        </div>
       )}
     </div>
   );
@@ -344,7 +352,7 @@ function pointInDraw(
   if (!mouse) return false;
   const { offX, offY, drawW, drawH, cw, ch } = layout;
   if (cw === 0 || ch === 0) return false;
-  // Ici mouse est en coordonnées client; on l’emploie juste pour désactiver le halo hors zone
+  // Ici mouse est en coordonnées client; on l'emploie juste pour désactiver le halo hors zone
   // (le test précis se fait déjà via clientToImage)
   return true && drawW > 0 && drawH > 0 && offX >= 0 && offY >= 0;
 }

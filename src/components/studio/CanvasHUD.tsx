@@ -3,37 +3,21 @@ import { ZoomIn, ZoomOut, Hand, Pipette, Hash, Eye, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils";
 
 export interface CanvasHUDProps {
-  // état zoom actuel et bornes
-  zoomPercent: number;              // ex: 100
-  canZoomIn?: boolean;              // ex: zoom < 800
-  canZoomOut?: boolean;             // ex: zoom > 10
-
-  // handlers fournis par ton canvas
+  zoomPercent: number;
+  canZoomIn?: boolean;
+  canZoomOut?: boolean;
   onZoomIn: () => void;
   onZoomOut: () => void;
-  onTogglePan: () => void;          // main/hand tool
-  onPickColor?: () => void;         // pipette (optionnel)
-
-  // overlay numéros/contours
-  numberedVisible: boolean;         // afficher les numéros ?
+  onTogglePan: () => void;
+  onPickColor?: () => void;
+  numberedVisible: boolean;
   onToggleNumbered: (visible: boolean) => void;
-
-  overlayOpacity: number;           // 0..100
+  overlayOpacity: number;
   onChangeOverlayOpacity: (val: number) => void;
-
-  // “Trouver le numéro N”
   onFindNumber?: (n: number) => void;
-
-  // classes utilitaires (facultatif)
   className?: string;
 }
 
-/**
- * HUD flottant pour le canvas :
- * - barre centrale (zoom, main, pipette)
- * - volet secondaire (numéroté on/off, opacité, trouver N°)
- * - visuel only ; toutes les actions viennent de props
- */
 export function CanvasHUD({
   zoomPercent,
   canZoomIn = true,
@@ -52,12 +36,10 @@ export function CanvasHUD({
   const [findNumber, setFindNumber] = useState<number | "">("");
 
   const handleFindSubmit = useCallback(
-   (e: React.FormEvent) => {
+    (e: React.FormEvent) => {
       e.preventDefault();
       const n = typeof findNumber === "number" ? findNumber : Number.NaN;
-      if (onFindNumber && Number.isFinite(n)) {
-        onFindNumber(n);
-      }
+      if (onFindNumber && Number.isFinite(n)) onFindNumber(n);
     },
     [findNumber, onFindNumber]
   );
@@ -65,60 +47,64 @@ export function CanvasHUD({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-4 flex flex-col items-center gap-3",
+        "pointer-events-none absolute inset-x-0 bottom-4 flex flex-col items-center gap-3 z-40",
         className
       )}
       aria-label="Contrôles du canvas"
     >
-      {/* Barre principale */}
+      {/* --- Barre principale --- */}
       <div
         className="
           pointer-events-auto
-          bg-card/95 backdrop-blur border shadow-sm rounded-lg
-          px-2 py-1.5 flex items-center gap-1
+          bg-studio-panel/95 backdrop-blur-md border border-studio-border/60
+          shadow-studio-panel-right rounded-md px-2 py-1.5
+          flex items-center gap-1 studio-transition
         "
       >
+        {/* Zoom Out */}
         <button
           type="button"
           onClick={onZoomOut}
           disabled={!canZoomOut}
           className="
-            h-8 w-8 inline-flex items-center justify-center rounded-md border
-            hover:bg-accent/60 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+            h-8 w-8 inline-flex items-center justify-center rounded-md border border-studio-border/60
+            hover:bg-studio-hover disabled:opacity-50 studio-transition focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40
           "
           aria-label="Zoom out"
         >
-          <ZoomOut className="h-4 w-4" />
+          <ZoomOut className="h-4 w-4 text-studio-foreground" />
         </button>
 
-        <div className="px-2 tabular-nums text-sm text-foreground">{zoomPercent}%</div>
+        <div className="px-2 tabular-nums text-sm text-studio-foreground">{zoomPercent}%</div>
 
+        {/* Zoom In */}
         <button
           type="button"
           onClick={onZoomIn}
           disabled={!canZoomIn}
           className="
-            h-8 w-8 inline-flex items-center justify-center rounded-md border
-            hover:bg-accent/60 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+            h-8 w-8 inline-flex items-center justify-center rounded-md border border-studio-border/60
+            hover:bg-studio-hover disabled:opacity-50 studio-transition focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40
           "
           aria-label="Zoom in"
         >
-          <ZoomIn className="h-4 w-4" />
+          <ZoomIn className="h-4 w-4 text-studio-foreground" />
         </button>
 
-        <div className="w-px h-6 bg-border mx-1.5" />
+        <div className="w-px h-6 bg-studio-border/50 mx-1.5" />
 
+        {/* Main tool */}
         <button
           type="button"
           onClick={onTogglePan}
           className="
-            h-8 px-2 inline-flex items-center gap-1 rounded-md border
-            hover:bg-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+            h-8 px-2 inline-flex items-center gap-1 rounded-md border border-studio-border/60
+            hover:bg-studio-hover studio-transition focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40
           "
-          aria-label="Activer l’outil Main (déplacement)"
+          aria-label="Activer l’outil Main"
         >
-          <Hand className="h-4 w-4" />
-          <span className="hidden sm:inline text-xs">Main</span>
+          <Hand className="h-4 w-4 text-studio-foreground" />
+          <span className="hidden sm:inline text-xs text-studio-foreground/80">Main</span>
         </button>
 
         {onPickColor && (
@@ -126,43 +112,53 @@ export function CanvasHUD({
             type="button"
             onClick={onPickColor}
             className="
-              h-8 px-2 inline-flex items-center gap-1 rounded-md border
-              hover:bg-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+              h-8 px-2 inline-flex items-center gap-1 rounded-md border border-studio-border/60
+              hover:bg-studio-hover studio-transition focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40
             "
             aria-label="Pipette (prélever une couleur)"
           >
-            <Pipette className="h-4 w-4" />
-            <span className="hidden sm:inline text-xs">Pipette</span>
+            <Pipette className="h-4 w-4 text-studio-foreground" />
+            <span className="hidden sm:inline text-xs text-studio-foreground/80">Pipette</span>
           </button>
         )}
       </div>
 
-      {/* Volet secondaire */}
+      {/* --- Volet secondaire --- */}
       <div
         className="
           pointer-events-auto
-          bg-card/95 backdrop-blur border shadow-sm rounded-lg
-          px-3 py-2 flex items-center gap-3
+          bg-studio-panel/95 backdrop-blur-md border border-studio-border/60
+          shadow-studio-panel-right rounded-md px-3 py-2
+          flex items-center gap-3 studio-transition
         "
       >
+        {/* Numéros on/off */}
         <button
           type="button"
           onClick={() => onToggleNumbered(!numberedVisible)}
           className="
-            h-8 px-2 inline-flex items-center gap-1 rounded-md border
-            hover:bg-accent/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+            h-8 px-2 inline-flex items-center gap-1 rounded-md border border-studio-border/60
+            hover:bg-studio-hover studio-transition focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40
           "
           aria-pressed={numberedVisible}
           aria-label={numberedVisible ? "Masquer les numéros" : "Afficher les numéros"}
         >
-          {numberedVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          <span className="hidden sm:inline text-xs">
+          {numberedVisible ? (
+            <EyeOff className="h-4 w-4 text-studio-foreground" />
+          ) : (
+            <Eye className="h-4 w-4 text-studio-foreground" />
+          )}
+          <span className="hidden sm:inline text-xs text-studio-foreground/80">
             {numberedVisible ? "Numéros off" : "Numéros on"}
           </span>
         </button>
 
+        {/* Opacité */}
         <div className="flex items-center gap-2">
-          <label htmlFor="overlay-opacity" className="text-xs text-muted-foreground">
+          <label
+            htmlFor="overlay-opacity"
+            className="text-xs text-studio-foreground/70"
+          >
             Opacité
           </label>
           <input
@@ -172,18 +168,21 @@ export function CanvasHUD({
             max={100}
             value={overlayOpacity}
             onChange={(e) => onChangeOverlayOpacity(Number(e.target.value))}
-            className="h-2 w-32 accent-foreground/70"
+            className="h-2 w-32 accent-studio-accent-blue/70 cursor-pointer"
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={overlayOpacity}
           />
-          <span className="text-xs tabular-nums w-8 text-center">{overlayOpacity}%</span>
+          <span className="text-xs tabular-nums w-8 text-center text-studio-foreground/70">
+            {overlayOpacity}%
+          </span>
         </div>
 
+        {/* Trouver numéro */}
         {onFindNumber && (
           <form onSubmit={handleFindSubmit} className="flex items-center gap-1">
             <div className="relative">
-              <Hash className="h-3.5 w-3.5 text-muted-foreground absolute left-2 top-[7px]" />
+              <Hash className="h-3.5 w-3.5 text-studio-foreground/50 absolute left-2 top-[7px]" />
               <input
                 type="number"
                 inputMode="numeric"
@@ -195,8 +194,8 @@ export function CanvasHUD({
                   setFindNumber(e.target.value === "" ? "" : Number(e.target.value))
                 }
                 className="
-                  pl-6 pr-2 h-8 w-20 rounded-md border bg-background
-                  text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
+                  pl-6 pr-2 h-8 w-20 rounded-md border border-studio-border/60 bg-studio-panel/60
+                  text-sm text-studio-foreground focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40 outline-none
                 "
                 aria-label="Aller à la zone numéro…"
               />
@@ -204,8 +203,8 @@ export function CanvasHUD({
             <button
               type="submit"
               className="
-                h-8 px-2 rounded-md border hover:bg-accent/60
-                focus:outline-none focus-visible:ring-2 focus-visible:ring-ring text-xs
+                h-8 px-2 rounded-md border border-studio-border/60 hover:bg-studio-hover
+                focus-visible:ring-1 focus-visible:ring-studio-accent-blue/40 text-xs text-studio-foreground studio-transition
               "
             >
               Trouver

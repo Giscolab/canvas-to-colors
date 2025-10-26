@@ -35,12 +35,16 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     clearHistory,
   } = studio.profiler;
 
-  // --- Portal vers la TopBar (si #topbar-tabs existe) ---
-  const [tabsHost, setTabsHost] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    const el = document.getElementById("topbar-tabs");
+// --- Portal vers la TopBar (si #topbar-tabs existe) ---
+const [tabsHost, setTabsHost] = useState<HTMLElement | null>(null);
+
+useEffect(() => {
+  const el = document.getElementById("topbar-tabs");
+  if (el) {
     setTabsHost(el);
-  }, []);
+  }
+}, []);
+
 
   // Récupérer les informations de l'image
   useEffect(() => {
@@ -163,41 +167,64 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     document.body.removeChild(link);
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
+const toggleFullscreen = useCallback(async () => {
+  try {
     if (!isFullscreen && imageContainerRef.current) {
-      imageContainerRef.current.requestFullscreen();
+      // Entrée en plein écran
+      if (imageContainerRef.current.requestFullscreen) {
+        await imageContainerRef.current.requestFullscreen();
+        setIsFullscreen(true);
+      }
     } else if (isFullscreen) {
-      document.exitFullscreen();
+      // Sortie en plein écran
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      } else {
+        return;
+      }
     }
-    setIsFullscreen(!isFullscreen);
-  }, [isFullscreen]);
+  } catch (err) {
+    console.error("[Studio] Erreur toggleFullscreen :", err);
+  }
+}, [isFullscreen]);
+// Synchroniser l’état plein écran avec les événements natifs du navigateur
+useEffect(() => {
+  const handleFullscreenChange = () => {
+    setIsFullscreen(Boolean(document.fullscreenElement));
+  };
+
+  document.addEventListener("fullscreenchange", handleFullscreenChange);
+  return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+}, []);
+
 
   // --- Onglets (UI) : styles Figma-like, tokens Tailwind ---
-const TabsBar = (
-  <TabsList
-    className="pill-tabs"
-    aria-label="Modes d'affichage"
-  >
-    <TabsTrigger value="original" className="pill-tab">
-      <ImageIcon className="w-4 h-4 mr-2" aria-hidden="true" /> Original
-    </TabsTrigger>
-    <TabsTrigger value="colorized" disabled={!processedData} className="pill-tab">
-      <Palette className="w-4 h-4 mr-2" aria-hidden="true" /> Colorisé
-    </TabsTrigger>
-    <TabsTrigger value="contours" disabled={!processedData} className="pill-tab">
-      <Grid3x3 className="w-4 h-4 mr-2" aria-hidden="true" /> Contours
-    </TabsTrigger>
-    <TabsTrigger value="numbered" disabled={!processedData} className="pill-tab">
-      <Hash className="w-4 h-4 mr-2" aria-hidden="true" /> Numéroté
-    </TabsTrigger>
-    <TabsTrigger value="compare" disabled={!processedData} className="pill-tab">
-      <ArrowLeftRight className="w-4 h-4 mr-2" aria-hidden="true" /> Comparer
-    </TabsTrigger>
-    <TabsTrigger value="profiler" className="pill-tab">
-      <Activity className="w-4 h-4 mr-2" aria-hidden="true" /> Profiler
-    </TabsTrigger>
-  </TabsList>
-);
+  const TabsBar = useMemo(() => (
+    <TabsList
+      className="studio-pill-tabs"
+      aria-label="Modes d'affichage"
+    >
+      <TabsTrigger value="original" className="studio-pill-tab" aria-label="Voir l'image originale">
+        <ImageIcon className="w-4 h-4 mr-2" aria-hidden="true" /> Original
+      </TabsTrigger>
+      <TabsTrigger value="colorized" disabled={!processedData} className="studio-pill-tab" aria-label="Voir l'image colorisée">
+        <Palette className="w-4 h-4 mr-2" aria-hidden="true" /> Colorisé
+      </TabsTrigger>
+      <TabsTrigger value="contours" disabled={!processedData} className="studio-pill-tab" aria-label="Voir les contours de l'image">
+        <Grid3x3 className="w-4 h-4 mr-2" aria-hidden="true" /> Contours
+      </TabsTrigger>
+      <TabsTrigger value="numbered" disabled={!processedData} className="studio-pill-tab" aria-label="Voir les zones numérotées">
+        <Hash className="w-4 h-4 mr-2" aria-hidden="true" /> Numéroté
+      </TabsTrigger>
+      <TabsTrigger value="compare" disabled={!processedData} className="studio-pill-tab" aria-label="Comparer l'original et le colorisé">
+        <ArrowLeftRight className="w-4 h-4 mr-2" aria-hidden="true" /> Comparer
+      </TabsTrigger>
+      <TabsTrigger value="profiler" className="studio-pill-tab" aria-label="Afficher le profil de performance">
+        <Activity className="w-4 h-4 mr-2" aria-hidden="true" /> Profiler
+      </TabsTrigger>
+    </TabsList>
+  ), [processedData]);
 
   return (
     <TooltipProvider>
@@ -225,7 +252,7 @@ const TabsBar = (
             {originalImage ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils d'image */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
@@ -236,7 +263,7 @@ const TabsBar = (
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -244,7 +271,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -252,7 +279,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -261,7 +288,7 @@ const TabsBar = (
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(originalImage, "original.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(originalImage, "original.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -269,7 +296,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -283,13 +310,13 @@ const TabsBar = (
                   <div className="relative group">
                     <img
                       src={originalImage}
-                      alt="Original"
+                      alt="Image originale du projet"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
                       style={{ transform: `scale(${studio.zoomPercent / 100})` }}
                     />
                     
                     {/* HUD de zoom */}
-                    <div className="absolute bottom-4 right-4 bg-studio-panel/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs text-studio-foreground/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="studio-zoom-hud">
                       {studio.zoomPercent}%
                     </div>
                   </div>
@@ -299,7 +326,7 @@ const TabsBar = (
               <div className="h-full flex items-center justify-center text-studio-foreground/50">
                 <div className="text-center">
                   <ImageIcon className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Chargez une image pour commencer</p>
+                  <p className="text-sm text-studio-foreground/70">Chargez une image pour commencer</p>
                 </div>
               </div>
             )}
@@ -309,7 +336,7 @@ const TabsBar = (
             {colorizedUrl ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils d'image */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
@@ -317,12 +344,12 @@ const TabsBar = (
                       </span>
                     )}
                     {studio.settings.paintEffect !== "none" && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-studio-accent-blue/20 text-studio-accent-blue">
+                      <span className="studio-status-badge studio-status-badge--success">
                         {studio.settings.paintEffect}
                       </span>
                     )}
                     {studio.settings.artisticEffect !== "none" && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-studio-accent-green/20 text-studio-accent-green">
+                      <span className="studio-status-badge studio-status-badge--success">
                         {studio.settings.artisticEffect}
                       </span>
                     )}
@@ -330,7 +357,7 @@ const TabsBar = (
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -338,7 +365,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -346,7 +373,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -354,7 +381,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.pickColor()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.pickColor()}>
                           <Pipette className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -363,7 +390,7 @@ const TabsBar = (
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -371,7 +398,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -383,9 +410,12 @@ const TabsBar = (
                 {/* Conteneur d'image */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
                   <div className="relative w-full h-full max-w-5xl">
+                    {/* Fond de texture subtil */}
+                    <div className="absolute inset-0 bg-studio-canvas-pattern opacity-5 pointer-events-none" />
+                    
                     <img
                       src={colorizedUrl}
-                      alt="Colorisé"
+                      alt="Image colorisée avec effets appliqués"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200"
                       style={{ transform: `scale(${studio.zoomPercent / 100})` }}
                     />
@@ -412,7 +442,7 @@ const TabsBar = (
               <div className="h-full flex items-center justify-center text-studio-foreground/50">
                 <div className="text-center">
                   <Palette className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Traitez l'image pour voir le rendu colorisé</p>
+                  <p className="text-sm text-studio-foreground/70">Traitez l'image pour voir le rendu colorisé</p>
                 </div>
               </div>
             )}
@@ -422,7 +452,7 @@ const TabsBar = (
             {contoursUrl ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils d'image */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
@@ -433,7 +463,7 @@ const TabsBar = (
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -441,7 +471,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -450,7 +480,7 @@ const TabsBar = (
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -464,13 +494,13 @@ const TabsBar = (
                   <div className="relative group">
                     <img
                       src={contoursUrl}
-                      alt="Contours"
+                      alt="Contours extraits de l'image"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
                       style={{ transform: `scale(${studio.zoomPercent / 100})` }}
                     />
                     
                     {/* HUD de zoom */}
-                    <div className="absolute bottom-4 right-4 bg-studio-panel/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs text-studio-foreground/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="studio-zoom-hud">
                       {studio.zoomPercent}%
                     </div>
                   </div>
@@ -480,7 +510,7 @@ const TabsBar = (
               <div className="h-full flex items-center justify-center text-studio-foreground/50">
                 <div className="text-center">
                   <Grid3x3 className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Traitez l'image pour voir les contours</p>
+                  <p className="text-sm text-studio-foreground/70">Traitez l'image pour voir les contours</p>
                 </div>
               </div>
             )}
@@ -490,14 +520,14 @@ const TabsBar = (
             {processedData?.numbered && processedData?.labels ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils d'image */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
                         {imageInfo.width} × {imageInfo.height}
                       </span>
                     )}
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-studio-accent-yellow/20 text-studio-accent-yellow">
+                    <span className="studio-status-badge studio-status-badge--warning">
                       {processedData.zones.length} zones
                     </span>
                   </div>
@@ -507,7 +537,7 @@ const TabsBar = (
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-7 w-7" 
+                          className="studio-action-button" 
                           onClick={() => studio.setOverlay({ ...studio.overlay, numbered: !studio.overlay.numbered })}
                         >
                           {studio.overlay.numbered ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
@@ -517,7 +547,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -525,7 +555,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -534,7 +564,7 @@ const TabsBar = (
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -558,7 +588,7 @@ const TabsBar = (
             ) : numberedUrl ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils d'image */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
@@ -569,7 +599,7 @@ const TabsBar = (
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -577,7 +607,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -586,7 +616,7 @@ const TabsBar = (
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -600,13 +630,13 @@ const TabsBar = (
                   <div className="relative group">
                     <img
                       src={numberedUrl}
-                      alt="Numéroté"
+                      alt="Image avec zones numérotées"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
                       style={{ transform: `scale(${studio.zoomPercent / 100})` }}
                     />
                     
                     {/* HUD de zoom */}
-                    <div className="absolute bottom-4 right-4 bg-studio-panel/80 backdrop-blur-sm rounded-md px-2 py-1 text-xs text-studio-foreground/80 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="studio-zoom-hud">
                       {studio.zoomPercent}%
                     </div>
                   </div>
@@ -616,7 +646,7 @@ const TabsBar = (
               <div className="h-full flex items-center justify-center text-studio-foreground/50">
                 <div className="text-center">
                   <Hash className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Traitez l'image pour voir le résultat numéroté</p>
+                  <p className="text-sm text-studio-foreground/70">Traitez l'image pour voir le résultat numéroté</p>
                 </div>
               </div>
             )}
@@ -626,7 +656,7 @@ const TabsBar = (
             {originalImage && colorizedUrl ? (
               <div className="w-full h-full flex flex-col">
                 {/* Barre d'outils de comparaison */}
-                <div className="h-10 bg-studio-panel-header/30 backdrop-blur-sm border-b border-studio-border/40 flex items-center justify-between px-4">
+                <div className="studio-panel-toolbar border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm">
                   <div className="flex items-center space-x-2">
                     {imageInfo && (
                       <span className="text-xs text-studio-foreground/70">
@@ -637,7 +667,7 @@ const TabsBar = (
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -645,7 +675,7 @@ const TabsBar = (
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -662,6 +692,7 @@ const TabsBar = (
                       afterImage={colorizedUrl}
                       beforeLabel="Original"
                       afterLabel="Colorisé"
+                      showHandleHint
                     />
                   </div>
                 </div>
@@ -670,7 +701,7 @@ const TabsBar = (
               <div className="h-full flex items-center justify-center text-studio-foreground/50">
                 <div className="text-center">
                   <ArrowLeftRight className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                  <p>Traitez l'image pour comparer les versions</p>
+                  <p className="text-sm text-studio-foreground/70">Traitez l'image pour comparer les versions</p>
                 </div>
               </div>
             )}

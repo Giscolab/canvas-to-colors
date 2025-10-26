@@ -13,6 +13,7 @@ interface CompareSliderProps {
   afterImage: string;
   beforeLabel?: string;
   afterLabel?: string;
+  showHandleHint?: boolean;
 }
 
 export function CompareSlider({
@@ -20,6 +21,7 @@ export function CompareSlider({
   afterImage,
   beforeLabel = "Avant",
   afterLabel = "Après",
+  showHandleHint = false,
 }: CompareSliderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
@@ -39,6 +41,7 @@ export function CompareSlider({
   }, [pos]);
 
   const startDrag = useCallback((e: React.PointerEvent) => {
+    e.preventDefault(); // Évite le scroll de la page pendant le drag sur mobile
     const id = e.pointerId;
     setPointerId(id);
     setDragging(true);
@@ -88,8 +91,9 @@ export function CompareSlider({
       ref={containerRef}
       className="
         relative overflow-hidden select-none
-        bg-background/50 border
+        bg-studio-panel/60 border border-studio-border/40
         min-h-[280px] sm:min-h-[360px]
+        rounded-lg shadow-studio-image
       "
       onPointerDown={onContainerPointerDown}
       role="group"
@@ -111,7 +115,8 @@ export function CompareSlider({
 
         {/* BEFORE (overlay clip) */}
         <div
-          className="absolute inset-0 overflow-hidden"
+          className="absolute inset-0 overflow-hidden transition-[clip-path] duration-200 ease-\[cubic-bezier\(0.22,1,0.36,1\)\]
+"
           style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
           aria-hidden="true"
         >
@@ -149,6 +154,7 @@ export function CompareSlider({
               ring-offset-background
               focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
               cursor-ew-resize
+              studio-transition
             "
             role="slider"
             tabIndex={0}
@@ -163,11 +169,18 @@ export function CompareSlider({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            {/* Icône “grip” minimaliste */}
+            {/* Icône "grip" minimaliste */}
             <div className="flex gap-0.5" aria-hidden="true">
               <div className="w-0.5 h-4 rounded-full bg-primary-foreground/90" />
               <div className="w-0.5 h-4 rounded-full bg-primary-foreground/90" />
             </div>
+
+            {/* Indicateur d'aide (optionnel) */}
+            {showHandleHint && (
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-studio-panel/90 backdrop-blur-sm px-2 py-1 rounded text-xs text-studio-foreground/70 whitespace-nowrap pointer-events-none">
+                Glissez pour comparer
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -652,3 +652,331 @@
 .theme-pro .focus-ring {
   @apply ring-1 ring-studio-accent-blue/40 outline-none;
 }
+
+/* ===========================
+   STUDIO EXPORT BAR (Adobe-grade v2)
+   =========================== */
+.theme-pro .studio-export-bar {
+  @apply px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3;
+  @apply border-t border-studio-border/60 bg-studio-panel/90 backdrop-blur-md;
+  @apply shadow-studio-panel-left studio-transition;
+}
+
+/* === Boutons principaux === */
+.theme-pro .studio-export-button {
+  @apply h-8 px-3 text-sm font-medium rounded-md inline-flex items-center gap-2;
+  @apply border border-studio-border/40 bg-studio-panel/60 text-studio-foreground/80;
+  @apply hover:bg-studio-hover hover:text-studio-foreground hover:border-studio-border/70;
+  @apply focus-ring transition-all duration-200;
+}
+
+.theme-pro .studio-export-button--primary {
+  @apply bg-studio-accent-blue text-white shadow-studio-panel-right;
+  @apply hover:opacity-90 active:scale-[0.98] disabled:opacity-50;
+}
+
+/* === Actions secondaires (icônes) === */
+.theme-pro .studio-action-button {
+  @apply h-8 w-8 rounded-md flex items-center justify-center text-studio-foreground/60;
+  @apply hover:text-studio-foreground hover:bg-studio-hover focus-ring studio-transition;
+}
+
+/* === Dialogues === */
+.theme-pro .studio-export-dialog,
+.theme-pro .studio-dialog-content {
+  @apply bg-studio-panel border border-studio-border/60 backdrop-blur-md rounded-lg shadow-elev-2;
+  @apply p-6 max-w-2xl w-full;
+  @apply studio-fade-in;
+}
+
+/* === Entête de dialogue === */
+.theme-pro .studio-dialog-header {
+  @apply mb-4 space-y-1;
+}
+.theme-pro .studio-dialog-title {
+  @apply text-lg font-semibold text-studio-foreground;
+}
+.theme-pro .studio-dialog-description {
+  @apply text-sm text-studio-foreground/70;
+}
+
+/* === Pied de dialogue === */
+.theme-pro .studio-dialog-footer {
+  @apply flex justify-end gap-2 mt-6 pt-3 border-t border-studio-border/40;
+}
+
+/* === Options === */
+.theme-pro .studio-option-container {
+  @apply space-y-2;
+}
+.theme-pro .studio-option-group {
+  @apply space-y-3;
+}
+.theme-pro .studio-option-label {
+  @apply text-sm font-medium text-studio-foreground;
+}
+.theme-pro .studio-option-description {
+  @apply text-xs text-studio-foreground/60 mt-1;
+}
+
+/* === Inputs / Sliders / Pickers === */
+.theme-pro .studio-input {
+  @apply w-full px-3 py-2 text-sm rounded-md border border-studio-border/40 bg-studio-panel/50 text-studio-foreground;
+  @apply focus:border-studio-accent-blue focus:ring-1 focus:ring-studio-accent-blue/40 outline-none;
+}
+.theme-pro .studio-export-slider {
+  @apply w-full accent-studio-accent-blue;
+}
+.theme-pro .studio-color-picker {
+  @apply w-12 h-8 p-1 rounded border border-studio-border/40 cursor-pointer;
+  @apply hover:border-studio-accent-blue/40 transition-colors;
+}
+.theme-pro .studio-switch {
+  @apply h-6 w-11 data-[state=checked]:bg-studio-accent-blue;
+}
+
+/* === Onglets === */
+.theme-pro .studio-export-tabs {
+  @apply grid grid-cols-6 w-full gap-1 bg-studio-panel/60 p-1 rounded-lg shadow-inner;
+}
+.theme-pro .studio-export-tab {
+  @apply text-xs py-1 rounded-md text-studio-foreground/70 hover:bg-studio-hover hover:text-studio-foreground;
+  @apply data-[state=active]:bg-studio-accent-blue/20 data-[state=active]:text-studio-accent-blue transition-all;
+}
+
+/* === Séparateurs === */
+.theme-pro .studio-separator {
+  @apply my-4 border-t border-studio-border/40;
+}
+
+/* === Badges d'état === */
+.theme-pro .studio-status-badge {
+  @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium gap-1;
+}
+.theme-pro .studio-status-badge--success {
+  @apply bg-studio-accent-green/20 text-studio-accent-green;
+}
+.theme-pro .studio-status-badge--error {
+  @apply bg-studio-accent-red/20 text-studio-accent-red;
+}
+
+/* === Animations === */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.theme-pro .studio-loading-spinner {
+  animation: spin 1s linear infinite;
+}
+.theme-pro .studio-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===========================
+   STUDIO VIEW TABS
+   =========================== */
+.theme-pro .studio-pill-tabs {
+  @apply flex gap-2 bg-studio-panel/60 p-1 rounded-lg shadow-inner;
+}
+
+.theme-pro .studio-pill-tab {
+  @apply px-3 py-1.5 text-sm rounded-md text-studio-foreground/70 transition-all;
+  @apply hover:bg-studio-hover hover:text-studio-foreground;
+  @apply data-[state=active]:bg-studio-accent-blue/20 data-[state=active]:text-studio-accent-blue;
+}
+
+.theme-pro .studio-panel-toolbar {
+  @apply flex items-center justify-between px-4 py-2 border-b border-studio-border/40 bg-studio-panel-header/60 backdrop-blur-sm;
+}
+
+.theme-pro .studio-zoom-hud {
+  @apply absolute bottom-3 right-3 px-2 py-1 text-xs font-medium bg-studio-panel/80 text-studio-foreground/70 rounded-md shadow-sm backdrop-blur;
+}
+
+.theme-pro .studio-status-badge--success {
+  @apply bg-studio-accent-green/20 text-studio-accent-green;
+}
+
+.theme-pro .studio-status-badge--warning {
+  @apply bg-studio-accent-yellow/20 text-studio-accent-yellow;
+}
+
+/* ===========================================================
+   STUDIO VISUAL SYSTEM (Complement for theme-pro)
+   =========================================================== */
+
+/* ------------------------------------------
+   Animations & transitions
+------------------------------------------ */
+@keyframes studio-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes studio-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.studio-fade-in {
+  animation: studio-fade-in 0.3s var(--ease-standard) both;
+}
+
+.studio-transition {
+  transition:
+    background-color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard),
+    opacity var(--dur-fast) var(--ease-standard);
+}
+
+/* ------------------------------------------
+   Shadows & Elevation Tokens
+------------------------------------------ */
+.shadow-studio-image {
+  box-shadow:
+    0 1px 2px hsl(var(--foreground) / 0.08),
+    0 4px 12px hsl(var(--foreground) / 0.04);
+}
+
+.shadow-studio-panel-right {
+  box-shadow:
+    inset -1px 0 0 hsl(var(--border) / 0.2),
+    4px 0 20px hsl(0 0% 0% / 0.05);
+}
+
+.shadow-studio-panel-left {
+  box-shadow:
+    inset 1px 0 0 hsl(var(--border) / 0.2),
+    -4px 0 20px hsl(0 0% 0% / 0.05);
+}
+
+/* ------------------------------------------
+   Status badges & action buttons
+------------------------------------------ */
+.studio-status-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.studio-status-badge--primary {
+  background-color: hsl(var(--studio-accent-blue) / 0.15);
+  color: hsl(var(--studio-accent-blue));
+  border: 1px solid hsl(var(--studio-accent-blue) / 0.3);
+}
+
+.studio-status-badge--success {
+  background-color: hsl(var(--studio-accent-green) / 0.15);
+  color: hsl(var(--studio-accent-green));
+  border: 1px solid hsl(var(--studio-accent-green) / 0.3);
+}
+
+.studio-action-button,
+.studio-export-button {
+  position: relative;
+  overflow: hidden;
+  background-color: hsl(var(--studio-panel));
+  border-color: hsl(var(--studio-border) / 0.6);
+  transition: all 0.2s ease;
+}
+
+.studio-action-button:hover,
+.studio-export-button:hover {
+  background-color: hsl(var(--studio-hover));
+}
+
+.studio-action-button:focus-visible,
+.studio-export-button:focus-visible {
+  outline: 2px solid hsl(var(--studio-accent-blue) / 0.8);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------
+   Canvas container styling
+------------------------------------------ */
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+  border: 1px solid hsl(var(--studio-border) / 0.4);
+}
+
+.canvas-container img,
+.canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ------------------------------------------
+   Overlay + loader aesthetics
+------------------------------------------ */
+.studio-overlay-blur {
+  backdrop-filter: blur(6px);
+  background: hsl(var(--studio-panel) / 0.8);
+  border: 1px solid hsl(var(--studio-border) / 0.3);
+}
+
+.studio-loader-ring {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.studio-loader-ring::before,
+.studio-loader-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid hsl(var(--studio-border) / 0.5);
+}
+
+.studio-loader-ring::after {
+  border-top-color: hsl(var(--studio-accent-blue));
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------
+   Global workspace overlay (Processing)
+------------------------------------------ */
+.studio-global-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  background: hsl(var(--studio-panel) / 0.85);
+  color: hsl(var(--studio-foreground) / 0.9);
+  animation: studio-fade-in 0.25s ease-out both;
+}
+
+.studio-global-overlay h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.studio-global-overlay p {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin-top: 2px;
+}

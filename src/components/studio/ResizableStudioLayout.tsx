@@ -5,6 +5,7 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface ResizableStudioLayoutProps {
   leftPanel: ReactNode;
@@ -33,10 +34,14 @@ export function ResizableStudioLayout({
 }: ResizableStudioLayoutProps) {
   const [sizes, setSizes] = useState<LayoutSizes>(DEFAULT_SIZES);
 
+  // Charger depuis localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setSizes(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.leftWidth && parsed?.rightWidth) setSizes(parsed);
+      }
     } catch (error) {
       console.error("Error loading layout sizes:", error);
     }
@@ -51,75 +56,103 @@ export function ResizableStudioLayout({
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newSizes));
     } catch {
-      /* noop */
+      /* ignore */
     }
   };
 
-return (
-  <div className="h-[calc(100vh-4rem)] flex flex-col" aria-label="Studio layout">
-    {/* 64px = hauteur TopBar sticky */}
-    <div className="flex-1 overflow-hidden">
-      <ResizablePanelGroup
-        direction="horizontal"
-        onLayout={handleLayoutChange}
-        className="h-full"
-      >
-        {/* LEFT SIDEBAR */}
-        <ResizablePanel
-          defaultSize={sizes.leftWidth}
-          minSize={20}
-          maxSize={40}
-          className="sidebar-surface"
+  return (
+    <div
+      className="h-[calc(100vh-4rem)] flex flex-col bg-studio-surface text-studio-foreground studio-transition"
+      aria-label="Studio Layout"
+    >
+      {/* Zone principale */}
+      <div className="flex-1 overflow-hidden">
+        <ResizablePanelGroup
+          direction="horizontal"
+          onLayout={handleLayoutChange}
+          className="h-full w-full"
         >
-          <aside aria-label="Panneau paramètres" className="h-full">
-            <ScrollArea className="h-full">
-              <div className="p-6 space-y-6">{leftPanel}</div>
-            </ScrollArea>
-          </aside>
-        </ResizablePanel>
-
-        <ResizableHandle
-          withHandle
-          className="bg-border/50 hover:bg-border transition-colors"
-        />
-
-        {/* CENTER / MAIN CANVAS */}
-        <ResizablePanel defaultSize={rightPanel ? 50 : 75} minSize={30}>
-          <main role="main" className="relative h-full app-surface overflow-hidden">
-            {centerPanel}
-          </main>
-        </ResizablePanel>
-
-        {/* RIGHT SIDEBAR (optional) */}
-        {rightPanel && (
-          <>
-            <ResizableHandle
-              withHandle
-              className="bg-border/50 hover:bg-border transition-colors"
-            />
-            <ResizablePanel
-              defaultSize={sizes.rightWidth}
-              minSize={20}
-              maxSize={40}
-              className="sidebar-surface"
+          {/* --- LEFT PANEL --- */}
+          <ResizablePanel
+            defaultSize={sizes.leftWidth}
+            minSize={20}
+            maxSize={40}
+            className="studio-transition bg-studio-panel border-r border-studio-border/60 shadow-studio-panel-left"
+          >
+            <aside
+              aria-label="Panneau gauche (paramètres)"
+              className="h-full overflow-hidden"
             >
-              <aside aria-label="Panneau palette et debug" className="h-full">
-                <ScrollArea className="h-full">
-                  <div className="p-6 space-y-6">{rightPanel}</div>
-                </ScrollArea>
-              </aside>
-            </ResizablePanel>
-          </>
-        )}
-      </ResizablePanelGroup>
-    </div>
+              <ScrollArea className="h-full">
+                <div className="p-6 space-y-6">{leftPanel}</div>
+              </ScrollArea>
+            </aside>
+          </ResizablePanel>
 
-    {/* BOTTOM BAR */}
-    {bottomBar && (
-      <footer className="border-t border-border/40 bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-        {bottomBar}
-      </footer>
-    )}
-  </div>
-);
+          {/* --- HANDLE --- */}
+          <ResizableHandle
+            withHandle
+            className={cn(
+              "group relative bg-studio-border/30 hover:bg-studio-border/60 transition-colors duration-200 cursor-col-resize w-[1.5px]",
+              "after:content-[''] after:absolute after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-1 after:h-8 after:rounded-full after:bg-studio-border/60 group-hover:after:bg-studio-accent-blue/80"
+            )}
+          />
+
+          {/* --- CENTER PANEL --- */}
+          <ResizablePanel
+            defaultSize={rightPanel ? 50 : 75}
+            minSize={30}
+            className="bg-studio-canvas relative"
+          >
+            <main
+              role="main"
+              className="relative h-full overflow-hidden focus:outline-none"
+              aria-label="Zone centrale du studio"
+            >
+              {centerPanel}
+            </main>
+          </ResizablePanel>
+
+          {/* --- RIGHT PANEL (optionnel) --- */}
+          {rightPanel && (
+            <>
+              <ResizableHandle
+                withHandle
+                className={cn(
+                  "group relative bg-studio-border/30 hover:bg-studio-border/60 transition-colors duration-200 cursor-col-resize w-[1.5px]",
+                  "after:content-[''] after:absolute after:left-1/2 after:top-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-1 after:h-8 after:rounded-full after:bg-studio-border/60 group-hover:after:bg-studio-accent-blue/80"
+                )}
+              />
+
+              <ResizablePanel
+                defaultSize={sizes.rightWidth}
+                minSize={20}
+                maxSize={40}
+                className="studio-transition bg-studio-panel border-l border-studio-border/60 shadow-studio-panel-right"
+              >
+                <aside
+                  aria-label="Panneau droit (palette ou débogage)"
+                  className="h-full overflow-hidden"
+                >
+                  <ScrollArea className="h-full">
+                    <div className="p-6 space-y-6">{rightPanel}</div>
+                  </ScrollArea>
+                </aside>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      </div>
+
+      {/* --- BOTTOM BAR --- */}
+      {bottomBar && (
+        <footer
+          className="border-t border-studio-border/60 bg-studio-status-bar/80 backdrop-blur-md px-4 py-2 text-xs text-studio-foreground/70 studio-transition"
+          aria-label="Barre inférieure du studio"
+        >
+          {bottomBar}
+        </footer>
+      )}
+    </div>
+  );
 }
