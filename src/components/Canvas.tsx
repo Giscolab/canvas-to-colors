@@ -146,12 +146,8 @@ export const Canvas = ({
   const activeInteractions =
     activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
 
-  // Synchronisation du zoom entre studio et les interactions du canvas
-  useEffect(() => {
-    if (activeInteractions) {
-      activeInteractions.setScale(studio.zoomPercent / 100);
-    }
-  }, [studio.zoomPercent, activeInteractions]);
+  // Note: Le zoom est déjà géré par le transform CSS ligne 342
+  // Pas besoin de synchroniser avec setScale du hook d'interactions
 
   const zonesCount = processedData?.zones?.length || 0;
 

@@ -58,7 +58,7 @@ export interface Project {
 // ---------------------------------------------
 
 export type OverlayState = {
-  numbered: boolean; // afficher les numéros sur l’overlay
+  numbered: boolean; // afficher les numéros sur l'overlay
   opacity: number; // 0..100
 };
 
@@ -99,7 +99,9 @@ export interface StudioContextValue {
   setZoomPercent: (v: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  togglePanTool: () => void; // mode “main” (pan) visuel
+  resetZoom: () => void;
+  panTool: boolean;
+  togglePanTool: () => void; // mode "main" (pan) visuel
   pickColor?: () => void; // pipette (optionnel)
 
   overlay: OverlayState;
@@ -195,6 +197,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const [isPanMode, setIsPanMode] = useState(false);
   const togglePanTool = useCallback(() => setIsPanMode((v) => !v), []);
+  const resetZoom = useCallback(() => {
+    _setZoomPercent(100);
+  }, []);
   const pickColor = undefined; // hook pipette si tu veux plus tard
 
   const [overlay, setOverlay] = useState<OverlayState>({
@@ -331,6 +336,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setZoomPercent,
     zoomIn,
     zoomOut,
+    resetZoom,
+    panTool: isPanMode,
     togglePanTool,
     pickColor,
     overlay,
