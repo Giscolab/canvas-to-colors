@@ -5,27 +5,18 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Settings,
   Download,
   Trash2,
-  Sun,
-  Moon,
-  Monitor,
   HardDrive
 } from "lucide-react";
 
 export function AuthPanel() {
   const studio = useStudio();
 
-  const themeIcon = useMemo(() => {
-    if (studio.preferences.theme === "light") return <Sun className="w-3.5 h-3.5" />;
-    if (studio.preferences.theme === "dark") return <Moon className="w-3.5 h-3.5" />;
-    return <Monitor className="w-3.5 h-3.5" />;
-  }, [studio.preferences.theme]);
 
   const handleExportAll = () => {
     try {
@@ -76,40 +67,7 @@ export function AuthPanel() {
       </div>
 
       <div className="space-y-3">
-        {/* Thème */}
-        <div className="space-y-1.5">
-          <Label className="text-xs">Thème</Label>
-          <Select
-            value={studio.preferences.theme}
-            onValueChange={(v: "light" | "dark" | "system") => studio.updatePreferences({ theme: v })}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Système" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">
-                <span className="inline-flex items-center gap-2">
-                  <Monitor className="w-3.5 h-3.5" /> Système
-                </span>
-              </SelectItem>
-              <SelectItem value="light">
-                <span className="inline-flex items-center gap-2">
-                  <Sun className="w-3.5 h-3.5" /> Clair
-                </span>
-              </SelectItem>
-              <SelectItem value="dark">
-                <span className="inline-flex items-center gap-2">
-                  <Moon className="w-3.5 h-3.5" /> Sombre
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="text-xs text-muted-foreground inline-flex items-center gap-1">
-            {themeIcon}
-            Mode actuel : <span className="font-medium">{studio.preferences.theme}</span>
-          </div>
-        </div>
-
+        
         {/* Autosave */}
         <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border">
           <div className="flex items-center gap-2">
