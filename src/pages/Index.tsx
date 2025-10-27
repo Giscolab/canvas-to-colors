@@ -6,6 +6,7 @@ import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
+import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
@@ -162,6 +163,7 @@ function IndexContent() {
   // ========== RENDER ==========
   return (
     <div className="min-h-screen flex flex-col">
+      <Header />
       {/* Confettis */}
       {showConfetti && (
         <Confetti

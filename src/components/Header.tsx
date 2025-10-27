@@ -1,9 +1,10 @@
 import { Palette } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 /**
  * TopBar Figma-like optimisée pour theme-pro.css :
  * - Sticky 64px, fond semi-opaque (bg-card/95), blur, bord bas et ombre subtile
- * - 3 zones : gauche (titre), centre (tabs/modes), droite (actions)
+ * - 3 zones : gauche (titre), centre (tabs/modes), droite (actions + theme toggle)
  * - Accessibilité : <header role="banner">, <nav aria-label="Modes">
  * - Utilisation des tokens de notre design system pour une cohérence parfaite
  */
@@ -43,15 +44,9 @@ export const Header = () => {
         {/* Zone centrale (tabs/modes) - pour le rendu dynamique */}
         <div id="topbar-tabs" className="flex-1 flex justify-center" />
 
-        {/* Zone droite : actions (placeholder visuel) */}
+        {/* Zone droite : actions + theme toggle */}
         <div className="ml-auto flex items-center gap-2">
-          {/* Exemple d'emplacements :
-              <button className="h-9 px-3 rounded-md hover:bg-accent/60 transition-colors">Undo</button>
-              <div className="text-xs text-muted-foreground tabular-nums">100%</div>
-              <button className="h-9 px-4 rounded-md bg-primary text-primary-foreground shadow-elev-1 hover:opacity-90 transition-opacity">
-                Générer
-              </button>
-           */}
+          <ThemeToggle />
         </div>
       </div>
     </header>
