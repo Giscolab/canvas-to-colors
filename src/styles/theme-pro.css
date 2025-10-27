@@ -1,5 +1,9 @@
 /* src/styles/theme-pro.css */
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /**
  * ===========================
  * THEME PRO – Design System d'Entreprise (v3.0 - Final Grade)

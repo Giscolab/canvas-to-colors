@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+@import "./styles/theme-pro.css";
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 
@@ -188,6 +190,3 @@ html, body, #root {
   max-height: 100%;
   object-fit: contain;
 }
-
-/* en fin de src/index.css */
-@import "./styles/theme-pro.css";
