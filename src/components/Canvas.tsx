@@ -1,11 +1,8 @@
 import { useRef, useEffect, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, FileCode, ZoomIn, Maximize2, RefreshCw } from "lucide-react";
+import { Download, FileCode, ZoomIn, ZoomOut, Maximize2, RefreshCw, Hand } from "lucide-react";
 import { useCanvasInteractions, Zone } from "@/hooks/useCanvasInteractions";
-import { CanvasHUD } from "@/components/studio/CanvasHUD";
 import { cn } from "@/lib/utils";
 import { useStudio } from "@/contexts/StudioContext";
 
@@ -41,10 +38,11 @@ export const Canvas = ({
   const contoursCanvasRef = useRef<HTMLCanvasElement>(null);
   const numberedCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-const studio = useStudio();
+  const studio = useStudio();
 
   const [activeTab, setActiveTab] = useState("original");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
 
   /* === Dessin des calques === */
   useEffect(() => {
@@ -65,11 +63,13 @@ const studio = useStudio();
         canvas.width = data.width;
         canvas.height = data.height;
         ctx.putImageData(data, 0, 0);
+        setCanvasDimensions({ width: data.width, height: data.height });
       } else {
         canvas.width = 512;
         canvas.height = 512;
         ctx.fillStyle = "#1e1e1e";
         ctx.fillRect(0, 0, 512, 512);
+        setCanvasDimensions({ width: 512, height: 512 });
       }
     };
 
@@ -88,6 +88,7 @@ const studio = useStudio();
       img.onload = () => {
         previewCanvas.width = img.width;
         previewCanvas.height = img.height;
+        setCanvasDimensions({ width: img.width, height: img.height });
 
         ctx.globalAlpha = 1;
         ctx.drawImage(img, 0, 0);
@@ -145,6 +146,13 @@ const studio = useStudio();
   const activeInteractions =
     activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
 
+  // Synchronisation du zoom entre studio et les interactions du canvas
+  useEffect(() => {
+    if (activeInteractions) {
+      activeInteractions.setScale(studio.zoomPercent / 100);
+    }
+  }, [studio.zoomPercent, activeInteractions]);
+
   const zonesCount = processedData?.zones?.length || 0;
 
   useEffect(() => {
@@ -154,138 +162,226 @@ const studio = useStudio();
     };
   }, [isFullscreen]);
 
+  // Rendu du contenu du canvas selon l'onglet actif
+  const renderCanvasContent = () => {
+    if (isProcessing) {
+      return <StudioLoading label="Traitement en cours…" />;
+    }
+
+    switch (activeTab) {
+      case "original":
+        return originalImage ? (
+          <img src={originalImage} alt="Original" className="max-w-full h-auto" />
+        ) : (
+          <div className="text-studio-foreground/60 p-6 text-sm">
+            Aucune image originale
+          </div>
+        );
+      case "contours":
+        return processedData?.contours ? (
+          <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+        ) : (
+          <div className="text-studio-foreground/60 p-6 text-sm">
+            Aucune donnée de contours
+          </div>
+        );
+      case "numbered":
+        return processedData?.numbered ? (
+          <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+        ) : (
+          <div className="text-studio-foreground/60 p-6 text-sm">
+            Aucune donnée numérotée
+          </div>
+        );
+      case "preview":
+        return processedData ? (
+          <canvas ref={previewCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
+        ) : (
+          <div className="text-studio-foreground/60 p-6 text-sm">
+            Aucune donnée d'aperçu
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <Card
-      className={cn(
-        "p-4 flex-1 relative bg-studio-panel border border-studio-border/60 text-studio-foreground shadow-studio-panel-right rounded-lg studio-transition overflow-hidden",
-        isFullscreen && "fixed inset-4 z-50"
-      )}
-    >
+    <div className="flex flex-col h-full bg-studio-canvas text-studio-foreground overflow-hidden">
       {/* Overlay global de traitement */}
       {globalProcessing && <GlobalProcessingOverlay />}
 
-      <div className="space-y-3">
-        {/* --- Header --- */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-base text-studio-foreground">Zone de travail</h3>
-            {processedData && zonesCount > 0 && (
-              <Badge variant="secondary" className="studio-status-badge studio-status-badge--primary">
-                {zonesCount} zones
-              </Badge>
-            )}
-          </div>
-
-          <div className="flex gap-1.5">
-            {activeInteractions && activeTab !== "original" && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => activeInteractions.resetTransform()}
-                  className="studio-action-button"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsFullscreen(!isFullscreen)}
-                  className="studio-action-button"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+      {/* Toolbar fixe en haut */}
+      <div className="h-10 bg-studio-panel-header border-b border-studio-border/40 flex items-center justify-between px-3">
+        {/* Left: View selector and info */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-studio-panel/60 rounded-md p-0.5">
             <Button
-              variant="outline"
               size="sm"
-              onClick={onExportPNG}
-              disabled={!processedData}
-              className="studio-export-button"
+              variant={activeTab === "original" ? "default" : "ghost"}
+              onClick={() => setActiveTab("original")}
+              className="h-7 px-2 text-xs"
             >
-              <Download className="mr-2 h-4 w-4" /> PNG
+              Original
             </Button>
             <Button
-              variant="outline"
               size="sm"
-              onClick={onExportJSON}
+              variant={activeTab === "contours" ? "default" : "ghost"}
+              onClick={() => setActiveTab("contours")}
               disabled={!processedData}
-              className="studio-export-button"
+              className="h-7 px-2 text-xs"
             >
-              <FileCode className="mr-2 h-4 w-4" /> JSON
+              Contours
+            </Button>
+            <Button
+              size="sm"
+              variant={activeTab === "numbered" ? "default" : "ghost"}
+              onClick={() => setActiveTab("numbered")}
+              disabled={!processedData}
+              className="h-7 px-2 text-xs"
+            >
+              Numéroté
+            </Button>
+            <Button
+              size="sm"
+              variant={activeTab === "preview" ? "default" : "ghost"}
+              onClick={() => setActiveTab("preview")}
+              disabled={!processedData}
+              className="h-7 px-2 text-xs"
+            >
+              Aperçu
             </Button>
           </div>
+          
+          {processedData && zonesCount > 0 && (
+            <Badge variant="secondary" className="studio-status-badge studio-status-badge--primary text-xs">
+              {zonesCount} zones
+            </Badge>
+          )}
         </div>
 
-        {/* --- Zoom info --- */}
-        {activeInteractions && activeTab !== "original" && (
-          <div className="flex items-center gap-2 text-xs text-studio-foreground/70">
-            <ZoomIn className="h-3.5 w-3.5" />
-            <span>Zoom: {Math.round(activeInteractions.scale * 100)}%</span>
-            <span className="ml-1">• Molette = zoom • Glisser = déplacer</span>
-          </div>
-        )}
+        {/* Center: Zoom controls */}
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={studio.zoomOut}
+            disabled={studio.zoomPercent <= 10}
+            className="h-7 w-7"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+          <span className="text-xs text-studio-foreground/70 w-10 text-center">{studio.zoomPercent}%</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={studio.zoomIn}
+            disabled={studio.zoomPercent >= 800}
+            className="h-7 w-7"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={studio.togglePanTool}
+            className={cn("h-7 w-7", studio.panTool && "bg-studio-accent-blue/20")}
+          >
+            <Hand className="w-4 h-4" />
+          </Button>
+          {activeInteractions && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                activeInteractions.resetTransform();
+                studio.resetZoom();
+              }}
+              className="h-7 w-7"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
 
-        {/* --- Tabs --- */}
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="w-full bg-studio-panel/60 backdrop-blur-md rounded-md border border-studio-border/40 p-2 studio-transition"
-        >
-          <TabsList className="grid w-full grid-cols-4 bg-studio-panel/70 rounded-md border border-studio-border/40 text-xs">
-            <TabsTrigger value="original">Original</TabsTrigger>
-            <TabsTrigger value="contours" disabled={!processedData}>Contours</TabsTrigger>
-            <TabsTrigger value="numbered" disabled={!processedData}>Numéroté</TabsTrigger>
-            <TabsTrigger value="preview" disabled={!processedData}>Aperçu</TabsTrigger>
-          </TabsList>
-
-          {/* --- Contenu dynamique --- */}
-          {["original", "contours", "numbered", "preview"].map((key) => (
-            <TabsContent key={key} value={key} className="mt-3 studio-transition">
-              <div className="canvas-container bg-studio-canvas rounded-md shadow-studio-image flex items-center justify-center min-h-[300px] relative">
-                {isProcessing ? (
-                  <StudioLoading label="Traitement en cours…" />
-                ) : key === "original" && originalImage ? (
-                  <img src={originalImage} alt="Original" className="max-w-full h-auto" />
-                ) : key === "contours" && processedData?.contours ? (
-                  <canvas ref={contoursCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
-                ) : key === "numbered" && processedData?.numbered ? (
-                  <canvas ref={numberedCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
-                ) : key === "preview" && processedData ? (
-                  <canvas ref={previewCanvasRef} className="cursor-move" style={{ touchAction: "none" }} />
-                ) : (
-                  <div className="text-studio-foreground/60 p-6 text-sm">
-                    Aucune donnée disponible
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+        {/* Right: Export and fullscreen */}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={onExportPNG}
+            disabled={!processedData}
+            className="h-7 px-2 text-xs"
+          >
+            <Download className="mr-1 h-3 w-3" /> PNG
+          </Button>
+          <Button
+            size="sm"
+            onClick={onExportJSON}
+            disabled={!processedData}
+            className="h-7 px-2 text-xs"
+          >
+            <FileCode className="mr-1 h-3 w-3" /> JSON
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="h-7 w-7"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* --- HUD --- */}
-      {activeInteractions && activeTab !== "original" && (
-        <CanvasHUD
-          zoomPercent={studio.zoomPercent}
-          canZoomIn={studio.zoomPercent < 800}
-          canZoomOut={studio.zoomPercent > 10}
-          onZoomIn={studio.zoomIn}
-          onZoomOut={studio.zoomOut}
-          onTogglePan={studio.togglePanTool}
-          numberedVisible={studio.overlay.numbered}
-          onToggleNumbered={(v) =>
-            studio.setOverlay({ ...studio.overlay, numbered: v })
-          }
-          overlayOpacity={studio.overlay.opacity}
-          onChangeOverlayOpacity={(v) =>
-            studio.setOverlay({ ...studio.overlay, opacity: v })
-          }
-        />
-      )}
+      {/* Zone centrale scrollable isolée avec gradient Figma-style */}
+      <div className="flex-1 overflow-auto bg-gradient-to-br from-studio-canvas via-studio-panel/40 to-studio-canvas relative">
+        <div className="flex items-center justify-center min-h-full p-8">
+          <div
+            className="relative bg-studio-panel shadow-2xl"
+            style={{
+              transform: `scale(${studio.zoomPercent / 100})`,
+              transformOrigin: "center",
+              transition: "transform 0.1s ease-out",
+            }}
+            onDoubleClick={() => studio.resetZoom()}
+          >
+            {/* Damier background */}
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{
+                backgroundImage:
+                  "linear-gradient(0deg, transparent 24%, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.05) 26%, transparent 27%, transparent 74%, rgba(255,255,255,0.05) 75%, rgba(255,255,255,0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.05) 26%, transparent 27%, transparent 74%, rgba(255,255,255,0.05) 75%, rgba(255,255,255,0.05) 76%, transparent 77%, transparent)",
+                backgroundSize: "40px 40px",
+              }}
+            />
+            
+            {/* Canvas content */}
+            <div className="relative">
+              {renderCanvasContent()}
+            </div>
+          </div>
+        </div>
+      </div>
 
-    </Card>
+      {/* Status bar fixe en bas */}
+      <div className="h-6 bg-studio-panel-header border-t border-studio-border/40 flex items-center justify-between px-3 text-xs text-studio-foreground/70">
+        <div className="flex items-center gap-4">
+          <span>{canvasDimensions.width} × {canvasDimensions.height} px</span>
+          <span className="text-studio-foreground/50">|</span>
+          <span>RVB/8</span>
+          {processedData && zonesCount > 0 && (
+            <>
+              <span className="text-studio-foreground/50">|</span>
+              <span>{zonesCount} zones détectées</span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          <span>Zoom: {studio.zoomPercent}%</span>
+          <span className="text-green-400">Ready</span>
+        </div>
+      </div>
+    </div>
   );
 };
 
