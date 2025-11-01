@@ -21,7 +21,7 @@ function Swatch({ hex, title }: { hex: string; title?: string }) {
     <div
       role="img"
       aria-label={`Couleur ${hex}`}
-      className="w-8 h-8 rounded-md border border-border shadow-sm"
+      className="w-6 h-6 rounded border border-border shadow-sm"
       style={{ backgroundColor: hex }}
       title={title ?? hex}
     />
@@ -80,17 +80,17 @@ export function ColorAnalysisPanel({
   if (isAnalyzing) {
     return (
       <Card className="border bg-card/60 backdrop-blur animate-pulse">
-        <CardHeader>
-          <CardTitle className="text-lg">🔍 Analyse en cours…</CardTitle>
+        <CardHeader className="p-2 pb-0">
+          <CardTitle className="text-sm">🔍 Analyse en cours…</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="h-2 w-1/2 bg-muted rounded" />
-          <Progress value={50} className="h-2" />
-          <div className="grid grid-cols-2 gap-2">
-            <div className="h-16 bg-muted rounded" />
-            <div className="h-16 bg-muted rounded" />
-            <div className="h-16 bg-muted rounded" />
-            <div className="h-16 bg-muted rounded" />
+        <CardContent className="space-y-2 p-2">
+          <div className="h-1.5 w-1/2 bg-muted rounded" />
+          <Progress value={50} className="h-1.5" />
+          <div className="grid grid-cols-2 gap-1">
+            <div className="h-12 bg-muted rounded" />
+            <div className="h-12 bg-muted rounded" />
+            <div className="h-12 bg-muted rounded" />
+            <div className="h-12 bg-muted rounded" />
           </div>
         </CardContent>
       </Card>
@@ -119,41 +119,41 @@ export function ColorAnalysisPanel({
 
   return (
     <Card className="border bg-card/60 backdrop-blur">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">📊 Analyse de l’image</CardTitle>
+      <CardHeader className="p-2 pb-0">
+        <CardTitle className="text-sm flex items-center gap-1.5">📊 Analyse de l'image</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2 p-2">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <div className="rounded-md border bg-card p-2">
-            <div className="text-muted-foreground text-xs">Couleurs uniques</div>
-            <div className="font-mono text-xl tabular-nums">{uniqueColors}</div>
+        <div className="grid grid-cols-2 gap-1">
+          <div className="rounded border bg-card p-1.5">
+            <div className="text-muted-foreground text-[10px] leading-tight">Couleurs uniques</div>
+            <div className="font-mono text-base tabular-nums">{uniqueColors}</div>
           </div>
-          <div className="rounded-md border bg-card p-2">
-            <div className="text-muted-foreground text-xs">Reco couleurs</div>
-            <div className="font-mono text-xl tabular-nums">{recommendedNum}</div>
+          <div className="rounded border bg-card p-1.5">
+            <div className="text-muted-foreground text-[10px] leading-tight">Reco couleurs</div>
+            <div className="font-mono text-base tabular-nums">{recommendedNum}</div>
           </div>
-          <div className="rounded-md border bg-card p-2">
-            <div className="text-muted-foreground text-xs">Reco min-region</div>
-            <div className="font-mono text-xl tabular-nums">{recommendedMinRegion}px</div>
+          <div className="rounded border bg-card p-1.5">
+            <div className="text-muted-foreground text-[10px] leading-tight">Reco min-region</div>
+            <div className="font-mono text-base tabular-nums">{recommendedMinRegion}px</div>
           </div>
-          <div className="rounded-md border bg-card p-2">
-            <div className="text-muted-foreground text-xs">Mode</div>
-            <div className="font-mono text-sm">{modeLabel}</div>
+          <div className="rounded border bg-card p-1.5">
+            <div className="text-muted-foreground text-[10px] leading-tight">Mode</div>
+            <div className="font-mono text-xs truncate">{modeLabel}</div>
           </div>
         </div>
 
         {/* Complexité */}
         <div>
-          <Label className="text-sm text-muted-foreground">Complexité visuelle</Label>
-          <div className="flex justify-between items-center mt-1">
-            <Badge className={cx.badge}>{cx.label}</Badge>
-            <span className="text-sm text-muted-foreground">{complexityScore}/100</span>
+          <Label className="text-[11px] text-muted-foreground">Complexité visuelle</Label>
+          <div className="flex justify-between items-center mt-0.5">
+            <Badge className={`${cx.badge} text-[10px] px-1.5 py-0`}>{cx.label}</Badge>
+            <span className="text-[10px] text-muted-foreground">{complexityScore}/100</span>
           </div>
           <Progress
             value={complexityScore}
-            className="h-2 mt-2"
+            className="h-1.5 mt-1"
             style={
               {
                 // couleur dynamique de la barre (fallback tokens)
@@ -170,28 +170,28 @@ export function ColorAnalysisPanel({
 
         {/* Couleurs dominantes */}
         <div>
-          <Label className="text-sm text-muted-foreground">Couleurs dominantes</Label>
+          <Label className="text-[11px] text-muted-foreground">Couleurs dominantes</Label>
           {hasDominants ? (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-1 mt-1">
               {analysis.dominantColors!.map((hex, i) => (
                 <Swatch key={hex + i} hex={hex} />
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground mt-2">Aucune dominante détectée.</p>
+            <p className="text-[10px] text-muted-foreground mt-1">Aucune dominante détectée.</p>
           )}
         </div>
 
         {/* Palette optimisée (si résultat dispo) */}
         {hasOptimizedPalette && (
-          <div className="pt-3 border-t border-border/40">
-            <Label className="text-sm text-muted-foreground flex items-center gap-2">
+          <div className="pt-2 border-t border-border/40">
+            <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
               ✨ Palette optimisée
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge variant="secondary" className="text-[9px] px-1 py-0">
                 ΔE&nbsp;: {processedResult!.metadata!.averageDeltaE!.toFixed(2)}
               </Badge>
             </Label>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-1 mt-1">
               {processedResult!.palette.slice(0, 12).map((hex, idx) => (
                 <Swatch key={`opt-${idx}`} hex={hex} title={`${hex} (optimisé)`} />
               ))}
@@ -201,9 +201,9 @@ export function ColorAnalysisPanel({
 
         {/* Histogramme (optionnel) */}
         {chartData.length > 1 && (
-          <div className="mt-2">
-            <Label className="text-sm text-muted-foreground">Répartition des couleurs (%)</Label>
-            <div className="h-32 mt-2">
+          <div className="mt-1">
+            <Label className="text-[11px] text-muted-foreground">Répartition des couleurs (%)</Label>
+            <div className="h-24 mt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <XAxis dataKey="name" hide />
@@ -234,7 +234,7 @@ export function ColorAnalysisPanel({
         )}
 
         {/* Résumé lisible */}
-        <div className="pt-2 border-t border-border/60 text-sm text-muted-foreground">
+        <div className="pt-1.5 border-t border-border/60 text-[10px] leading-snug text-muted-foreground">
           {summaryMessage}
         </div>
       </CardContent>

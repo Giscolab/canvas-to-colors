@@ -61,7 +61,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     [onImageSelect, toast]
   );
 
-  // Analyse dimensions & taille une fois l’aperçu dispo
+  // Analyse dimensions & taille une fois l'aperçu dispo
   useEffect(() => {
     if (selectedImage && actualFile) {
       const img = new Image();
@@ -82,12 +82,12 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     }
   }, [selectedImage, actualFile]);
 
-  // Protège l’ouverture de la boîte de dialogue
+  // Protège l'ouverture de la boîte de dialogue
   const openFileDialog = useCallback(() => {
     if (openingRef.current || openLock) return;
     openingRef.current = true;
     setOpenLock(true);
-    // petit délai de déverrouillage pour laisser le navigateur “respirer”
+    // petit délai de déverrouillage pour laisser le navigateur "respirer"
     const unlock = () => {
       openingRef.current = false;
       setTimeout(() => setOpenLock(false), 250);
@@ -99,11 +99,11 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       return;
     }
 
-    // Écoute l’événement "cancel" natif (Chrome/Edge/Safari)
+    // Écoute l'événement "cancel" natif (Chrome/Edge/Safari)
     const onCancel = () => unlock();
     input.addEventListener("cancel", onCancel, { once: true });
 
-    // Sur certains navigateurs, “cancel” n’existe pas — on met un filet de sécurité
+    // Sur certains navigateurs, "cancel" n'existe pas — on met un filet de sécurité
     const safety = setTimeout(unlock, 1500);
 
     input.click();
@@ -153,7 +153,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       aria-describedby={helpId}
       role="region"
       className={[
-        "p-3 border-2 border-dashed transition-all duration-200 rounded-lg",
+        "p-2 border-2 border-dashed transition-all duration-200 rounded-lg",
         "bg-card/60 backdrop-blur hover:border-primary/60",
         isDragging ? "border-primary shadow-md scale-[1.01]" : "border-border",
       ].join(" ")}
@@ -180,23 +180,23 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               openFileDialog();
             }}
             className={[
-              "flex flex-col items-center justify-center py-4 space-y-2",
+              "flex flex-col items-center justify-center py-3 space-y-1.5",
               "outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg",
               openLock ? "pointer-events-none opacity-70" : "cursor-pointer",
             ].join(" ")}
           >
-          <div className={`p-3 rounded-full bg-primary/10 transition-transform ${isDragging ? "scale-125 animate-pulse" : ""}`}>
-            <Upload className="h-6 w-6 text-primary" />
+          <div className={`p-2 rounded-full bg-primary/10 transition-transform ${isDragging ? "scale-125 animate-pulse" : ""}`}>
+            <Upload className="h-5 w-5 text-primary" />
           </div>
 
-          <div className="text-center space-y-1">
-            <h2 id={dropId} className="font-semibold text-foreground text-base">
+          <div className="text-center space-y-0.5">
+            <h2 id={dropId} className="font-semibold text-foreground text-sm">
               {isDragging ? "Déposez votre image ici !" : "Importer une image"}
             </h2>
-            <p id={helpId} className="text-xs text-muted-foreground">
+            <p id={helpId} className="text-[10px] text-muted-foreground">
               Glissez-déposez ou cliquez pour choisir
             </p>
-            <Badge variant="secondary" className="mt-1 text-xs">
+            <Badge variant="secondary" className="mt-0.5 text-[9px] px-1.5 py-0">
               PNG, JPG ou JPEG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB
             </Badge>
           </div>
@@ -209,56 +209,56 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               openFileDialog();
             }}
             disabled={openLock}
-            className="bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-sm"
+            className="bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-sm text-xs h-7 px-2"
           >
-            <Upload className="mr-1.5 h-3.5 w-3.5" />
+            <Upload className="mr-1 h-3 w-3" />
             Choisir une image
           </Button>
         </div>
       ) : (
         // ÉTAT AVEC APERÇU
-        <div className="space-y-2">
-          <div className="relative h-32 rounded-lg overflow-hidden bg-secondary border">
+        <div className="space-y-1.5">
+          <div className="relative h-24 rounded-lg overflow-hidden bg-secondary border">
             <img
               src={selectedImage}
-              alt={imageInfo?.name ? `Aperçu – ${imageInfo.name}` : "Aperçu de l’image sélectionnée"}
+              alt={imageInfo?.name ? `Aperçu – ${imageInfo.name}` : "Aperçu de l'image sélectionnée"}
               className="w-full h-full object-contain"
               draggable={false}
             />
             <div
-              className="absolute top-2 right-2 bg-green-500 text-white p-1.5 rounded-full shadow-sm"
+              className="absolute top-1 right-1 bg-green-500 text-white p-1 rounded-full shadow-sm"
               aria-label="Image chargée avec succès"
               title="Image chargée avec succès"
             >
-              <Check className="h-3 w-3" />
+              <Check className="h-2.5 w-2.5" />
             </div>
           </div>
 
-          <div className="flex gap-2 justify-center flex-wrap">
+          <div className="flex gap-1 justify-center flex-wrap">
             {imageInfo?.name && (
-              <Badge variant="outline" className="gap-1 max-w-full truncate">
-                🗂️ <span className="truncate">{imageInfo.name}</span>
+              <Badge variant="outline" className="gap-0.5 max-w-full truncate text-[9px] px-1 py-0">
+                🗂️ <span className="truncate max-w-[140px]">{imageInfo.name}</span>
               </Badge>
             )}
             {imageInfo && (
               <>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-0.5 text-[9px] px-1 py-0">
                   📐 {imageInfo.width} × {imageInfo.height}
                 </Badge>
-                <Badge variant="outline" className="gap-1">
+                <Badge variant="outline" className="gap-0.5 text-[9px] px-1 py-0">
                   💾 {imageInfo.size}
                 </Badge>
               </>
             )}
             {(imageInfo?.width ?? 0) > 4000 || (imageInfo?.height ?? 0) > 4000 ? (
-              <Badge variant="destructive" className="gap-1">
-                <FileWarning className="h-3 w-3" />
-                Image très grande — temps de traitement plus long
+              <Badge variant="destructive" className="gap-0.5 text-[9px] px-1 py-0">
+                <FileWarning className="h-2.5 w-2.5" />
+                Image très grande
               </Badge>
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Button
               type="button"
               onClick={(e) => {
@@ -267,17 +267,17 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               }}
               variant="outline"
               disabled={openLock}
-              className="flex-1 hover:border-primary"
+              className="flex-1 hover:border-primary text-xs h-7"
             >
-              <ImageIcon className="mr-2 h-4 w-4" />
-              Changer d’image
+              <ImageIcon className="mr-1.5 h-3 w-3" />
+              Changer d'image
             </Button>
             <Button
               type="button"
               onClick={() => setActualFile(null)}
               variant="ghost"
-              className="text-xs text-muted-foreground"
-              title="Réinitialiser l’info locale (nom/taille)"
+              className="text-[10px] text-muted-foreground h-7 px-2"
+              title="Réinitialiser l'info locale (nom/taille)"
             >
               Réinitialiser
             </Button>
