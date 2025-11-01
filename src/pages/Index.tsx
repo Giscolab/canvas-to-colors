@@ -3,7 +3,6 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
-import { HistoryPanel } from "@/components/HistoryPanel";
 import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
@@ -11,7 +10,7 @@ import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
-import { EnhancedProjectManager } from "@/components/studio/EnhancedProjectManager";
+
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -20,7 +19,7 @@ import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
-import { useImageHistory } from "@/hooks/useImageHistory";
+
 import { useExport } from "@/hooks/useExport";
 import { useAuth } from "@/hooks/useAuth";
 import { Zone } from "@/hooks/useCanvasInteractions";
@@ -52,7 +51,6 @@ function IndexContent() {
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
 
   const { width = 0, height = 0 } = useWindowSize() ?? {};
-  const { saveJob } = useImageHistory();
   const { exportPNG, exportJSON, exportSVG } = useExport();
   const { user } = useAuth();
 
@@ -227,7 +225,7 @@ function IndexContent() {
   isProcessing={studio.isProcessing}
 />
 
-            <EnhancedProjectManager />
+            
           </>
         }
         centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
@@ -246,7 +244,6 @@ function IndexContent() {
                 <DebugPanel processedData={studio.result} />
               </>
             )}
-            {user && <HistoryPanel />}
             <AuthPanel />
           </>
         }
