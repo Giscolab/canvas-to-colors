@@ -24,7 +24,9 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   const studio = useStudio();
   const canvasCache = useRef<Map<string, string>>(new Map());
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
+  // 1. Ajout de la référence de dimensions
   const [referenceDimensions, setReferenceDimensions] = useState<{ width: number; height: number } | null>(null);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   
@@ -67,16 +69,6 @@ useEffect(() => {
       img.src = originalImage;
     }
   }, [originalImage]);
-
-  // Extraire les dimensions de référence depuis colorized
-  useEffect(() => {
-    if (processedData?.colorized) {
-      setReferenceDimensions({
-        width: processedData.colorized.width,
-        height: processedData.colorized.height
-      });
-    }
-  }, [processedData?.colorized]);
 
   const getCanvasDataUrl = useMemo(() => {
     return (imageData: ImageData | null, key: string): string | null => {
@@ -162,6 +154,16 @@ useEffect(() => {
     measureSync,
   ]);
 
+  // 2. Capturer automatiquement les dimensions du rendu colorisé
+  useEffect(() => {
+    if (processedData?.colorized) {
+      setReferenceDimensions({
+        width: processedData.colorized.width,
+        height: processedData.colorized.height,
+      });
+    }
+  }, [processedData?.colorized]);
+
   const handleToggleProfiler = useCallback(
     (enabled: boolean) => {
       studio.updateSettings({ profilingEnabled: enabled });
@@ -199,7 +201,7 @@ const toggleFullscreen = useCallback(async () => {
     console.error("[Studio] Erreur toggleFullscreen :", err);
   }
 }, [isFullscreen]);
-// Synchroniser l’état plein écran avec les événements natifs du navigateur
+// Synchroniser l'état plein écran avec les événements natifs du navigateur
 useEffect(() => {
   const handleFullscreenChange = () => {
     setIsFullscreen(Boolean(document.fullscreenElement));
@@ -318,21 +320,29 @@ useEffect(() => {
                 
                 {/* Conteneur d'image */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div className="relative group">
-                    <img
-                      src={originalImage}
-                      alt="Image originale du projet"
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{
-                        transform: `scale(${studio.zoomPercent / 100})`,
-                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
-                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
-                      }}
-                    />
-                    
-                    {/* HUD de zoom */}
-                    <div className="studio-zoom-hud">
-                      {studio.zoomPercent}%
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{
+                      width: referenceDimensions?.width || "auto",
+                      height: referenceDimensions?.height || "auto",
+                    }}
+                  >
+                    <div className="relative group">
+                      <img
+                        src={originalImage}
+                        alt="Image originale du projet"
+                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
+                        style={{
+                          width: referenceDimensions?.width || "auto",
+                          height: referenceDimensions?.height || "auto",
+                          transform: `scale(${studio.zoomPercent / 100})`,
+                        }}
+                      />
+                      
+                      {/* HUD de zoom */}
+                      <div className="studio-zoom-hud">
+                        {studio.zoomPercent}%
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -506,21 +516,29 @@ useEffect(() => {
                 
                 {/* Conteneur d'image */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div className="relative group">
-                    <img
-                      src={contoursUrl}
-                      alt="Contours extraits de l'image"
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{
-                        transform: `scale(${studio.zoomPercent / 100})`,
-                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
-                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
-                      }}
-                    />
-                    
-                    {/* HUD de zoom */}
-                    <div className="studio-zoom-hud">
-                      {studio.zoomPercent}%
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{
+                      width: referenceDimensions?.width || "auto",
+                      height: referenceDimensions?.height || "auto",
+                    }}
+                  >
+                    <div className="relative group">
+                      <img
+                        src={contoursUrl}
+                        alt="Contours extraits de l'image"
+                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
+                        style={{
+                          width: referenceDimensions?.width || "auto",
+                          height: referenceDimensions?.height || "auto",
+                          transform: `scale(${studio.zoomPercent / 100})`,
+                        }}
+                      />
+                      
+                      {/* HUD de zoom */}
+                      <div className="studio-zoom-hud">
+                        {studio.zoomPercent}%
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -594,14 +612,22 @@ useEffect(() => {
                 
                 {/* Conteneur d'image */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <InspectionOverlay
-                    imageData={processedData.numbered}
-                    zones={processedData.zones}
-                    palette={processedData.palette}
-                    labels={processedData.labels}
-                    width={processedData.numbered.width}
-                    height={processedData.numbered.height}
-                  />
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{
+                      width: referenceDimensions?.width || "auto",
+                      height: referenceDimensions?.height || "auto",
+                    }}
+                  >
+                    <InspectionOverlay
+                      imageData={processedData.numbered}
+                      zones={processedData.zones}
+                      palette={processedData.palette}
+                      labels={processedData.labels}
+                      width={referenceDimensions?.width || processedData.numbered.width}
+                      height={referenceDimensions?.height || processedData.numbered.height}
+                    />
+                  </div>
                 </div>
               </div>
             ) : numberedUrl ? (
@@ -646,21 +672,29 @@ useEffect(() => {
                 
                 {/* Conteneur d'image */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div className="relative group">
-                    <img
-                      src={numberedUrl}
-                      alt="Image avec zones numérotées"
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{
-                        transform: `scale(${studio.zoomPercent / 100})`,
-                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
-                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
-                      }}
-                    />
-                    
-                    {/* HUD de zoom */}
-                    <div className="studio-zoom-hud">
-                      {studio.zoomPercent}%
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{
+                      width: referenceDimensions?.width || "auto",
+                      height: referenceDimensions?.height || "auto",
+                    }}
+                  >
+                    <div className="relative group">
+                      <img
+                        src={numberedUrl}
+                        alt="Image avec zones numérotées"
+                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
+                        style={{
+                          width: referenceDimensions?.width || "auto",
+                          height: referenceDimensions?.height || "auto",
+                          transform: `scale(${studio.zoomPercent / 100})`,
+                        }}
+                      />
+                      
+                      {/* HUD de zoom */}
+                      <div className="studio-zoom-hud">
+                        {studio.zoomPercent}%
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -709,7 +743,13 @@ useEffect(() => {
                 
                 {/* Conteneur de comparaison */}
                 <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div className="w-full h-full max-w-4xl">
+                  <div
+                    className="w-full h-full max-w-4xl"
+                    style={{
+                      width: referenceDimensions?.width || "auto",
+                      height: referenceDimensions?.height || "auto",
+                    }}
+                  >
                     <CompareSlider
                       beforeImage={originalImage}
                       afterImage={colorizedUrl}
