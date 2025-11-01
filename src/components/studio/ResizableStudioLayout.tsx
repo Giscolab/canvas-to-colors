@@ -81,11 +81,9 @@ export function ResizableStudioLayout({
           >
             <aside
               aria-label="Panneau gauche (paramètres)"
-              className="h-full overflow-hidden"
+              className="h-full overflow-auto"
             >
-              <ScrollArea className="h-full">
-                <div className="p-3 space-y-3">{leftPanel}</div>
-              </ScrollArea>
+              <div className="p-3 space-y-3">{leftPanel}</div>
             </aside>
           </ResizablePanel>
 
