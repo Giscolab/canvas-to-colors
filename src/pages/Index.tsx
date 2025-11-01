@@ -11,7 +11,7 @@ import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
-import { EnhancedProjectManager } from "@/components/studio/EnhancedProjectManager";
+
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -226,8 +226,6 @@ function IndexContent() {
   onProcess={handleProcess}
   isProcessing={studio.isProcessing}
 />
-
-            <EnhancedProjectManager />
           </>
         }
         centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
