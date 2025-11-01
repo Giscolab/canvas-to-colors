@@ -35,8 +35,8 @@ export function StudioLayout({
       {/* Layout principal : 3 colonnes fixes */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- Panneau gauche --- */}
-        <aside className="w-[420px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
-          <ScrollArea className="flex-1 overflow-auto p-2">{leftPanel}</ScrollArea>
+        <aside className="w-[500px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
+          <ScrollArea className="flex-1 overflow-auto p-2 pt-4">{leftPanel}</ScrollArea>
         </aside>
 
         {/* --- Zone centrale --- */}
