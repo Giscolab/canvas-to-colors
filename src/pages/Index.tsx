@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
-
-
-
-
+import { PalettePanel } from "@/components/PalettePanel";
+import { DebugPanel } from "@/components/studio/DebugPanel";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
@@ -229,6 +229,28 @@ function IndexContent() {
           </>
         }
         centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
+        rightPanel={
+          <Tabs defaultValue="palette" className="w-full">
+            <TabsList className="w-full grid grid-cols-3">
+              <TabsTrigger value="palette">Palette</TabsTrigger>
+              <TabsTrigger value="debug">Debug</TabsTrigger>
+              <TabsTrigger value="history">Historique</TabsTrigger>
+            </TabsList>
+            <TabsContent value="palette" className="mt-4">
+              <PalettePanel
+                zonesByColor={zonesByColor}
+                selectedColorIdx={selectedColorIdx}
+                onColorSelect={setSelectedColorIdx}
+              />
+            </TabsContent>
+            <TabsContent value="debug" className="mt-4">
+              <DebugPanel processedData={studio.result} />
+            </TabsContent>
+            <TabsContent value="history" className="mt-4">
+              <HistoryPanel />
+            </TabsContent>
+          </Tabs>
+        }
         bottomBar={
           <ExportBar
             processedData={studio.result}
