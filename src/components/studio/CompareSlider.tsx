@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 
 /**
  * CompareSlider (Figma-like)
- * - Props inchangées
+ * - Props avec width et height optionnelles pour respecter les dimensions de référence
  * - A11y: handle focusable (role="slider"), clavier (←/→, Shift=±5), ARIA min/max/now
  * - Pointer Events unifiés (souris/touch/pen), listeners sans fuite
  * - Tokens only (dark OK)
@@ -96,20 +96,23 @@ export function CompareSlider({
       className="
         relative overflow-hidden select-none
         bg-studio-panel/60 border border-studio-border/40
-        min-h-[280px] sm:min-h-[360px]
         rounded-lg shadow-studio-image
       "
+      style={{
+        width: width ? `${width}px` : "auto",
+        height: height ? `${height}px` : "auto",
+      }}
       onPointerDown={onContainerPointerDown}
       role="group"
       aria-label="Comparateur avant/après"
     >
       {/* Plan d'alignement : conteneur absolu pour que les deux images s'alignent parfaitement */}
-      <div className="absolute inset-0" style={width && height ? { width: `${width}px`, height: `${height}px`, margin: 'auto' } : undefined}>
+      <div className="absolute inset-0">
         {/* AFTER (fond) */}
         <img
           src={afterImage}
           alt={afterLabel}
-          className="absolute inset-0 w-full h-full object-contain"
+          className="absolute inset-0 w-full h-full object-contain m-auto"
           draggable={false}
         />
         <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium
@@ -119,15 +122,14 @@ export function CompareSlider({
 
         {/* BEFORE (overlay clip) */}
         <div
-          className="absolute inset-0 overflow-hidden transition-[clip-path] duration-200 ease-\[cubic-bezier\(0.22,1,0.36,1\)\]
-"
+          className="absolute inset-0 overflow-hidden transition-[clip-path] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
           style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
           aria-hidden="true"
         >
           <img
             src={beforeImage}
             alt={beforeLabel}
-            className="absolute inset-0 w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-contain m-auto"
             draggable={false}
           />
         </div>
