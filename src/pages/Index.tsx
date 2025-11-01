@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
-import { ColorPalette } from "@/components/ColorPalette";
-import { PalettePanel } from "@/components/PalettePanel";
-import { HistoryPanel } from "@/components/HistoryPanel";
+
+
+
 
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
-import { DebugPanel } from "@/components/studio/DebugPanel";
+
 
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
@@ -229,24 +229,6 @@ function IndexContent() {
           </>
         }
         centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
-        rightPanel={
-          <>
-            {studio.result && (
-              <>
-                <ColorPalette colors={studio.result.palette} />
-                {zonesByColor.size > 0 && (
-                  <PalettePanel
-                    zonesByColor={zonesByColor}
-                    selectedColorIdx={selectedColorIdx}
-                    onColorSelect={setSelectedColorIdx}
-                  />
-                )}
-                <DebugPanel processedData={studio.result} />
-              </>
-            )}
-            {user && <HistoryPanel />}
-          </>
-        }
         bottomBar={
           <ExportBar
             processedData={studio.result}
