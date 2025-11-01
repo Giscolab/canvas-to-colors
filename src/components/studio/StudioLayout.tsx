@@ -65,8 +65,8 @@ export function StudioLayout({
 
         {/* --- Panneau droit (optionnel) --- */}
         {rightPanel && (
-          <aside className="w-[240px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
-            <ScrollArea className="flex-1 overflow-auto p-2">{rightPanel}</ScrollArea>
+          <aside className="w-[500px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
+            <ScrollArea className="flex-1 overflow-auto p-2 pt-12">{rightPanel}</ScrollArea>
           </aside>
         )}
       </div>
