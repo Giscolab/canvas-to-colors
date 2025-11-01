@@ -14,6 +14,8 @@ interface CompareSliderProps {
   beforeLabel?: string;
   afterLabel?: string;
   showHandleHint?: boolean;
+  width?: number;
+  height?: number;
 }
 
 export function CompareSlider({
@@ -22,6 +24,8 @@ export function CompareSlider({
   beforeLabel = "Avant",
   afterLabel = "Après",
   showHandleHint = false,
+  width,
+  height,
 }: CompareSliderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLDivElement>(null);
@@ -100,7 +104,7 @@ export function CompareSlider({
       aria-label="Comparateur avant/après"
     >
       {/* Plan d'alignement : conteneur absolu pour que les deux images s'alignent parfaitement */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0" style={width && height ? { width: `${width}px`, height: `${height}px`, margin: 'auto' } : undefined}>
         {/* AFTER (fond) */}
         <img
           src={afterImage}

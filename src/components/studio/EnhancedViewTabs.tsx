@@ -24,6 +24,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
   const studio = useStudio();
   const canvasCache = useRef<Map<string, string>>(new Map());
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number; size: string } | null>(null);
+  const [referenceDimensions, setReferenceDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   
@@ -66,6 +67,16 @@ useEffect(() => {
       img.src = originalImage;
     }
   }, [originalImage]);
+
+  // Extraire les dimensions de référence depuis colorized
+  useEffect(() => {
+    if (processedData?.colorized) {
+      setReferenceDimensions({
+        width: processedData.colorized.width,
+        height: processedData.colorized.height
+      });
+    }
+  }, [processedData?.colorized]);
 
   const getCanvasDataUrl = useMemo(() => {
     return (imageData: ImageData | null, key: string): string | null => {
@@ -312,7 +323,11 @@ useEffect(() => {
                       src={originalImage}
                       alt="Image originale du projet"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{ transform: `scale(${studio.zoomPercent / 100})` }}
+                      style={{
+                        transform: `scale(${studio.zoomPercent / 100})`,
+                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
+                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
+                      }}
                     />
                     
                     {/* HUD de zoom */}
@@ -496,7 +511,11 @@ useEffect(() => {
                       src={contoursUrl}
                       alt="Contours extraits de l'image"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{ transform: `scale(${studio.zoomPercent / 100})` }}
+                      style={{
+                        transform: `scale(${studio.zoomPercent / 100})`,
+                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
+                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
+                      }}
                     />
                     
                     {/* HUD de zoom */}
@@ -632,7 +651,11 @@ useEffect(() => {
                       src={numberedUrl}
                       alt="Image avec zones numérotées"
                       className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                      style={{ transform: `scale(${studio.zoomPercent / 100})` }}
+                      style={{
+                        transform: `scale(${studio.zoomPercent / 100})`,
+                        width: referenceDimensions ? `${referenceDimensions.width}px` : 'auto',
+                        height: referenceDimensions ? `${referenceDimensions.height}px` : 'auto'
+                      }}
                     />
                     
                     {/* HUD de zoom */}
@@ -693,6 +716,8 @@ useEffect(() => {
                       beforeLabel="Original"
                       afterLabel="Colorisé"
                       showHandleHint
+                      width={referenceDimensions?.width}
+                      height={referenceDimensions?.height}
                     />
                   </div>
                 </div>
