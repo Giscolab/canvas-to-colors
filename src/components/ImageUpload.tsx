@@ -153,7 +153,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       aria-describedby={helpId}
       role="region"
       className={[
-        "p-6 border-2 border-dashed transition-all duration-200 rounded-xl",
+        "p-3 border-2 border-dashed transition-all duration-200 rounded-lg",
         "bg-card/60 backdrop-blur hover:border-primary/60",
         isDragging ? "border-primary shadow-md scale-[1.01]" : "border-border",
       ].join(" ")}
@@ -171,38 +171,39 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
 
       {!selectedImage ? (
         // ÉTAT VIDE
-        <div
-          tabIndex={0}
-          onKeyDown={handleKeyDown}
-          // ⚠️ zone cliquable — protégée par openLock/openingRef
-          onClick={(e) => {
-            if (openLock) return; // empêche les relances
-            openFileDialog();
-          }}
-          className={[
-            "flex flex-col items-center justify-center py-8 space-y-4",
-            "outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg",
-            openLock ? "pointer-events-none opacity-70" : "cursor-pointer",
-          ].join(" ")}
-        >
-          <div className={`p-4 rounded-full bg-primary/10 transition-transform ${isDragging ? "scale-125 animate-pulse" : ""}`}>
-            <Upload className="h-8 w-8 text-primary" />
+          <div
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            // ⚠️ zone cliquable — protégée par openLock/openingRef
+            onClick={(e) => {
+              if (openLock) return; // empêche les relances
+              openFileDialog();
+            }}
+            className={[
+              "flex flex-col items-center justify-center py-4 space-y-2",
+              "outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg",
+              openLock ? "pointer-events-none opacity-70" : "cursor-pointer",
+            ].join(" ")}
+          >
+          <div className={`p-3 rounded-full bg-primary/10 transition-transform ${isDragging ? "scale-125 animate-pulse" : ""}`}>
+            <Upload className="h-6 w-6 text-primary" />
           </div>
 
-          <div className="text-center space-y-2">
-            <h2 id={dropId} className="font-semibold text-foreground text-lg">
+          <div className="text-center space-y-1">
+            <h2 id={dropId} className="font-semibold text-foreground text-base">
               {isDragging ? "Déposez votre image ici !" : "Importer une image"}
             </h2>
-            <p id={helpId} className="text-sm text-muted-foreground">
+            <p id={helpId} className="text-xs text-muted-foreground">
               Glissez-déposez ou cliquez pour choisir
             </p>
-            <Badge variant="secondary" className="mt-2">
-              PNG, JPG ou JPEG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB • Format conseillé : HD 1920×1080
+            <Badge variant="secondary" className="mt-1 text-xs">
+              PNG, JPG ou JPEG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB
             </Badge>
           </div>
 
           <Button
             type="button"
+            size="sm"
             onClick={(e) => {
               e.stopPropagation();
               openFileDialog();
@@ -210,14 +211,14 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
             disabled={openLock}
             className="bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-sm"
           >
-            <Upload className="mr-2 h-4 w-4" />
+            <Upload className="mr-1.5 h-3.5 w-3.5" />
             Choisir une image
           </Button>
         </div>
       ) : (
         // ÉTAT AVEC APERÇU
-        <div className="space-y-4">
-          <div className="relative aspect-video rounded-xl overflow-hidden bg-secondary border">
+        <div className="space-y-2">
+          <div className="relative aspect-video rounded-lg overflow-hidden bg-secondary border">
             <img
               src={selectedImage}
               alt={imageInfo?.name ? `Aperçu – ${imageInfo.name}` : "Aperçu de l’image sélectionnée"}
@@ -225,11 +226,11 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               draggable={false}
             />
             <div
-              className="absolute top-3 right-3 bg-green-500 text-white p-2 rounded-full shadow-sm"
+              className="absolute top-2 right-2 bg-green-500 text-white p-1.5 rounded-full shadow-sm"
               aria-label="Image chargée avec succès"
               title="Image chargée avec succès"
             >
-              <Check className="h-4 w-4" />
+              <Check className="h-3 w-3" />
             </div>
           </div>
 
