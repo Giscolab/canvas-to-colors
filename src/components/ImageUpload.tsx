@@ -218,7 +218,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
       ) : (
         // ÉTAT AVEC APERÇU
         <div className="space-y-2">
-          <div className="relative aspect-video rounded-lg overflow-hidden bg-secondary border">
+          <div className="relative h-32 rounded-lg overflow-hidden bg-secondary border">
             <img
               src={selectedImage}
               alt={imageInfo?.name ? `Aperçu – ${imageInfo.name}` : "Aperçu de l’image sélectionnée"}
