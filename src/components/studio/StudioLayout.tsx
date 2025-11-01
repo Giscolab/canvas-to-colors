@@ -35,11 +35,8 @@ export function StudioLayout({
       {/* Layout principal : 3 colonnes fixes */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- Panneau gauche --- */}
-        <aside className="w-[550px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
-          <div className="h-8 bg-studio-panel-header border-b border-studio-border/40 flex items-center px-3 text-xs font-medium text-studio-foreground/70">
-            Panneau gauche
-          </div>
-          <ScrollArea className="flex-1 overflow-auto p-4">{leftPanel}</ScrollArea>
+        <aside className="w-[420px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
+          <ScrollArea className="flex-1 overflow-auto p-2">{leftPanel}</ScrollArea>
         </aside>
 
         {/* --- Zone centrale --- */}
@@ -68,11 +65,8 @@ export function StudioLayout({
 
         {/* --- Panneau droit (optionnel) --- */}
         {rightPanel && (
-          <aside className="w-[280px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
-            <div className="h-8 bg-studio-panel-header border-b border-studio-border/40 flex items-center px-3 text-xs font-medium text-studio-foreground/70">
-              Panneau droit
-            </div>
-            <ScrollArea className="flex-1 overflow-auto p-4">{rightPanel}</ScrollArea>
+          <aside className="w-[240px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
+            <ScrollArea className="flex-1 overflow-auto p-2">{rightPanel}</ScrollArea>
           </aside>
         )}
       </div>

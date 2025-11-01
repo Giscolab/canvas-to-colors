@@ -84,9 +84,8 @@ export const PalettePanel: React.FC<PalettePanelProps> = ({
         role="listbox"
         aria-label="Palette de couleurs"
         className={cn(
-          "p-3 grid gap-2",
-          // Grille responsive confortable (≥44px)
-          "grid-cols-6 sm:grid-cols-8 lg:grid-cols-10"
+          "p-2 grid gap-2",
+          "grid-cols-5"
         )}
       >
         {palette.map(({ colorIdx, color, percent }, idx) => {
