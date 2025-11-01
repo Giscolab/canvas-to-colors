@@ -71,17 +71,17 @@ function Section({
       className="group border border-border/50 rounded-lg bg-card/60 open:bg-card transition-colors"
       {...(defaultOpen ? { open: true } : {})}
     >
-      <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-2 py-1.5 rounded-lg hover:bg-accent/50">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1.5 rounded-md bg-primary/10 text-primary">{icon}</div>
-          <span className="truncate text-sm font-medium">{title}</span>
+      <summary className="flex items-center justify-between gap-1.5 cursor-pointer list-none px-1.5 py-1 rounded-lg hover:bg-accent/50">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="p-1 rounded-md bg-primary/10 text-primary">{icon}</div>
+          <span className="truncate text-xs font-medium">{title}</span>
           {summaryHelp ? (
             <span className="hidden md:inline text-[10px] text-muted-foreground truncate">
               {summaryHelp}
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {badge}
           <span
             aria-hidden="true"
@@ -89,7 +89,7 @@ function Section({
           />
         </div>
       </summary>
-      <div className="px-2 pb-2 pt-1">{children}</div>
+      <div className="px-1.5 pb-1.5 pt-0.5">{children}</div>
     </details>
   );
 }
@@ -128,16 +128,16 @@ export const ParametersPanel = ({
       : { label: "Artistique", className: "bg-pink-500" };
 
   return (
-    <Card className="p-2 space-y-2 rounded-lg border bg-card text-card-foreground shadow-sm">
+    <Card className="p-1.5 space-y-1.5 rounded-lg border bg-card text-card-foreground shadow-sm">
       {/* Header panel */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <div className="p-1.5 rounded-md bg-primary/10">
-            <Wand2 className="h-4 w-4 text-primary" />
+        <h3 className="text-xs font-semibold flex items-center gap-1.5">
+          <div className="p-1 rounded-md bg-primary/10">
+            <Wand2 className="h-3.5 w-3.5 text-primary" />
           </div>
           Paramètres de génération
         </h3>
-        <Badge className={`${quality.className} text-white text-[10px] px-2 py-0.5`}>
+        <Badge className={`${quality.className} text-white text-[10px] px-1.5 py-0.5`}>
           {quality.label}
         </Badge>
       </div>
@@ -154,19 +154,19 @@ export const ParametersPanel = ({
           </span>
         }
       >
-        <fieldset className="space-y-3" aria-labelledby="colors-legend">
+        <fieldset className="space-y-2" aria-labelledby="colors-legend">
           <legend id="colors-legend" className="sr-only">
             Nombre de couleurs
           </legend>
 
           {/* Nombre de couleurs */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex justify-between items-center">
-              <Label htmlFor="colors" className="flex items-center gap-2 text-sm">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <Label htmlFor="colors" className="flex items-center gap-1.5 text-xs">
+                <Sparkles className="h-3 w-3 text-primary" />
                 Nombre de couleurs
               </Label>
-              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                 {numColors}
               </span>
             </div>
@@ -178,22 +178,22 @@ export const ParametersPanel = ({
               value={[numColors]}
               onValueChange={(v) => onNumColorsChange(v[0])}
               aria-label="Nombre de couleurs"
-              className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+              className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground">
+            <div className="flex justify-between text-[9px] text-muted-foreground">
               <span>5 (Simple)</span>
               <span>40 (Complexe)</span>
             </div>
           </div>
 
           {/* Fusion zones (min region) */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex justify-between items-center">
-              <Label htmlFor="region" className="flex items-center gap-2 text-sm">
-                <Layers className="h-3.5 w-3.5 text-primary" />
+              <Label htmlFor="region" className="flex items-center gap-1.5 text-xs">
+                <Layers className="h-3 w-3 text-primary" />
                 Fusion des petites zones
               </Label>
-              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                 {minRegionSize} px
               </span>
             </div>
@@ -205,22 +205,22 @@ export const ParametersPanel = ({
               value={[minRegionSize]}
               onValueChange={(v) => onMinRegionSizeChange(v[0])}
               aria-label="Fusion zones"
-              className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+              className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground">
+            <div className="flex justify-between text-[9px] text-muted-foreground">
               <span>10 (Précis)</span>
               <span>500 (Simplifié)</span>
             </div>
           </div>
 
           {/* Douceur des bords */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex justify-between items-center">
-              <Label htmlFor="smoothness" className="flex items-center gap-2 text-sm">
-                <Gauge className="h-3.5 w-3.5 text-primary" />
+              <Label htmlFor="smoothness" className="flex items-center gap-1.5 text-xs">
+                <Gauge className="h-3 w-3 text-primary" />
                 Douceur des bords
               </Label>
-              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                 {smoothness}%
               </span>
             </div>
@@ -232,9 +232,9 @@ export const ParametersPanel = ({
               value={[smoothness]}
               onValueChange={(v) => onSmoothnessChange(v[0])}
               aria-label="Douceur des bords"
-              className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+              className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
             />
-            <div className="flex justify-between text-[10px] text-muted-foreground">
+            <div className="flex justify-between text-[9px] text-muted-foreground">
               <span>0 (Net)</span>
               <span>100 (Doux)</span>
             </div>
@@ -254,10 +254,10 @@ export const ParametersPanel = ({
           </span>
         }
       >
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2 text-sm" htmlFor="art-merge">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <Label className="flex items-center gap-1.5 text-xs" htmlFor="art-merge">
+              <Sparkles className="h-3 w-3 text-primary" />
               Activer la fusion artistique
             </Label>
             <Switch
@@ -269,13 +269,13 @@ export const ParametersPanel = ({
           </div>
 
           {enableArtisticMerge && (
-            <div className="space-y-1.5 pl-6">
+            <div className="space-y-1 pl-4">
               <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Gauge className="h-3 w-3 text-primary/70" />
+                <Label className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <Gauge className="h-2.5 w-2.5 text-primary/70" />
                   Tolérance ΔE
                 </Label>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                   {mergeTolerance}
                 </span>
               </div>
@@ -286,7 +286,7 @@ export const ParametersPanel = ({
                 value={[mergeTolerance]}
                 onValueChange={(v) => onMergeToleranceChange(v[0])}
                 aria-label="Tolérance ΔE"
-                className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+                className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
               />
             </div>
           )}
@@ -301,16 +301,16 @@ export const ParametersPanel = ({
         defaultOpen={false}
       >
         {/* Palette intelligente */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label
               htmlFor="smart-palette"
-              className="flex items-center gap-2 text-sm cursor-pointer"
+              className="flex items-center gap-1.5 text-xs cursor-pointer"
             >
-              <PaletteIcon className="h-3.5 w-3.5 text-primary" />
+              <PaletteIcon className="h-3 w-3 text-primary" />
               <div className="flex flex-col">
                 <span>Palette intelligente</span>
-                <span className="text-[10px] text-muted-foreground font-normal">
+                <span className="text-[9px] text-muted-foreground font-normal">
                   Équilibrage chromatique automatique
                 </span>
               </div>
@@ -325,14 +325,14 @@ export const ParametersPanel = ({
         </div>
 
         {/* Effet peinture */}
-        <div className="space-y-2 pt-2 border-t border-border/40">
-          <Label className="flex items-center gap-2 text-sm" htmlFor="paint-effect">
-            <Paintbrush className="h-3.5 w-3.5 text-primary" />
+        <div className="space-y-1.5 pt-1.5 border-t border-border/40">
+          <Label className="flex items-center gap-1.5 text-xs" htmlFor="paint-effect">
+            <Paintbrush className="h-3 w-3 text-primary" />
             Effet peinture
           </Label>
 
           <Select value={paintEffect} onValueChange={onPaintEffectChange}>
-            <SelectTrigger id="paint-effect" className="h-9">
+            <SelectTrigger id="paint-effect" className="h-8 text-xs">
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
@@ -343,10 +343,10 @@ export const ParametersPanel = ({
           </Select>
 
           {paintEffect !== "none" && (
-            <div className="space-y-1.5 pl-6">
+            <div className="space-y-1 pl-4">
               <div className="flex justify-between items-center">
-                <Label className="text-xs text-muted-foreground">Intensité</Label>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <Label className="text-[10px] text-muted-foreground">Intensité</Label>
+                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                   {paintIntensity}%
                 </span>
               </div>
@@ -356,8 +356,8 @@ export const ParametersPanel = ({
                 step={5}
                 value={[paintIntensity]}
                 onValueChange={(v) => onPaintIntensityChange(v[0])}
-                aria-label="Intensité de l’effet peinture"
-                className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+                aria-label="Intensité de l'effet peinture"
+                className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
               />
             </div>
           )}
@@ -371,27 +371,27 @@ export const ParametersPanel = ({
         summaryHelp="Filtres style huile/crayon et intensité"
         defaultOpen={false}
       >
-        <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-sm" htmlFor="ai-effect">
-            <PaintBucket className="h-3.5 w-3.5 text-primary" />
-            Choix de l’effet
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5 text-xs" htmlFor="ai-effect">
+            <PaintBucket className="h-3 w-3 text-primary" />
+            Choix de l'effet
           </Label>
 
           <Select value={artisticEffect} onValueChange={onArtisticEffectChange}>
-            <SelectTrigger id="ai-effect" className="h-9">
+            <SelectTrigger id="ai-effect" className="h-8 text-xs">
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Aucun</SelectItem>
               <SelectItem value="oil">
-                <span className="flex items-center gap-2">
-                  <PaintBucket className="h-3.5 w-3.5" />
+                <span className="flex items-center gap-1.5">
+                  <PaintBucket className="h-3 w-3" />
                   Huile
                 </span>
               </SelectItem>
               <SelectItem value="pencil">
-                <span className="flex items-center gap-2">
-                  <Pencil className="h-3.5 w-3.5" />
+                <span className="flex items-center gap-1.5">
+                  <Pencil className="h-3 w-3" />
                   Crayon
                 </span>
               </SelectItem>
@@ -399,10 +399,10 @@ export const ParametersPanel = ({
           </Select>
 
           {artisticEffect !== "none" && (
-            <div className="space-y-1.5 pl-6">
+            <div className="space-y-1 pl-4">
               <div className="flex justify-between items-center">
-                <Label className="text-xs text-muted-foreground">Intensité</Label>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <Label className="text-[10px] text-muted-foreground">Intensité</Label>
+                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                   {artisticIntensity}%
                 </span>
               </div>
@@ -412,8 +412,8 @@ export const ParametersPanel = ({
                 step={5}
                 value={[artisticIntensity]}
                 onValueChange={(v) => onArtisticIntensityChange(v[0])}
-                aria-label="Intensité de l’effet artistique"
-                className="w-full [&_.relative]:h-1.5 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
+                aria-label="Intensité de l'effet artistique"
+                className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
               />
             </div>
           )}
@@ -435,12 +435,12 @@ export const ParametersPanel = ({
         <div className="flex items-center justify-between">
           <Label
             htmlFor="profiling"
-            className="flex items-center gap-2 text-sm cursor-pointer"
+            className="flex items-center gap-1.5 text-xs cursor-pointer"
           >
-            <Activity className="h-3.5 w-3.5 text-primary" />
+            <Activity className="h-3 w-3 text-primary" />
             <div className="flex flex-col">
               <span>Activer le profileur</span>
-              <span className="text-[10px] text-muted-foreground font-normal">
+              <span className="text-[9px] text-muted-foreground font-normal">
                 Mesure les performances du pipeline
               </span>
             </div>
@@ -458,19 +458,19 @@ export const ParametersPanel = ({
       <Button
         onClick={onProcess}
         disabled={isProcessing}
-        className="w-full h-9 rounded-md bg-primary text-primary-foreground shadow hover:opacity-90 disabled:opacity-60"
+        className="w-full h-8 text-xs rounded-md bg-primary text-primary-foreground shadow hover:opacity-90 disabled:opacity-60"
         size="sm"
         aria-live="polite"
         aria-busy={isProcessing}
       >
         {isProcessing ? (
           <>
-            <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground/80 border-t-transparent" />
+            <span className="mr-1.5 inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-primary-foreground/80 border-t-transparent" />
             Traitement en cours…
           </>
         ) : (
           <>
-            <Wand2 className="mr-2 h-4 w-4" />
+            <Wand2 className="mr-1.5 h-3.5 w-3.5" />
             Générer le modèle
           </>
         )}
