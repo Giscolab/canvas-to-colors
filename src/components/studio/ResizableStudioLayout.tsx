@@ -22,7 +22,7 @@ interface LayoutSizes {
 }
 
 const DEFAULT_SIZES: LayoutSizes = {
-  leftWidth: 18,
+  leftWidth: 22,
   rightWidth: 25,
 };
 
@@ -75,7 +75,7 @@ export function ResizableStudioLayout({
           {/* --- LEFT PANEL --- */}
           <ResizablePanel
             defaultSize={sizes.leftWidth}
-            minSize={15}
+            minSize={18}
             maxSize={35}
             className="studio-transition bg-studio-panel border-r border-studio-border/60 shadow-studio-panel-left"
           >
@@ -83,7 +83,7 @@ export function ResizableStudioLayout({
               aria-label="Panneau gauche (paramètres)"
               className="h-full overflow-auto"
             >
-              <div className="p-2 space-y-2">{leftPanel}</div>
+              <div className="p-3 space-y-2.5">{leftPanel}</div>
             </aside>
           </ResizablePanel>
 
@@ -98,7 +98,7 @@ export function ResizableStudioLayout({
 
           {/* --- CENTER PANEL --- */}
           <ResizablePanel
-            defaultSize={rightPanel ? 50 : 82}
+            defaultSize={rightPanel ? 50 : 78}
             minSize={30}
             className="bg-studio-canvas relative"
           >
