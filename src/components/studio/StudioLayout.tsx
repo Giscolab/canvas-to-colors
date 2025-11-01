@@ -35,7 +35,7 @@ export function StudioLayout({
       {/* Layout principal : 3 colonnes fixes */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- Panneau gauche --- */}
-        <aside className="w-[420px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
+        <aside className="w-[320px] bg-studio-panel border-r border-studio-border/60 flex flex-col">
           <div className="h-8 bg-studio-panel-header border-b border-studio-border/40 flex items-center px-3 text-xs font-medium text-studio-foreground/70">
             Panneau gauche
           </div>
@@ -68,7 +68,7 @@ export function StudioLayout({
 
         {/* --- Panneau droit (optionnel) --- */}
         {rightPanel && (
-          <aside className="w-[380px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
+          <aside className="w-[320px] bg-studio-panel border-l border-studio-border/60 flex flex-col">
             <div className="h-8 bg-studio-panel-header border-b border-studio-border/40 flex items-center px-3 text-xs font-medium text-studio-foreground/70">
               Panneau droit
             </div>

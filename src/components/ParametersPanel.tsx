@@ -74,7 +74,7 @@ function Section({
       <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-2 py-1.5 rounded-lg hover:bg-accent/50">
         <div className="flex items-center gap-2 min-w-0">
           <div className="p-1.5 rounded-md bg-primary/10 text-primary">{icon}</div>
-          <span className="text-sm font-medium">{title}</span>
+          <span className="truncate text-sm font-medium">{title}</span>
           {summaryHelp ? (
             <span className="hidden md:inline text-[10px] text-muted-foreground truncate">
               {summaryHelp}

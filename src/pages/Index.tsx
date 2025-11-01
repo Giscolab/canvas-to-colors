@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
+import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
-import { DebugPanel } from "@/components/studio/DebugPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
+import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-
+import { DebugPanel } from "@/components/studio/DebugPanel";
+import { EnhancedProjectManager } from "@/components/studio/EnhancedProjectManager";
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -226,30 +226,29 @@ function IndexContent() {
   onProcess={handleProcess}
   isProcessing={studio.isProcessing}
 />
+
+            <EnhancedProjectManager />
           </>
         }
         centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
         rightPanel={
-          <Tabs defaultValue="palette" className="w-full">
-            <TabsList className="w-full grid grid-cols-3">
-              <TabsTrigger value="palette">Palette</TabsTrigger>
-              <TabsTrigger value="debug">Debug</TabsTrigger>
-              <TabsTrigger value="history">Historique</TabsTrigger>
-            </TabsList>
-            <TabsContent value="palette" className="mt-4">
-              <PalettePanel
-                zonesByColor={zonesByColor}
-                selectedColorIdx={selectedColorIdx}
-                onColorSelect={setSelectedColorIdx}
-              />
-            </TabsContent>
-            <TabsContent value="debug" className="mt-4">
-              <DebugPanel processedData={studio.result} />
-            </TabsContent>
-            <TabsContent value="history" className="mt-4">
-              <HistoryPanel />
-            </TabsContent>
-          </Tabs>
+          <>
+            {studio.result && (
+              <>
+                <ColorPalette colors={studio.result.palette} />
+                {zonesByColor.size > 0 && (
+                  <PalettePanel
+                    zonesByColor={zonesByColor}
+                    selectedColorIdx={selectedColorIdx}
+                    onColorSelect={setSelectedColorIdx}
+                  />
+                )}
+                <DebugPanel processedData={studio.result} />
+              </>
+            )}
+            {user && <HistoryPanel />}
+            <AuthPanel />
+          </>
         }
         bottomBar={
           <ExportBar
