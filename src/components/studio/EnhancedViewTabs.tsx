@@ -1,12 +1,13 @@
 import { useMemo, useRef, useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Image as ImageIcon, Grid3x3, Hash, Palette, ArrowLeftRight, Activity, ZoomIn, ZoomOut, Move, Pipette, Eye, EyeOff, Download, Settings, Maximize2 } from "lucide-react";
+import { Image as ImageIcon, Grid3x3, Hash, Palette, ArrowLeftRight, Activity, ZoomIn, ZoomOut, Move, Pipette, Eye, EyeOff, Download, Settings, Maximize2, Package } from "lucide-react";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { useStudio } from "@/contexts/StudioContext";
 import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
 import { ProfilerPanel } from "./ProfilerPanel";
+import { ExportPanel } from "./ExportPanel";
 import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
 import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
 import { CanvasHUD } from "@/components/studio/CanvasHUD";
@@ -235,6 +236,9 @@ useEffect(() => {
       </TabsTrigger>
       <TabsTrigger value="profiler" className="studio-pill-tab" aria-label="Afficher le profil de performance">
         <Activity className="w-4 h-4 mr-2" aria-hidden="true" /> Profiler
+      </TabsTrigger>
+      <TabsTrigger value="export" className="studio-pill-tab" aria-label="Gérer les exports et données">
+        <Package className="w-4 h-4 mr-2" aria-hidden="true" /> Export
       </TabsTrigger>
     </TabsList>
   ), [processedData]);
@@ -783,6 +787,10 @@ useEffect(() => {
                 onClearHistory={clearHistory}
               />
             </div>
+          </TabsContent>
+
+          <TabsContent value="export" className="h-full mt-0 data-[state=active]:flex">
+            <ExportPanel />
           </TabsContent>
         </div>
       </Tabs>

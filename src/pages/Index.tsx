@@ -4,7 +4,7 @@ import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
-import { AuthPanel } from "@/components/AuthPanel";
+
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
@@ -247,7 +247,6 @@ function IndexContent() {
               </>
             )}
             {user && <HistoryPanel />}
-            <AuthPanel />
           </>
         }
         bottomBar={
