@@ -84,7 +84,7 @@ export function ResizableStudioLayout({
               className="h-full overflow-hidden"
             >
               <ScrollArea className="h-full">
-                <div className="p-6 space-y-6">{leftPanel}</div>
+                <div className="p-3 space-y-3">{leftPanel}</div>
               </ScrollArea>
             </aside>
           </ResizablePanel>
@@ -134,9 +134,9 @@ export function ResizableStudioLayout({
                   aria-label="Panneau droit (palette ou débogage)"
                   className="h-full overflow-hidden"
                 >
-                  <ScrollArea className="h-full">
-                    <div className="p-6 space-y-6">{rightPanel}</div>
-                  </ScrollArea>
+                <ScrollArea className="h-full">
+                  <div className="p-3 space-y-3">{rightPanel}</div>
+                </ScrollArea>
                 </aside>
               </ResizablePanel>
             </>

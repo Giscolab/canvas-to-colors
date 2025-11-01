@@ -71,7 +71,7 @@ function Section({
       className="group border border-border/50 rounded-lg bg-card/60 open:bg-card transition-colors"
       {...(defaultOpen ? { open: true } : {})}
     >
-      <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-3 py-2 rounded-lg hover:bg-accent/50">
+      <summary className="flex items-center justify-between gap-2 cursor-pointer list-none px-2 py-1.5 rounded-lg hover:bg-accent/50">
         <div className="flex items-center gap-2 min-w-0">
           <div className="p-1.5 rounded-md bg-primary/10 text-primary">{icon}</div>
           <span className="truncate text-sm font-medium">{title}</span>
@@ -89,7 +89,7 @@ function Section({
           />
         </div>
       </summary>
-      <div className="px-3 pb-3 pt-1">{children}</div>
+      <div className="px-2 pb-2 pt-1">{children}</div>
     </details>
   );
 }
@@ -128,7 +128,7 @@ export const ParametersPanel = ({
       : { label: "Artistique", className: "bg-pink-500" };
 
   return (
-    <Card className="p-3 md:p-4 space-y-3 md:space-y-4 rounded-lg border bg-card text-card-foreground shadow-sm">
+    <Card className="p-2 space-y-2 rounded-lg border bg-card text-card-foreground shadow-sm">
       {/* Header panel */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-2">

@@ -123,22 +123,22 @@ export function ColorAnalysisPanel({
         <CardTitle className="text-lg flex items-center gap-2">📊 Analyse de l’image</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-3">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-md border bg-card p-3">
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded-md border bg-card p-2">
             <div className="text-muted-foreground text-xs">Couleurs uniques</div>
             <div className="font-mono text-xl tabular-nums">{uniqueColors}</div>
           </div>
-          <div className="rounded-md border bg-card p-3">
+          <div className="rounded-md border bg-card p-2">
             <div className="text-muted-foreground text-xs">Reco couleurs</div>
             <div className="font-mono text-xl tabular-nums">{recommendedNum}</div>
           </div>
-          <div className="rounded-md border bg-card p-3">
+          <div className="rounded-md border bg-card p-2">
             <div className="text-muted-foreground text-xs">Reco min-region</div>
             <div className="font-mono text-xl tabular-nums">{recommendedMinRegion}px</div>
           </div>
-          <div className="rounded-md border bg-card p-3">
+          <div className="rounded-md border bg-card p-2">
             <div className="text-muted-foreground text-xs">Mode</div>
             <div className="font-mono text-sm">{modeLabel}</div>
           </div>
@@ -203,7 +203,7 @@ export function ColorAnalysisPanel({
         {chartData.length > 1 && (
           <div className="mt-2">
             <Label className="text-sm text-muted-foreground">Répartition des couleurs (%)</Label>
-            <div className="h-40 mt-2">
+            <div className="h-32 mt-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <XAxis dataKey="name" hide />
