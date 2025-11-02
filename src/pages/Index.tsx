@@ -3,14 +3,12 @@ import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
-import { AuthPanel } from "@/components/AuthPanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
 import { Header } from "@/components/Header";
 import { StudioLayout } from "@/components/studio/StudioLayout";
 import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
-
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
@@ -19,26 +17,23 @@ import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { ProcessingProgress } from "@/components/ProcessingProgress";
-
-import { useExport } from "@/hooks/useExport";
-import { useAuth } from "@/hooks/useAuth";
 import { Zone } from "@/hooks/useCanvasInteractions";
 import { IMAGE_PROCESSING, UI } from "@/config/constants";
 import { useAutoSave } from "@/hooks/useAutoSave";
 
 /**
  * ================================
- *  PAINT BY NUMBERS STUDIO v1.0
- *  Layout global Figma-like
- *  - panneau gauche : paramètres + analyse
+ *  PAINT BY NUMBERS STUDIO v2.0
+ *  - gauche : upload + réglages
  *  - centre : canvas interactif
- *  - panneau droit : palette, debug, historique
- *  - barre bas : export
+ *  - droite : palette + debug
+ *  - bas : export PNG / ZIP
  * ================================
  */
 function IndexContent() {
   const studio = useStudio();
-  const { startProfiling, recordStage, endProfiling, clearHistory } = studio.profiler;
+  const { startProfiling, recordStage, endProfiling, clearHistory } =
+    studio.profiler;
   useAutoSave();
 
   const lastFileRef = useRef<File | null>(null);
@@ -47,12 +42,12 @@ function IndexContent() {
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(new Map());
+  const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(
+    new Map()
+  );
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
 
   const { width = 0, height = 0 } = useWindowSize() ?? {};
-  const { exportPNG, exportJSON, exportSVG } = useExport();
-  const { user } = useAuth();
 
   // ========== IMAGE SELECTION ==========
   const handleImageSelect = async (file: File) => {
@@ -69,13 +64,19 @@ function IndexContent() {
         imageFile: file,
         settings: studio.settings,
       };
+
       studio.setResult(null);
       studio.setCurrentProject(initialProject);
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
-      toast.success("Image chargée (aperçu)", { description: "Normalisation en cours…" });
+      toast.success("Image chargée (aperçu)", {
+        description: "Normalisation en cours…",
+      });
 
-      const normalizedUrl = await resizeForDisplay(file, IMAGE_PROCESSING.MAX_DISPLAY_WIDTH);
+      const normalizedUrl = await resizeForDisplay(
+        file,
+        IMAGE_PROCESSING.MAX_DISPLAY_WIDTH
+      );
       setSelectedImageUrl(normalizedUrl);
       studio.setCurrentProject({ ...initialProject, imageUrl: normalizedUrl });
       URL.revokeObjectURL(tempUrl);
@@ -153,15 +154,11 @@ function IndexContent() {
     }
   };
 
-  // ========== EXPORT ==========
-  const handleExportPNG = () => exportPNG(studio.result);
-  const handleExportJSON = () => exportJSON(studio.result, studio.settings);
-  const handleExportSVG = () => exportSVG(studio.result);
-
   // ========== RENDER ==========
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
+
       {/* Confettis */}
       {showConfetti && (
         <Confetti
@@ -184,7 +181,11 @@ function IndexContent() {
       <StudioLayout
         leftPanel={
           <>
-            <ImageUpload onImageSelect={handleImageSelect} selectedImage={selectedImageUrl} />
+            <ImageUpload
+              onImageSelect={handleImageSelect}
+              selectedImage={selectedImageUrl}
+            />
+
             {(studio.analysis || isAnalyzing) && (
               <ColorAnalysisPanel
                 analysis={studio.analysis}
@@ -192,43 +193,63 @@ function IndexContent() {
                 processedResult={studio.result}
               />
             )}
- <ParametersPanel
-  numColors={studio.settings.numColors}
-  onNumColorsChange={(v) => studio.updateSettings({ numColors: v })}
-  minRegionSize={studio.settings.minRegionSize}
-  onMinRegionSizeChange={(v) => studio.updateSettings({ minRegionSize: v })}
-  smoothness={studio.settings.smoothness}
-  onSmoothnessChange={(v) => studio.updateSettings({ smoothness: v })}
-  mergeTolerance={studio.settings.mergeTolerance}
-  onMergeToleranceChange={(v) => studio.updateSettings({ mergeTolerance: v })}
-  enableArtisticMerge={studio.settings.enableArtisticMerge}
-  onEnableArtisticMergeChange={(v) => studio.updateSettings({ enableArtisticMerge: v })}
-  smartPalette={studio.settings.smartPalette}
-  onSmartPaletteChange={(v) => studio.updateSettings({ smartPalette: v })}
-  
-  paintEffect={studio.settings.paintEffect}
-  onPaintEffectChange={(effect) => studio.updateSettings({ paintEffect: effect })}
-  paintIntensity={studio.settings.paintIntensity}
-  onPaintIntensityChange={(intensity) => studio.updateSettings({ paintIntensity: intensity })}
-  artisticEffect={studio.settings.artisticEffect}
-  onArtisticEffectChange={(effect) => studio.updateSettings({ artisticEffect: effect })}
-  artisticIntensity={studio.settings.artisticIntensity}
-  onArtisticIntensityChange={(intensity) =>
-    studio.updateSettings({ artisticIntensity: intensity })
-  }
 
-  profilingEnabled={studio.settings.profilingEnabled}
-  onProfilingEnabledChange={(enabled) =>
-    studio.updateSettings({ profilingEnabled: enabled })
-  }
-  onProcess={handleProcess}
-  isProcessing={studio.isProcessing}
-/>
-
-            
+            <ParametersPanel
+              numColors={studio.settings.numColors}
+              onNumColorsChange={(v) =>
+                studio.updateSettings({ numColors: v })
+              }
+              minRegionSize={studio.settings.minRegionSize}
+              onMinRegionSizeChange={(v) =>
+                studio.updateSettings({ minRegionSize: v })
+              }
+              smoothness={studio.settings.smoothness}
+              onSmoothnessChange={(v) =>
+                studio.updateSettings({ smoothness: v })
+              }
+              mergeTolerance={studio.settings.mergeTolerance}
+              onMergeToleranceChange={(v) =>
+                studio.updateSettings({ mergeTolerance: v })
+              }
+              enableArtisticMerge={studio.settings.enableArtisticMerge}
+              onEnableArtisticMergeChange={(v) =>
+                studio.updateSettings({ enableArtisticMerge: v })
+              }
+              smartPalette={studio.settings.smartPalette}
+              onSmartPaletteChange={(v) =>
+                studio.updateSettings({ smartPalette: v })
+              }
+              paintEffect={studio.settings.paintEffect}
+              onPaintEffectChange={(effect) =>
+                studio.updateSettings({ paintEffect: effect })
+              }
+              paintIntensity={studio.settings.paintIntensity}
+              onPaintIntensityChange={(intensity) =>
+                studio.updateSettings({ paintIntensity: intensity })
+              }
+              artisticEffect={studio.settings.artisticEffect}
+              onArtisticEffectChange={(effect) =>
+                studio.updateSettings({ artisticEffect: effect })
+              }
+              artisticIntensity={studio.settings.artisticIntensity}
+              onArtisticIntensityChange={(intensity) =>
+                studio.updateSettings({ artisticIntensity: intensity })
+              }
+              profilingEnabled={studio.settings.profilingEnabled}
+              onProfilingEnabledChange={(enabled) =>
+                studio.updateSettings({ profilingEnabled: enabled })
+              }
+              onProcess={handleProcess}
+              isProcessing={studio.isProcessing}
+            />
           </>
         }
-        centerPanel={<EnhancedViewTabs originalImage={selectedImageUrl} processedData={studio.result} />}
+        centerPanel={
+          <EnhancedViewTabs
+            originalImage={selectedImageUrl}
+            processedData={studio.result}
+          />
+        }
         rightPanel={
           <>
             {studio.result && (
@@ -244,17 +265,9 @@ function IndexContent() {
                 <DebugPanel processedData={studio.result} />
               </>
             )}
-            <AuthPanel />
           </>
         }
-        bottomBar={
-          <ExportBar
-            processedData={studio.result}
-            onExportPNG={handleExportPNG}
-            onExportJSON={handleExportJSON}
-            onExportSVG={handleExportSVG}
-          />
-        }
+        bottomBar={<ExportBar />} // ✅ export PNG + ZIP
       />
     </div>
   );

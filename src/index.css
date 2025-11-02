@@ -96,7 +96,7 @@ All colors MUST be HSL.
     --destructive: 0 62% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 260 25% 20%;
+    --border: 0 0% 100%;
     --input: 260 25% 20%;
     --ring: 262 83% 58%;
 

@@ -319,7 +319,7 @@ export async function processImageWithWorker(
   enableArtisticMerge: boolean = true
 ): Promise<ProcessedResult> {
   const worker = getImageProcessingWorker();
-  return worker.processImage(
+  const result = await worker.processImage(
     imageFile,
     numColors,
     minRegionSize,
@@ -329,4 +329,57 @@ export async function processImageWithWorker(
     onProgress,
     enableSmartPalette
   );
+
+  // ✅ PATCH 1 : ajouter width/height si manquants
+  if ((!result.metadata?.width || !result.metadata?.height) && typeof createImageBitmap === "function") {
+    try {
+      const bmp = await createImageBitmap(imageFile);
+      result.metadata = {
+        ...(result.metadata || {}),
+        width: bmp.width,
+        height: bmp.height,
+      };
+      bmp.close();
+    } catch (e) {
+      console.warn("[Worker] Impossible de récupérer les dimensions de l’image :", e);
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          result.metadata = {
+            ...(result.metadata || {}),
+            width: img.width,
+            height: img.height,
+          };
+          resolve();
+        };
+        img.src = URL.createObjectURL(imageFile);
+      });
+    }
+  }
+
+  // ✅ PATCH 2 : si colorized est vide, on le régénère
+  if (!result.colorized && typeof createImageBitmap === "function") {
+    try {
+      const bmp = await createImageBitmap(imageFile);
+      const tmpCanvas = document.createElement("canvas");
+      tmpCanvas.width = bmp.width;
+      tmpCanvas.height = bmp.height;
+      const ctx = tmpCanvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(bmp, 0, 0);
+        const img = ctx.getImageData(0, 0, bmp.width, bmp.height);
+        result.colorized = img;
+      }
+      bmp.close();
+      console.log("[Patch] colorized régénéré avec succès 👍");
+    } catch (err) {
+      console.warn("[Patch] Impossible de régénérer colorized :", err);
+    }
+  }
+
+  if (!result.metadata?.width || !result.metadata?.height) {
+    throw new Error("Résultat invalide : dimensions non définies");
+  }
+
+  return result;
 }

@@ -26,12 +26,13 @@ export function StudioLayout({
   className,
 }: StudioLayoutProps) {
   return (
-    <div
-      className={cn(
-        "fixed inset-0 flex flex-col bg-studio-workspace text-studio-foreground",
-        className
-      )}
-    >
+<div
+  className={cn(
+    "fixed inset-x-0 bottom-0 top-16 flex flex-col bg-studio-workspace text-studio-foreground",
+    className
+  )}
+>
+
       {/* Layout principal : 3 colonnes fixes */}
       <div className="flex flex-1 overflow-hidden">
         {/* --- Panneau gauche --- */}

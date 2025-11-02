@@ -9,6 +9,11 @@ import {
 import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
 import { useProfiler } from "@/hooks/useProfiler";
 
+// Note: Pour la fonctionnalité d'export ZIP, vous devrez installer ces dépendances:
+// npm install jszip file-saver
+// import JSZip from "jszip";
+// import { saveAs } from "file-saver";
+
 // ---------------------------------------------
 // Types principaux
 // ---------------------------------------------
@@ -32,6 +37,8 @@ export interface StudioSettings {
   artisticEffect: "none" | "oil" | "pencil";
   artisticIntensity: number;
   profilingEnabled: boolean;
+  watermarkEnabled?: boolean; // Nouveau: option pour le filigrane
+  watermarkText?: string; // Nouveau: texte du filigrane
 }
 
 export interface UserPreferences {
@@ -50,7 +57,7 @@ export interface Project {
   settings: StudioSettings;
   analysis?: ColorAnalysis;
   result?: ProcessedResult;
-	favorite?: boolean;
+    favorite?: boolean;
 }
 
 // ---------------------------------------------
@@ -109,6 +116,11 @@ export interface StudioContextValue {
 
   // Aller à la zone numérotée N (si dispo)
   findZoneByNumber?: (n: number) => void;
+  
+  // --- AJOUT : méthodes de rendu et d'export ---
+  renderToCanvas: (mode: ViewMode, scale?: number, backgroundColor?: string) => HTMLCanvasElement | null;
+  exportCanvasAsPNG: (mode: ViewMode, filename?: string, scale?: number, backgroundColor?: string) => void;
+  exportAllPNGs: () => Promise<void>; // Nouveau: export multi-fichiers en ZIP
 }
 
 // ---------------------------------------------
@@ -127,6 +139,8 @@ const DEFAULT_SETTINGS: StudioSettings = {
   artisticEffect: "none",
   artisticIntensity: 50,
   profilingEnabled: false,
+  watermarkEnabled: false,
+  watermarkText: "@FranckStudio",
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -218,6 +232,183 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     },
     [result]
   );
+
+// ---------------------------------------------
+// Fonction de rendu sur Canvas (corrigée et centrée)
+// ---------------------------------------------
+// ---------------------------------------------
+// Fonction de rendu sur Canvas (Option B : taille originale, redimensionnée)
+// ---------------------------------------------
+const renderToCanvas = useCallback((
+  mode: ViewMode,
+  scale: number = 1,
+  backgroundColor?: string
+): HTMLCanvasElement | null => {
+  if (!result) {
+    console.warn("[Studio] Aucun résultat à exporter.");
+    toast.error("Aucun rendu disponible.");
+    return null;
+  }
+
+  const { metadata, colorized, contours, numbered } = result;
+  const width = metadata?.width ?? colorized?.width ?? 0;
+  const height = metadata?.height ?? colorized?.height ?? 0;
+
+  if (!width || !height || width <= 0 || height <= 0) {
+    console.error("[Studio] Export annulé : dimensions invalides", { width, height });
+    toast.error("Erreur : largeur ou hauteur d'image invalide.");
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // Fond blanc par défaut
+  ctx.fillStyle = backgroundColor ?? "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Choix du rendu à exporter
+  let img: ImageData | null = null;
+  switch (mode) {
+    case "original":
+    case "colorized":
+      img = colorized;
+      break;
+    case "contours":
+      img = contours;
+      break;
+    case "numbered":
+      img = numbered ?? colorized;
+      break;
+    case "compare":
+      img = colorized;
+      break;
+    default:
+      toast.error(`Mode d'export inconnu : ${mode}`);
+      return null;
+  }
+
+  if (!img) {
+    toast.error("Aucune image disponible pour ce mode.");
+    console.error("[Studio] Aucun ImageData pour le mode", mode);
+    return null;
+  }
+
+  // ✅ Création d’un canvas temporaire à la taille du rendu réel
+  const tempCanvas = document.createElement("canvas");
+  tempCanvas.width = img.width;
+  tempCanvas.height = img.height;
+  const tempCtx = tempCanvas.getContext("2d");
+  if (!tempCtx) return null;
+  tempCtx.putImageData(img, 0, 0);
+
+  // ✅ Mise à l’échelle vers la taille originale
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.drawImage(tempCanvas, 0, 0, img.width, img.height, 0, 0, width, height);
+  ctx.restore();
+
+  // ✅ Numéros en surimpression (si applicable)
+  if (mode === "numbered" && Array.isArray(result.zones)) {
+    const scaleRatioX = width / img.width;
+    const scaleRatioY = height / img.height;
+    ctx.font = `bold ${10 * scale}px JetBrains Mono`;
+    ctx.fillStyle = "black";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    for (const zone of result.zones) {
+      if (zone.centroid && zone.label != null) {
+        ctx.fillText(
+          zone.label.toString(),
+          Math.round(zone.centroid.x * scaleRatioX * scale) + 0.5,
+          Math.round(zone.centroid.y * scaleRatioY * scale) + 0.5
+        );
+      }
+    }
+  }
+
+  // ✅ Filigrane optionnel
+  if (settings.watermarkEnabled && settings.watermarkText) {
+    ctx.font = `${8 * scale}px JetBrains Mono`;
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.textAlign = "right";
+    ctx.fillText(
+      settings.watermarkText,
+      width * scale - 10,
+      height * scale - 10
+    );
+  }
+
+  return canvas;
+}, [result, settings.watermarkEnabled, settings.watermarkText]);
+
+
+
+  // ---------------------------------------------
+  // Helper d'export PNG
+  // ---------------------------------------------
+  const exportCanvasAsPNG = useCallback((
+    mode: ViewMode,
+    filename?: string,
+    scale = 1,
+    backgroundColor?: string
+  ) => {
+    const canvas = renderToCanvas(mode, scale, backgroundColor);
+    if (!canvas) throw new Error("Canvas introuvable");
+    
+    const link = document.createElement("a");
+    link.download = filename ?? `pbn-${mode}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  }, [renderToCanvas]);
+
+  // ---------------------------------------------
+  // Helper d'export multi-fichiers en ZIP
+  // ---------------------------------------------
+  const exportAllPNGs = useCallback(async () => {
+    if (!result) return;
+    
+    // Note: Cette fonction nécessite les dépendances jszip et file-saver
+    // import JSZip from "jszip";
+    // import { saveAs } from "file-saver";
+    
+    try {
+      // Dynamique import pour éviter les erreurs si les dépendances ne sont pas installées
+      const JSZip = (await import("jszip")).default;
+      const { saveAs } = await import("file-saver");
+      
+      const zip = new JSZip();
+      const modes: ViewMode[] = ["colorized", "contours", "numbered"];
+      
+      for (const mode of modes) {
+        const canvas = renderToCanvas(mode, 1);
+        if (!canvas) continue;
+        
+        const blob = await new Promise<Blob | null>((res) => 
+          canvas.toBlob(res, "image/png")
+        );
+        
+        if (blob) {
+          zip.file(`pbn-${mode}.png`, blob);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const dateStr = new Date().toISOString().slice(0, 10);
+      saveAs(zipBlob, `pbn-exports-${dateStr}.zip`);
+    } catch (error) {
+      console.error("Erreur lors de l'export ZIP:", error);
+      // Fallback: exporter les fichiers individuellement si JSZip n'est pas disponible
+      const modes: ViewMode[] = ["colorized", "contours", "numbered"];
+      for (const mode of modes) {
+        exportCanvasAsPNG(mode);
+      }
+    }
+  }, [result, renderToCanvas, exportCanvasAsPNG]);
 
   // ---------------------------------------------
   // Effets
@@ -343,6 +534,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     overlay,
     setOverlay,
     findZoneByNumber,
+    
+    // Export
+    renderToCanvas,
+    exportCanvasAsPNG,
+    exportAllPNGs,
   };
 
   return (
