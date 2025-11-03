@@ -208,8 +208,6 @@ function setCachedResult(key: string, result: ProcessedResult): void {
   console.log('💾 Result cached for future use. Stats:', resultCache.getStats());
 }
 
-// ============= K-MEANS QUANTIZATION =============
-
 // ============= COLOR ANALYSIS =============
 
 /**
@@ -277,73 +275,223 @@ export async function analyzeImageColors(
     }
   }
 
-  // === 5️⃣ Calcul d'entropie (complexité visuelle) ===
-  const entropy = Array.from(colorCounts.values())
-    .map(count => {
-      const p = count / totalPixels;
-      return p === 0 ? 0 : -p * Math.log2(p);
-    })
-    .reduce((sum, val) => sum + val, 0);
+// === 5️⃣ Calcul d'entropie (complexité visuelle) ===
+const entropy = Array.from(colorCounts.values())
+  .map(count => {
+    const p = count / totalPixels;
+    return p === 0 ? 0 : -p * Math.log2(p);
+  })
+  .reduce((sum, val) => sum + val, 0);
 
-  const complexityScore = Math.min(100, Math.round(entropy * 10));
+const complexityScore = Math.min(100, Math.round(entropy * 10));
 
-  // === 6️⃣ Recommandations intelligentes ===
-  const uniqueCount = colorSet.size;
-  let recommendedNumColors: number;
-  let recommendedMinRegionSize: number;
-  if (uniqueCount < 16) {
-    recommendedNumColors = Math.max(8, uniqueCount);
-    recommendedMinRegionSize = 20;
-  } else if (uniqueCount < 100) {
-    recommendedNumColors = 16;
-    recommendedMinRegionSize = 50;
-  } else if (uniqueCount < 1000) {
-    recommendedNumColors = 24;
-    recommendedMinRegionSize = 100;
-  } else {
-    recommendedNumColors = 32;
-    recommendedMinRegionSize = 200;
+// === 6️⃣ Recommandations intelligentes de base ===
+const uniqueCount = colorSet.size;
+let recommendedNumColors: number;
+let recommendedMinRegionSize: number;
+
+if (uniqueCount < 16) {
+  recommendedNumColors = Math.max(8, uniqueCount);
+  recommendedMinRegionSize = 20;
+} else if (uniqueCount < 100) {
+  recommendedNumColors = 16;
+  recommendedMinRegionSize = 50;
+} else if (uniqueCount < 1000) {
+  recommendedNumColors = 24;
+  recommendedMinRegionSize = 100;
+} else {
+  recommendedNumColors = 32;
+  recommendedMinRegionSize = 200;
+}
+
+// === 6️⃣.1 Sélection des couleurs dominantes ===
+const topDominantEntries = [...colorCounts.entries()]
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 10);
+const totalCount = Array.from(colorCounts.values()).reduce((a, b) => a + b, 0);
+
+// =========================================
+// 🧭 Détection du type d'image (statistique)
+// =========================================
+function detectImageType(imageData: ImageData) {
+  const { data, width, height } = imageData;
+  const totalPixels = width * height;
+
+  if (!width || !height || totalPixels === 0) {
+    return { type: "unknown", realismScore: 0, stylizationScore: 0, confidence: 0 };
   }
 
-  const totalCount = Array.from(colorCounts.values()).reduce((acc, val) => acc + val, 0);
-  const sortedColors = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
-  const topDominantEntries = sortedColors.slice(0, 10);
+  let totalSaturation = 0;
+  let gradientEnergy = 0;
+  let edgeCount = 0;
 
-  // === 6.5️⃣ Détection du mode de traitement ===
-  let mode: 'vector' | 'photo' = 'photo';
+  for (let y = 1; y < height - 1; y += 2) {
+    for (let x = 1; x < width - 1; x += 2) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+
+      const maxRGB = Math.max(r, g, b);
+      const minRGB = Math.min(r, g, b);
+      const saturation = (maxRGB - minRGB) / (maxRGB || 1);
+      totalSaturation += saturation;
+
+      // --- Gradient Sobel (énergie de texture)
+      let gx = 0, gy = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const i2 = ((y + ky) * width + (x + kx)) * 4;
+          const lum2 =
+            0.299 * data[i2] + 0.587 * data[i2 + 1] + 0.114 * data[i2 + 2];
+
+          const kxIndex = (ky + 1) * 3 + (kx + 1);
+          const gxKernel = [-1, 0, 1, -2, 0, 2, -1, 0, 1][kxIndex];
+          const gyKernel = [-1, -2, -1, 0, 0, 0, 1, 2, 1][kxIndex];
+
+          gx += lum2 * gxKernel;
+          gy += lum2 * gyKernel;
+        }
+      }
+
+      const mag = Math.sqrt(gx * gx + gy * gy);
+      gradientEnergy += mag;
+      if (mag > 100) edgeCount++;
+    }
+  }
+
+  const avgSaturation = totalSaturation / totalPixels;
+  const texturePower = gradientEnergy / totalPixels;
+  const edgeDensity = edgeCount / totalPixels;
+
+  const realismScore = Math.min(
+    1,
+    (texturePower * 0.5 + avgSaturation * 0.3 + edgeDensity * 0.2) * 10
+  );
+  const stylizationScore = 1 - realismScore;
+
+  let type: string = "unknown";
+  if (realismScore > 0.8) type = "photo";
+  else if (realismScore > 0.6) type = "ai-realistic";
+  else if (realismScore > 0.45) type = "painting";
+  else if (realismScore > 0.3) type = "illustration";
+  else if (edgeDensity > 0.01 && avgSaturation < 0.2) type = "drawing";
+  else if (realismScore < 0.2) type = "sketch";
+  else type = "technical";
+
+  return {
+    type,
+    realismScore: parseFloat(realismScore.toFixed(3)),
+    stylizationScore: parseFloat(stylizationScore.toFixed(3)),
+    confidence: 0.8,
+  };
+}
+
+// === 6.5️⃣ Détection du type d'image ===
+const typeInfo = detectImageType(imageData);
+console.log(
+  `🧩 Type détecté : ${typeInfo.type} (réalisme ${typeInfo.realismScore}, stylisation ${typeInfo.stylizationScore})`
+);
+
+// === Ajustement des recommandations selon le type détecté ===
+switch (typeInfo.type) {
+  case "photo":
+    recommendedNumColors = 36;
+    recommendedMinRegionSize = 20;
+    break;
+  case "ai-realistic":
+    recommendedNumColors = 30;
+    recommendedMinRegionSize = 25;
+    break;
+  case "painting":
+    recommendedNumColors = 26;
+    recommendedMinRegionSize = 50;
+    break;
+  case "illustration":
+    recommendedNumColors = 18;
+    recommendedMinRegionSize = 80;
+    break;
+  case "drawing":
+  case "sketch":
+    recommendedNumColors = 10;
+    recommendedMinRegionSize = 10;
+    break;
+  case "technical":
+    recommendedNumColors = 12;
+    recommendedMinRegionSize = 5;
+    break;
+  }
+
+// === 6.7️⃣ Ajustement perceptuel du ΔE selon le type ===
+function perceptualDeltaE(baseDeltaE: number, imageType: string): number {
+  if (imageType === "photo") return baseDeltaE * 1.2; // plus tolérant (transitions douces)
+  if (imageType === "illustration" || imageType === "drawing") return baseDeltaE * 0.8; // plus strict (bords nets)
+  return baseDeltaE;
+}
+
+// Valeur de base pour ΔE
+let recommendedDeltaE = perceptualDeltaE(5, typeInfo.type);
+
+// Ajustement fin selon la complexité visuelle
+recommendedDeltaE *= 1 - Math.min(0.4, complexityScore / 250);
+
+// === 6.8️⃣ Détection du mode de traitement (fusion simplifiée) ===
+let mode: 'vector' | 'photo' = 'photo';
+
   if (
+    typeInfo.type === "illustration" ||
+    typeInfo.type === "drawing" ||
+    typeInfo.type === "technical"
+  ) {
+    mode = 'vector';
+  } else if (
     uniqueCount < 300 &&
     complexityScore < 25 &&
     topDominantEntries.length <= 10
   ) {
+    // Cas hybride — image peu complexe mais détectée comme photo simplifiée
     mode = 'vector';
   }
 
+  // Ajustement complémentaire du profil selon le mode
   if (mode === 'vector') {
-    recommendedNumColors = Math.min(recommendedNumColors, 12);
-    recommendedMinRegionSize = Math.max(20, recommendedMinRegionSize);
+    recommendedNumColors = Math.min(recommendedNumColors, 14);
+    recommendedMinRegionSize = Math.max(10, recommendedMinRegionSize);
+    recommendedDeltaE = Math.min(4, recommendedDeltaE); // contours plus précis
   }
 
   // === 7️⃣ Tri et pondération des couleurs dominantes ===
-  const dominantColors = topDominantEntries.map(([hex]) => hex);
-  const dominantWeights = topDominantEntries.map(([_, count]) => (totalCount ? count / totalCount : 0));
 
-  if (onProgress) onProgress(100);
+const dominantColors = topDominantEntries.map(([hex]) => hex);
+const dominantWeights = topDominantEntries.map(([_, count]) =>
+  totalCount ? count / totalCount : 0
+);
 
-  console.log(`🧠 Analyse auto :\n  • Couleurs uniques (après quantification ${quantStep}) : ${uniqueCount}\n  • Complexité visuelle : ${complexityScore}/100\n  • Palette recommandée : ${recommendedNumColors} couleurs\n  • Taille min. région : ${recommendedMinRegionSize}px\n  • Mode détecté : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}\n  `);
+if (onProgress) onProgress(100);
 
-  return {
-    uniqueColorsCount: uniqueCount,
-    dominantColors,
-    dominantWeights,
-    complexityScore,
-    recommendedNumColors,
-    recommendedMinRegionSize,
-    quantStep,
-    mode,
-  };
+console.log(`🧠 Analyse auto :
+  • Couleurs uniques : ${uniqueCount}
+  • Complexité : ${complexityScore}/100
+  • Palette recommandée : ${recommendedNumColors} couleurs
+  • Taille min. région : ${recommendedMinRegionSize}px
+  • Mode : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}
+`);
+
+return {
+  uniqueColorsCount: uniqueCount,
+  dominantColors,
+  dominantWeights,
+  complexityScore,
+  recommendedNumColors,
+  recommendedMinRegionSize,
+  quantStep,
+  mode,
+  recommendedEdgeSoftness: typeInfo.type === "photo" ? 50 : 10,
+  recommendedDeltaE: typeInfo.type === "photo" ? 5 : 3,
+  fusionArtistic: typeInfo.type !== "technical",
+};
+
 }
-
 /**
  * Merge near-identical colors to avoid splitting visually identical regions
  * Uses ΔE2000 threshold to detect imperceptible differences
@@ -430,9 +578,7 @@ function consolidateColorMap(
   
   return { consolidatedPalette, consolidatedColorMap };
 }
-
 // ============= K-MEANS QUANTIZATION =============
-
 /**
  * K-means color quantization with Lab palette caching
  * Uses ΔE2000 perceptual distance for accurate clustering
