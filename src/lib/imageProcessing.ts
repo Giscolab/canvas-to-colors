@@ -1926,9 +1926,9 @@ function createNumberedVersion(
   // Start with white background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
-  
+  const grayscaleMapForNumbers = generateGrayscaleMap(imageData);
   // Draw thin black contours
-  const edgesData = detectEdges(labels, width, height);
+const edgesData = detectEdges(labels, grayscaleMapForNumbers, width, height);
   for (let i = 0; i < edgesData.data.length; i += 4) {
     if (edgesData.data[i] === 0) { // Black pixel = edge
       const pixelIdx = i / 4;
@@ -2049,75 +2049,232 @@ function generateLegend(zones: Zone[], palette: string[], totalPixels: number): 
     .sort((a, b) => b.percent - a.percent);
 }
 
-// ============= EDGE DETECTION =============
-
-function detectEdges(labels: Int32Array, width: number, height: number): ImageData {
-  const result = new ImageData(width, height);
-
-  // === 1. Fond blanc par défaut ===
-  for (let i = 0; i < result.data.length; i += 4) {
-    result.data[i] = 255;
-    result.data[i + 1] = 255;
-    result.data[i + 2] = 255;
-    result.data[i + 3] = 255;
+// === Conversion en niveaux de gris pour les gradients ===
+function generateGrayscaleMap(imageData: ImageData): Uint8Array {
+  if (
+    !imageData ||
+    typeof imageData.width !== "number" ||
+    typeof imageData.height !== "number" ||
+    !imageData.data
+  ) {
+    console.warn("[generateGrayscaleMap] ⚠️ ImageData invalide ou vide :", imageData);
+    return new Uint8Array(0);
   }
 
-  // === 2. Détection des transitions de zones ===
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
+  const { width, height, data } = imageData;
+  const grayscaleMap = new Uint8Array(width * height);
+
+  // Conversion rapide RGB → niveaux de gris perceptuels (Rec. 709)
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // Pondération standard : luminosité perceptuelle
+    grayscaleMap[j] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
+  }
+
+  console.log(`[generateGrayscaleMap] ✅ Carte générée (${width}x${height})`);
+  return grayscaleMap;
+}
+
+
+// ============= EDGE DETECTION =============
+
+function detectEdges(labels: Int32Array, grayscaleMap: Uint8Array, width: number, height: number): ImageData {
+  // === Validation et correction automatique des entrées ===
+  if (!labels || !grayscaleMap) {
+    console.warn("[detectEdges] Données manquantes — labels ou grayscaleMap indéfini.");
+    return new ImageData(Math.max(width, 1), Math.max(height, 1));
+  }
+
+  // Calcul de la taille attendue
+  const expectedSize = width * height;
+  const labelSize = labels.length;
+  const graySize = grayscaleMap.length;
+
+  if (labelSize !== expectedSize || graySize !== expectedSize) {
+    console.warn(
+      `[detectEdges] ⚠️ Mismatch détecté : labels=${labelSize}, grayscale=${graySize}, attendu=${expectedSize}`
+    );
+
+    // Tentative de correction "intelligente"
+    const dim = Math.floor(Math.sqrt(Math.min(labelSize, graySize)));
+    width = dim;
+    height = Math.floor(Math.min(labelSize, graySize) / dim);
+
+    console.warn(`[detectEdges] Dimensions corrigées automatiquement → ${width}x${height}`);
+  }
+
+  // ✅ Vérification finale
+  if (width <= 0 || height <= 0) {
+    console.warn("[detectEdges] Dimensions invalides après correction, utilisation de valeurs minimales 1x1.");
+    width = height = 1;
+  }
+
+  const result = new ImageData(width, height);
+
+  // === 1️⃣ Fond blanc par défaut ===
+  // Micro-optimisation : fill() est bien plus rapide qu'une boucle for en JS.
+  result.data.fill(255);
+
+  // --- Déclaration des kernels et constantes ---
+  const sobelXKernel = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+  const sobelYKernel = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+  const prewittXKernel = [-1, 0, 1, -1, 0, 1, -1, 0, 1];
+  const prewittYKernel = [-1, -1, -1, 0, 0, 0, 1, 1, 1];
+  const gaussianKernel = [1/16, 2/16, 1/16, 2/16, 4/16, 2/16, 1/16, 2/16, 1/16];
+
+  // Constantes pour le seuillage dynamique Canny
+  const HIGH_THRESHOLD_FACTOR = 1.0; // mean + std * factor
+  const LOW_THRESHOLD_RATIO = 0.5;   // mean * ratio
+
+  // Buffers intermédiaires pour le pipeline
+  const gradientMap = new Float32Array(width * height);
+  const angleMap = new Float32Array(width * height);
+  // edgeMap: 0 = non-bord, 1 = bord ΔE, 2 = bord Canny confirmé
+  const edgeMap = new Uint8Array(width * height);
+
+  // === 🟩 ZONE A – Préparation & Calculs Unifiés ===
+  // Boucle unique pour la détection ΔE et le calcul de gradient (Sobel + Prewitt).
+  // On itère de 1 à height-1/width-1 car les kernels 3x3 nécessitent un voisinage complet.
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
       const label = labels[idx];
-
-      // Ignore les pixels sans zone
       if (label === -1) continue;
 
-      let isEdge = false;
-      const deltas = [
-        [-1, 0], [1, 0],
-        [0, -1], [0, 1],
-      ];
+      // --- Détection ΔE (transitions entre zones) ---
+      const n1 = labels[idx - 1], n2 = labels[idx + 1];
+      const n3 = labels[idx - width], n4 = labels[idx + width];
+      if ((n1 !== label && n1 !== -1) || (n2 !== label && n2 !== -1) ||
+          (n3 !== label && n3 !== -1) || (n4 !== label && n4 !== -1)) {
+        edgeMap[idx] = 1; // Marquer comme bord ΔE
+      }
 
-      for (const [dx, dy] of deltas) {
-        const nx = x + dx;
-        const ny = y + dy;
+      // --- Gradient local (Sobel + Prewitt combiné) ---
+      let gxS = 0, gyS = 0, gxP = 0, gyP = 0;
+      let k = 0; // Optimisation : un seul compteur pour le kernel
 
-        // Si on sort de l'image → bord
-        if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-          isEdge = true;
-          break;
-        }
-
-        const nidx = ny * width + nx;
-        const nlabel = labels[nidx];
-
-        // ✅ Correction : éviter les faux bords internes et pixels vides
-        if (nlabel !== label && nlabel !== -1) {
-          isEdge = true;
-          break;
+      for (let ky = -1; ky <= 1; ky++) {
+        const iy = (y + ky) * width;
+        for (let kx = -1; kx <= 1; kx++, k++) {
+          const val = grayscaleMap[iy + (x + kx)];
+          gxS += val * sobelXKernel[k];
+          gyS += val * sobelYKernel[k];
+          gxP += val * prewittXKernel[k];
+          gyP += val * prewittYKernel[k];
         }
       }
 
-      // === 3. Dessine les contours fins (noir sur fond blanc) ===
-      if (isEdge && labels[idx] !== -1) {
-        const offset = idx * 4;
-        // ✅ Ne redessine pas un pixel déjà noir
-        if (
-          result.data[offset] !== 0 ||
-          result.data[offset + 1] !== 0 ||
-          result.data[offset + 2] !== 0
-        ) {
-          result.data[offset] = 0;     // R
-          result.data[offset + 1] = 0; // G
-          result.data[offset + 2] = 0; // B
-          result.data[offset + 3] = 255; // A
+      // --- Combinaison robuste des gradients ---
+      const gx = (gxS + gxP) * 0.5;
+      const gy = (gyS + gyP) * 0.5;
+      gradientMap[idx] = Math.hypot(gx, gy); // Équivalent à sqrt(gx*gx + gy*gy)
+      angleMap[idx] = Math.atan2(gy, gx);
+    }
+  }
+
+  // Optionnel: Traitement des bords de l'image pour un rendu "plein cadre"
+  // for (let y = 0; y < height; y++) {
+  //   for (let x = 0; x < width; x++) {
+  //     if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+  //       const idx = y * width + x;
+  //       if (labels[idx] !== -1) edgeMap[idx] = edgeMap[idx] || 1;
+  //     }
+  //   }
+  // }
+
+  // === 🟦 ZONE B – Pipeline Canny (Lissage & Nettoyage) ===
+
+  // 1. Flou gaussien léger pour réduire le bruit
+  const blurred = new Float32Array(width * height);
+  for (let y = 1; y < height - 1; y++) {
+    const wy = y * width;
+    for (let x = 1; x < width - 1; x++) {
+      let sum = 0, k = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        const iy = (y + ky) * width;
+        for (let kx = -1; kx <= 1; kx++, k++) {
+          sum += gradientMap[iy + (x + kx)] * gaussianKernel[k];
         }
       }
+      blurred[wy + x] = sum;
+    }
+  }
+
+  // 2. Suppression non-maximale (affiner les contours)
+  const suppressed = new Float32Array(width * height);
+  for (let y = 1; y < height - 1; y++) {
+    const wy = y * width;
+    for (let x = 1; x < width - 1; x++) {
+      const idx = wy + x;
+      const angle = ((angleMap[idx] * 180) / Math.PI + 180) % 180;
+      const mag = blurred[idx];
+
+      let q = 0, r = 0;
+      if ((angle < 22.5) || (angle >= 157.5)) {
+        q = blurred[idx + 1]; r = blurred[idx - 1];
+      } else if (angle < 67.5) {
+        q = blurred[idx - width + 1]; r = blurred[idx + width - 1];
+      } else if (angle < 112.5) {
+        q = blurred[idx + width]; r = blurred[idx - width];
+      } else {
+        q = blurred[idx - width - 1]; r = blurred[idx + width + 1];
+      }
+
+      suppressed[idx] = (mag >= q && mag >= r) ? mag : 0;
+    }
+  }
+
+  // 3. Seuillage dynamique + Hystérésis (éliminer les faux bords)
+  let sum = 0, sumSq = 0, n = 0;
+  for (const val of suppressed) if (val > 0) { sum += val; sumSq += val * val; n++; }
+  const mean = sum / n;
+  const std = Math.sqrt(sumSq / n - mean * mean);
+  const highThreshold = mean + std * HIGH_THRESHOLD_FACTOR;
+  const lowThreshold = mean * LOW_THRESHOLD_RATIO;
+
+  const cannyMask = new Uint8Array(width * height);
+  for (let i = 0; i < suppressed.length; i++) {
+    if (suppressed[i] > highThreshold) cannyMask[i] = 2; // Pixel fort
+    else if (suppressed[i] > lowThreshold) cannyMask[i] = 1; // Pixel faible
+  }
+
+  // Propagation des pixels faibles connectés à des pixels forts
+  for (let y = 1; y < height - 1; y++) {
+    const wy = y * width;
+    for (let x = 1; x < width - 1; x++) {
+      const idx = wy + x;
+      if (cannyMask[idx] !== 1) continue;
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          // ✅ Optimisation : éviter de vérifier le pixel central
+          if (dx === 0 && dy === 0) continue;
+          if (cannyMask[wy + dy * width + x + dx] === 2) {
+            cannyMask[idx] = 2;
+            edgeMap[idx] = 2; // Marquer comme bord Canny confirmé
+            break;
+          }
+        }
+        if (cannyMask[idx] === 2) break;
+      }
+    }
+  }
+
+  // === 🟨 ZONE C – Fusion & Rendu Final ===
+  // Une seule passe de rendu, en se basant sur la carte de bords unifiée.
+  for (let i = 0; i < width * height; i++) {
+    // La condition `edgeMap[i] > 0` couvre désormais les bords ΔE (1) et Canny (2).
+    if (edgeMap[i] > 0 && labels[i] !== -1) {
+      const o = i * 4;
+      result.data[o] = result.data[o + 1] = result.data[o + 2] = 0;
+      result.data[o + 3] = 255;
     }
   }
 
   return result;
 }
-
 // ============= MAIN PROCESSING PIPELINE =============
 
 interface LoadedImageSource {
@@ -2184,6 +2341,7 @@ async function loadImageSource(imageFile: File): Promise<LoadedImageSource> {
  * @param enableSmartPalette - Enable intelligent palette balancing (default: false)
  */
 export async function processImage(
+
   imageFile: File,
   numColors: number,
   minRegionSize: number,
@@ -2206,7 +2364,6 @@ export async function processImage(
     console.log(`[processImage] ${message} (${progress}%) @ ${timestamp}ms`);
     onProgress?.(message, progress);
   };
-
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       reject(
@@ -2214,41 +2371,59 @@ export async function processImage(
           "Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs."
         )
       );
-    }, GLOBAL_TIMEOUT);
+ }, GLOBAL_TIMEOUT);
 
-    const run = async () => {
-      try {
-        const effectiveMinRegionSize = Math.max(minRegionSize, 20);
-        const effectiveMergeTolerance = Math.max(mergeTolerance, 1);
-        report(
-          "Initialisation du traitement",
-          2,
-          `Paramètres : ${numColors} couleurs, zone minimale ${effectiveMinRegionSize}px, lissage ${smoothness}, fusion ΔE ≤ ${effectiveMergeTolerance}`
-        );
-        report("Chargement de l'image", 5, "Décodage de la source");
-        const loadedImage = await loadImageSource(imageFile);
-  
-        // Scale down if too large (max 1200px)
-        const maxDim = 1200;
-        let width = loadedImage.width;
-        let height = loadedImage.height;
-  
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+const run = async () => {
+  try {
+    const effectiveMinRegionSize = Math.max(minRegionSize, 20);
+    const effectiveMergeTolerance = Math.max(mergeTolerance, 1);
+
+    report(
+      "Initialisation du traitement",
+      2,
+      `Paramètres : ${numColors} couleurs, zone minimale ${effectiveMinRegionSize}px, lissage ${smoothness}, fusion ΔE ≤ ${effectiveMergeTolerance}`
+    );
+
+    // 👉 C’est ici qu’on insère le nouveau bloc :
+    let imageData: ImageData;
+    let width: number;
+    let height: number;
+
+    // 🔵 Nouveau bloc : gestion double mode
+    if (imageFile instanceof ImageData) {
+      imageData = imageFile;
+      width = imageFile.width;
+      height = imageFile.height;
+      report("Chargement de l'image", 5, `Image déjà décodée (${width}x${height})`);
+    } else {
+      report("Chargement de l'image", 5, "Décodage de la source");
+      const loadedImage = await loadImageSource(imageFile);
+      const maxDim = 1200;
+      width = loadedImage.width;
+      height = loadedImage.height;
+
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
-  
-        report("Préparation du canevas", 8, `Dimensions initiales ${loadedImage.width}x${loadedImage.height} → ${width}x${height}`);
-  
-        const { ctx } = canvasFactory.createCanvas(width, height);
-        ctx.drawImage(loadedImage.source, 0, 0, width, height);
-  
-        const imageData = ctx.getImageData(0, 0, width, height);
+      }
+
+      report(
+        "Préparation du canevas",
+        8,
+        `Dimensions initiales ${loadedImage.width}x${loadedImage.height} → ${width}x${height}`
+      );
+
+      const { ctx } = canvasFactory.createCanvas(width, height);
+      ctx.drawImage(loadedImage.source, 0, 0, width, height);
+      imageData = ctx.getImageData(0, 0, width, height);
+      loadedImage.cleanup?.();
+    }
+
   
         // === Cache check ===
         report("Vérification du cache", 10, "Recherche d'un résultat existant");
@@ -2539,10 +2714,20 @@ report(
   88,
   `Zones optimisées en ${Date.now() - labelPlacementStart}ms`
 );
-
 // === STEP 8: Generate contours image ===
 report("Génération des contours", 90, "Rasterisation des lignes de séparation");
-const contoursData = detectEdges(smoothedLabels, width, height);
+
+// --- DÉBOGAGE : Vérifions les variables juste avant l'appel ---
+console.log("[DEBUG AVANT DETECTEDGES] smoothedLabels est un tableau de", smoothedLabels?.length, "éléments.");
+console.log("[DEBUG AVANT DETECTEDGES] quantizedData est un ImageData de", quantizedData?.width, "x", quantizedData?.height);
+// --- FIN DU DÉBOGAGE ---
+
+
+// --- CORRECTION : On génère la carte de gris et on la passe en argument ---
+const grayscaleMapForContours = generateGrayscaleMap(quantizedData);
+console.log("[DEBUG AVANT DETECTEDGES] grayscaleMapForContours est un tableau de", grayscaleMapForContours?.length, "éléments.");
+
+const contoursData = detectEdges(smoothedLabels, grayscaleMapForContours, width, height);
 
 // === STEP 9: SVG generation ===
 report("Génération du SVG", 92, "Conversion des polygones en chemins");
@@ -2561,7 +2746,7 @@ const numberedData = createNumberedVersion(
 report("Fusion de l'aperçu final", 96, "Superposition image + contours + numéros");
 
 const { ctx: previewCtx } = canvasFactory.createCanvas(width, height);
-previewCtx.drawImage(loadedImage.source, 0, 0, width, height);
+previewCtx.putImageData(imageData, 0, 0);
 const originalImageData = previewCtx.getImageData(0, 0, width, height);
 
 const previewData = createPreviewFusion(
@@ -2584,8 +2769,107 @@ for (const zone of refinedZones) {
   }
   colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
 }
+// 🧩 Création d'une source ImageData brute si absente
+if (typeof imageData === "undefined" || !imageData) {
+  try {
+    const tmpCanvas = document.createElement("canvas");
+    tmpCanvas.width = width;
+    tmpCanvas.height = height;
+    const ctx = tmpCanvas.getContext("2d");
 
-// === Final result ===
+    if (ctx && newColorMap) {
+      const imgData = ctx.createImageData(width, height);
+      for (let i = 0; i < newColorMap.length; i++) {
+        const color = palette[newColorMap[i]];
+        const idx = i * 4;
+        const rgb = color.match(/[A-Fa-f0-9]{2}/g);
+        if (rgb) {
+          imgData.data[idx] = parseInt(rgb[0], 16);
+          imgData.data[idx + 1] = parseInt(rgb[1], 16);
+          imgData.data[idx + 2] = parseInt(rgb[2], 16);
+          imgData.data[idx + 3] = 255;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      imageData = imgData; // ✅ réaffectation sans redeclaration
+      console.log("[detectEdges] 🔧 ImageData reconstruite à partir de newColorMap");
+    }
+  } catch (e) {
+    console.warn("[detectEdges] Impossible de reconstruire l'image source :", e);
+  }
+}
+
+// ===  Détection des contours (ΔE + Sobel/Prewitt/Canny) ===
+let edges: ImageData | null = null;
+try {
+  report("Détection des contours", 70, "Fusion ΔE + Sobel/Prewitt + Canny");
+
+  // 🧩 1️⃣ Vérification que l'image source existe
+  let grayscaleSource: ImageData | null = null;
+  const isImageData = (obj: any): obj is ImageData =>
+    obj && typeof obj === "object" && "data" in obj && "width" in obj && "height" in obj;
+
+  // 🔍 Sélection intelligente de la meilleure source disponible
+  if (isImageData(imageData)) grayscaleSource = imageData;
+  else if (isImageData(colorized)) grayscaleSource = colorized;
+  else if (isImageData(previewData)) grayscaleSource = previewData;
+  else if (isImageData(contoursData)) grayscaleSource = contoursData;
+  else if (isImageData(numberedData)) grayscaleSource = numberedData;
+
+  if (!grayscaleSource) {
+    console.warn("[detectEdges] ⚠️ Aucune source ImageData valide trouvée — création d’un tampon blanc.");
+    grayscaleSource = new ImageData(width, height);
+  }
+
+  console.log("[detectEdges] ✅ Source ImageData sélectionnée :", grayscaleSource.width, "x", grayscaleSource.height);
+
+ // 🧩 2️⃣ Génération fiable des niveaux de gris
+let grayscaleMap: Uint8Array;
+
+if (!grayscaleSource) {
+  console.warn("[detectEdges] ⚠️ Aucun buffer d'image valide trouvé, fallback blanc.");
+  const blank = new ImageData(width, height);
+  blank.data.fill(255);
+  grayscaleMap = generateGrayscaleMap(blank);
+} else {
+  try {
+    grayscaleMap = generateGrayscaleMap(grayscaleSource);
+  } catch (err) {
+    console.warn("[detectEdges] ⚠️ Erreur lors de la génération de la carte de gris :", err);
+    const blank = new ImageData(width, height);
+    blank.data.fill(255);
+    grayscaleMap = generateGrayscaleMap(blank);
+  }
+}
+
+// 🧩 Vérification de cohérence
+if (!grayscaleMap || grayscaleMap.length !== width * height) {
+  console.warn(
+    `[detectEdges] ⚠️ grayscaleMap incohérente : ${grayscaleMap?.length} (attendu ${width * height}), fallback blanc.`
+  );
+  const tmp = new Uint8Array(width * height);
+  tmp.fill(255);
+  grayscaleMap = tmp;
+}
+
+// ✅ Lancement final du détecteur de contours
+edges = detectEdges(initialLabels, grayscaleMap, width, height);
+
+
+  // 🧩 3️⃣ Validation du résultat
+  if (edges) {
+    report("Contours détectés avec succès", 70, `${edges.width}x${edges.height}px`);
+  } else {
+    console.warn("[detectEdges] Aucun contour détecté.");
+  }
+} catch (err) {
+  console.error("[processImage] Erreur lors de la détection des contours :", err);
+  report("Erreur de contours", 70, "Échec de detectEdges()");
+}
+
+
+// --- Début de la section de finalisation ---
+
 clearTimeout(timeoutId);
 const totalTime = Date.now() - startTime;
 console.log(
@@ -2650,9 +2934,11 @@ const result: ProcessedResult = {
     wasCached: false,
     averageDeltaE: enableSmartPalette ? averageDeltaE : undefined
   },
+  // Les contours sont maintenant intégrés proprement.
+  edges: edges,
 };
 
-// 🔍 Structured clone test
+// 🔍 Structured clone test (maintenant valide sur l'objet complet)
 try {
   structuredClone(result);
   console.log("✅ Structured clone test réussi — pas de références circulaires.");
