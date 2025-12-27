@@ -6,6 +6,7 @@ import {
   ReactNode,
   useEffect,
 } from "react";
+import { toast } from "sonner";
 import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
 import { useProfiler } from "@/hooks/useProfiler";
 
@@ -321,9 +322,9 @@ const renderToCanvas = useCallback((
     ctx.textBaseline = "middle";
 
     for (const zone of result.zones) {
-      if (zone.centroid && zone.label != null) {
+      if (zone.centroid && zone.id != null) {
         ctx.fillText(
-          zone.label.toString(),
+          zone.id.toString(),
           Math.round(zone.centroid.x * scaleRatioX * scale) + 0.5,
           Math.round(zone.centroid.y * scaleRatioY * scale) + 0.5
         );

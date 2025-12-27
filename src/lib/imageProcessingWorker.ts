@@ -335,20 +335,26 @@ export async function processImageWithWorker(
     try {
       const bmp = await createImageBitmap(imageFile);
       result.metadata = {
-        ...(result.metadata || {}),
+        totalProcessingTimeMs: result.metadata?.totalProcessingTimeMs ?? 0,
+        cacheKey: result.metadata?.cacheKey ?? "",
+        wasCached: result.metadata?.wasCached ?? false,
         width: bmp.width,
         height: bmp.height,
+        averageDeltaE: result.metadata?.averageDeltaE,
       };
       bmp.close();
     } catch (e) {
-      console.warn("[Worker] Impossible de récupérer les dimensions de l’image :", e);
+      console.warn("[Worker] Impossible de récupérer les dimensions de l'image :", e);
       await new Promise<void>((resolve) => {
         const img = new Image();
         img.onload = () => {
           result.metadata = {
-            ...(result.metadata || {}),
+            totalProcessingTimeMs: result.metadata?.totalProcessingTimeMs ?? 0,
+            cacheKey: result.metadata?.cacheKey ?? "",
+            wasCached: result.metadata?.wasCached ?? false,
             width: img.width,
             height: img.height,
+            averageDeltaE: result.metadata?.averageDeltaE,
           };
           resolve();
         };

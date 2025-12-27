@@ -486,9 +486,6 @@ return {
   recommendedMinRegionSize,
   quantStep,
   mode,
-  recommendedEdgeSoftness: typeInfo.type === "photo" ? 50 : 10,
-  recommendedDeltaE: typeInfo.type === "photo" ? 5 : 3,
-  fusionArtistic: typeInfo.type !== "technical",
 };
 
 }
@@ -2341,8 +2338,7 @@ async function loadImageSource(imageFile: File): Promise<LoadedImageSource> {
  * @param enableSmartPalette - Enable intelligent palette balancing (default: false)
  */
 export async function processImage(
-
-  imageFile: File,
+  imageFile: File | ImageData,
   numColors: number,
   minRegionSize: number,
   smoothness: number,
@@ -2447,7 +2443,6 @@ const run = async () => {
             100,
             `Réutilisation de ${cached.zones.length} zones et ${cached.palette.length} couleurs`
           );
-          loadedImage.cleanup?.();
           return resolve({
             ...cached,
             progressLog: [...progressLog],
@@ -2811,7 +2806,6 @@ try {
 
   // 🔍 Sélection intelligente de la meilleure source disponible
   if (isImageData(imageData)) grayscaleSource = imageData;
-  else if (isImageData(colorized)) grayscaleSource = colorized;
   else if (isImageData(previewData)) grayscaleSource = previewData;
   else if (isImageData(contoursData)) grayscaleSource = contoursData;
   else if (isImageData(numberedData)) grayscaleSource = numberedData;
@@ -2934,8 +2928,6 @@ const result: ProcessedResult = {
     wasCached: false,
     averageDeltaE: enableSmartPalette ? averageDeltaE : undefined
   },
-  // Les contours sont maintenant intégrés proprement.
-  edges: edges,
 };
 
 // 🔍 Structured clone test (maintenant valide sur l'objet complet)
