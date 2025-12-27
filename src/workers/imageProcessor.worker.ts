@@ -77,45 +77,39 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       self.postMessage(progressResponse);
     };
     
-// 🧩 Décodage robuste du fichier image en ImageData
-let decodedImageData: ImageData | null = null;
-try {
-  const arrayBuffer = await imageFile.arrayBuffer();
-  const blob = new Blob([arrayBuffer], { type: imageFile.type });
-  const imageBitmap = await createImageBitmap(blob);
+    // 🧩 Décodage robuste du fichier image en ImageData
+    let decodedImageData: ImageData;
+    try {
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: imageFile.type });
+      const imageBitmap = await createImageBitmap(blob);
 
-  const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Impossible de créer le contexte 2D pour le décodage.");
+      const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Impossible de créer le contexte 2D pour le décodage.");
 
-  ctx.drawImage(imageBitmap, 0, 0);
-  decodedImageData = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height);
-  imageBitmap.close();
+      ctx.drawImage(imageBitmap, 0, 0);
+      decodedImageData = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height);
+      imageBitmap.close();
 
-  console.log("[Worker] ✅ Image décodée correctement :", decodedImageData.width, "x", decodedImageData.height);
-} catch (err) {
-  console.error("[Worker] ❌ Échec du décodage ImageData, fallback FileReader :", err);
-  try {
-    const reader = new FileReaderSync(); // dispo en Worker
-    const blobUrl = URL.createObjectURL(imageFile);
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = reject;
-      i.src = blobUrl;
-    });
-    const canvas = new OffscreenCanvas(img.width, img.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Impossible de créer le contexte 2D (fallback).");
-    ctx.drawImage(img, 0, 0);
-    decodedImageData = ctx.getImageData(0, 0, img.width, img.height);
-    URL.revokeObjectURL(blobUrl);
-    console.log("[Worker] ✅ Fallback réussi :", decodedImageData.width, "x", decodedImageData.height);
-  } catch (fallbackErr) {
-    console.error("[Worker] ❌ Fallback échoué :", fallbackErr);
-    throw new Error("Impossible de convertir le fichier image en ImageData (même en fallback).");
-  }
-}
+      console.log("[Worker] ✅ Image décodée correctement :", decodedImageData.width, "x", decodedImageData.height);
+    } catch (err) {
+      console.error("[Worker] ❌ Échec du décodage ImageData, fallback createImageBitmap :", err);
+      try {
+        // Re-try with createImageBitmap from file directly
+        const imageBitmapRetry = await createImageBitmap(imageFile);
+        const retryCanvas = new OffscreenCanvas(imageBitmapRetry.width, imageBitmapRetry.height);
+        const retryCtx = retryCanvas.getContext("2d");
+        if (!retryCtx) throw new Error("Impossible de créer le contexte 2D (fallback).");
+        retryCtx.drawImage(imageBitmapRetry, 0, 0);
+        decodedImageData = retryCtx.getImageData(0, 0, imageBitmapRetry.width, imageBitmapRetry.height);
+        imageBitmapRetry.close();
+        console.log("[Worker] ✅ Fallback réussi :", decodedImageData.width, "x", decodedImageData.height);
+      } catch (fallbackErr) {
+        console.error("[Worker] ❌ Fallback échoué :", fallbackErr);
+        throw new Error("Impossible de convertir le fichier image en ImageData (même en fallback).");
+      }
+    }
 	
     // Process image with progress callback
     const result = await processImage(
