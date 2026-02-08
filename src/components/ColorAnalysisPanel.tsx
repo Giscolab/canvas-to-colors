@@ -113,7 +113,7 @@ export function ColorAnalysisPanel({
         <CardContent className="space-y-2 p-2 text-xs text-muted-foreground">
           <p>
             L'analyse brute n'est pas disponible pour le moment. Lancez-la depuis le bouton
-            "Analyse brute" à côté de l'upload.
+            "Analyser l'image" à côté de l'upload.
           </p>
           <Button type="button" size="sm" onClick={onClose}>
             Fermer
@@ -125,6 +125,7 @@ export function ColorAnalysisPanel({
 
   const uniqueColors = analysis.uniqueColorsCount ?? 0;
   const complexityScore = Math.max(0, Math.min(100, analysis.complexityScore ?? 0));
+  const edgeDensity = Math.max(0, Math.min(1, analysis.edgeDensity ?? 0));
   const modeLabel = analysis.mode === "vector" ? "Vectorielle" : "Photographique";
   const cx = complexityInfo(complexityScore);
 
@@ -164,6 +165,12 @@ export function ColorAnalysisPanel({
           <div className="rounded border bg-card p-1.5">
             <div className="text-muted-foreground text-[10px] leading-tight">Mode</div>
             <div className="font-mono text-xs truncate">{modeLabel}</div>
+          </div>
+          <div className="rounded border bg-card p-1.5">
+            <div className="text-muted-foreground text-[10px] leading-tight">Densité d'arêtes</div>
+            <div className="font-mono text-base tabular-nums">
+              {(edgeDensity * 100).toFixed(1)}%
+            </div>
           </div>
         </div>
 
@@ -318,7 +325,7 @@ export function ColorAnalysisPanel({
             Appliquer les recommandations
           </Button>
           <Button type="button" size="sm" variant="outline" onClick={onClose}>
-            Modifier manuellement
+            Modifier les paramètres
           </Button>
         </div>
       </CardContent>

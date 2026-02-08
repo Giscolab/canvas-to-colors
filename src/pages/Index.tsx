@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
@@ -60,10 +60,10 @@ function IndexContent() {
       const isVectorSource = isSvgFile(file);
       let processingFile = file;
       const resetSettings = {
-        numColors: 0,
-        minRegionSize: 0,
+        numColors: 36,
+        minRegionSize: 20,
         smoothness: 0,
-        mergeTolerance: 0,
+        mergeTolerance: 5,
         enableArtisticMerge: false,
         smartPalette: false,
         paintEffect: "none",
@@ -159,6 +159,10 @@ function IndexContent() {
   const handleProcess = async () => {
     const file = studio.currentProject?.imageFile ?? lastFileRef.current;
     if (!file) return toast.error("Aucun fichier à traiter");
+    if (!studio.analysis) {
+      toast.error("Veuillez d'abord analyser l'image.");
+      return;
+    }
 
     studio.setIsProcessing(true);
     setProcessingStage("Initialisation…");
@@ -249,7 +253,7 @@ function IndexContent() {
                 onClick={handleAnalyze}
                 disabled={!selectedImageUrl || isAnalyzing}
               >
-                {isAnalyzing ? "Analyse en cours…" : "Analyse brute"}
+                {isAnalyzing ? "Analyse en cours…" : "Analyser l'image"}
               </Button>
               {studio.analysis && (
                 <Button
@@ -327,6 +331,8 @@ function IndexContent() {
               onProfilingEnabledChange={(enabled) =>
                 studio.updateSettings({ profilingEnabled: enabled })
               }
+              analysisReady={Boolean(studio.analysis)}
+              recommendations={studio.recommendations}
               onProcess={handleProcess}
               isProcessing={studio.isProcessing}
             />
