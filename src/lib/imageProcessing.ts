@@ -2,10 +2,13 @@ import { isoContours } from 'marchingsquares';
 import polylabel from 'polylabel';
 import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
-import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor, balancePalette, averagePaletteDeltaE } from './colorUtils';
-import { artisticMerge, ArtisticMergeStats } from './regionMerge';
+import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } from './colorUtils';
+import type { ArtisticMergeStats } from './regionMerge';
 import { analyzeBruteSignal, type BruteSignalReport } from './bruteSignalAnalyzer';
 import { LRUCache } from './lruCache';
+import { createCanvasFactory } from './canvasFactory';
+import { analysisPipeline } from './analysisPipeline';
+import { renderPipeline } from './renderPipeline';
 
 // Image processing utilities for paint-by-numbers conversion
 // Enhanced with ΔE2000 perceptual color distance, adaptive simplification, and parametric caching
@@ -101,54 +104,15 @@ interface Contour {
   path: Array<{ x: number; y: number }>;
 }
 
-type CanvasLike = HTMLCanvasElement | OffscreenCanvas;
-type Canvas2DContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-
-interface CanvasHandle {
-  canvas: CanvasLike;
-  ctx: Canvas2DContext;
-}
-
-function createCanvasFactory() {
-  if (typeof document === 'undefined') {
-    if (typeof OffscreenCanvas === 'undefined') {
-      throw new Error('OffscreenCanvas is not supported in this environment.');
-    }
-    return {
-      createCanvas(width: number, height: number): CanvasHandle {
-        const canvas = new OffscreenCanvas(width, height);
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) {
-          throw new Error('Unable to acquire 2D context from OffscreenCanvas');
-        }
-        return { canvas, ctx };
-      }
-    };
-  }
-
-  return {
-    createCanvas(width: number, height: number): CanvasHandle {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (!ctx) {
-        throw new Error('Unable to acquire 2D context from canvas element');
-      }
-      return { canvas, ctx };
-    }
-  };
-}
-
 const canvasFactory = createCanvasFactory();
 
 // ============= COLOR UTILITIES =============
 
-function rgbToHex(r: number, g: number, b: number): string {
+export function rgbToHex(r: number, g: number, b: number): string {
   return rgbToHexColor(Math.round(r), Math.round(g), Math.round(b));
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? [
     parseInt(result[1], 16),
@@ -637,7 +601,7 @@ function _avgStatMetric(
  * Merge near-identical colors to avoid splitting visually identical regions
  * Uses ΔE2000 threshold to detect imperceptible differences
  */
-function mergeNearIdenticalColors(
+export function mergeNearIdenticalColors(
   palette: string[],
   threshold: number = 5 // ΔE2000 < 5 = imperceptible
 ): string[] {
@@ -674,7 +638,7 @@ function mergeNearIdenticalColors(
  * Merges colors with ΔE2000 < threshold and updates the colorMap indices
  * This fixes issues where K-means produces visually identical colors (e.g., multiple whites)
  */
-function consolidateColorMap(
+export function consolidateColorMap(
   palette: string[],
   colorMap: number[],
   paletteLabCache: [number, number, number][],
@@ -727,7 +691,7 @@ function consolidateColorMap(
 /**
  * Quantize image colors using K-means++ clustering
  */
-function quantizeColors(imageData: ImageData, numColors: number): string[] {
+export function quantizeColors(imageData: ImageData, numColors: number): string[] {
   const { data, width, height } = imageData;
   const totalPixels = width * height;
 
@@ -834,7 +798,7 @@ function quantizeColors(imageData: ImageData, numColors: number): string[] {
  * Label connected components using flood fill
  * Returns zone labels and zone metadata
  */
-function labelConnectedComponents(
+export function labelConnectedComponents(
   colorMap: number[],
   width: number,
   height: number
@@ -901,7 +865,7 @@ function labelConnectedComponents(
  * Rebuild zone metadata from a modified label map
  * Uses reference zones to preserve color assignments
  */
-function buildZonesFromLabels(
+export function buildZonesFromLabels(
   labels: Int32Array,
   palette: string[],
   width: number,
@@ -954,7 +918,7 @@ function buildZonesFromLabels(
   return zones;
 }
 
-function mergeSimilarAdjacentZones(
+export function mergeSimilarAdjacentZones(
   zones: Zone[],
   labels: Int32Array,
   palette: string[],
@@ -1127,7 +1091,7 @@ function mergeSimilarAdjacentZones(
  * Merge small zones with their nearest neighbor by color distance and compactness
  * Optimized with zone maps for faster lookups
  */
-function mergeSmallZones(
+export function mergeSmallZones(
   zones: Zone[],
   labels: Int32Array,
   palette: string[],
@@ -1255,7 +1219,7 @@ function mergeSmallZones(
  * Apply morphological operations for edge smoothing with adaptive range
  * Uses adaptive neighborhood size based on image dimensions for better performance
  */
-function smoothZones(
+export function smoothZones(
   labels: Int32Array,
   width: number,
   height: number,
@@ -1360,7 +1324,7 @@ function simplifyPath(
  * Merge adjacent polygons of the same color using martinez-polygon-clipping
  * This reduces the number of polygons and simplifies the output
  */
-function mergeAdjacentPolygons(
+export function mergeAdjacentPolygons(
   contours: Contour[],
   zones: Zone[]
 ): Contour[] {
@@ -1516,7 +1480,7 @@ function toClosedRing(path: Array<{ x: number; y: number }>): Array<[number, num
   return ring;
 }
 
-function refineZoneLabelPositions(
+export function refineZoneLabelPositions(
   zones: Zone[],
   contours: Contour[],
   width: number,
@@ -1644,7 +1608,7 @@ function findPoleOfInaccessibility(
 /**
  * Trace contours using Marching Squares polygonization
  */
-function traceContours(
+export function traceContours(
   width: number,
   height: number,
   zones: Zone[]
@@ -1738,7 +1702,7 @@ function generateFallbackSVG(
 /**
  * Generate SVG from contours
  */
-function generateSVG(
+export function generateSVG(
   contours: Contour[],
   zones: Zone[],
   palette: string[],
@@ -1852,11 +1816,12 @@ function findBestLabelPosition(
 /**
  * Create numbered version with optimal label positioning (enhanced with pbnify algorithm)
  */
-function createNumberedVersion(
+export function createNumberedVersion(
   imageData: ImageData,
   zones: Zone[],
   palette: string[],
-  labels: Int32Array
+  labels: Int32Array,
+  contoursData: ImageData
 ): ImageData {
   const width = imageData.width;
   const height = imageData.height;
@@ -1866,9 +1831,10 @@ function createNumberedVersion(
   // Start with white background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
-  const grayscaleMapForNumbers = generateGrayscaleMap(imageData);
-  // Draw thin black contours
-const edgesData = detectEdges(labels, grayscaleMapForNumbers, width, height);
+  if (contoursData.width !== width || contoursData.height !== height) {
+    throw new Error('Contours invalides pour la version numérotée.');
+  }
+  const edgesData = contoursData;
   for (let i = 0; i < edgesData.data.length; i += 4) {
     if (edgesData.data[i] === 0) { // Black pixel = edge
       const pixelIdx = i / 4;
@@ -1922,7 +1888,7 @@ const edgesData = detectEdges(labels, grayscaleMapForNumbers, width, height);
 /**
  * Create preview fusion: image + contours + numbers layered together
  */
-function createPreviewFusion(
+export function createPreviewFusion(
   quantizedData: ImageData,
   contoursData: ImageData,
   numberedData: ImageData,
@@ -1972,7 +1938,7 @@ function createPreviewFusion(
 /**
  * Generate legend with zone info
  */
-function generateLegend(zones: Zone[], palette: string[], totalPixels: number): LegendEntry[] {
+export function generateLegend(zones: Zone[], palette: string[], totalPixels: number): LegendEntry[] {
   const colorCounts = new Map<number, number>();
   
   for (const zone of zones) {
@@ -1990,18 +1956,20 @@ function generateLegend(zones: Zone[], palette: string[], totalPixels: number): 
 }
 
 // === Conversion en niveaux de gris pour les gradients ===
-function generateGrayscaleMap(imageData: ImageData): Uint8Array {
+export function generateGrayscaleMap(imageData: ImageData): Uint8Array {
   if (
     !imageData ||
     typeof imageData.width !== "number" ||
     typeof imageData.height !== "number" ||
     !imageData.data
   ) {
-    console.warn("[generateGrayscaleMap] ⚠️ ImageData invalide ou vide :", imageData);
-    return new Uint8Array(0);
+    throw new Error("ImageData invalide pour la génération de niveaux de gris.");
   }
 
   const { width, height, data } = imageData;
+  if (data.length !== width * height * 4) {
+    throw new Error("ImageData incohérente pour la génération de niveaux de gris.");
+  }
   const grayscaleMap = new Uint8Array(width * height);
 
   // Conversion rapide RGB → niveaux de gris perceptuels (Rec. 709)
@@ -2013,42 +1981,30 @@ function generateGrayscaleMap(imageData: ImageData): Uint8Array {
     grayscaleMap[j] = (0.2126 * r + 0.7152 * g + 0.0722 * b) | 0;
   }
 
-  console.log(`[generateGrayscaleMap] ✅ Carte générée (${width}x${height})`);
   return grayscaleMap;
 }
 
 
 // ============= EDGE DETECTION =============
 
-function detectEdges(labels: Int32Array, grayscaleMap: Uint8Array, width: number, height: number): ImageData {
-  // === Validation et correction automatique des entrées ===
+export function detectEdges(
+  labels: Int32Array,
+  grayscaleMap: Uint8Array,
+  width: number,
+  height: number
+): ImageData {
   if (!labels || !grayscaleMap) {
-    console.warn("[detectEdges] Données manquantes — labels ou grayscaleMap indéfini.");
-    return new ImageData(Math.max(width, 1), Math.max(height, 1));
+    throw new Error("detectEdges: labels ou grayscaleMap manquant.");
   }
 
-  // Calcul de la taille attendue
   const expectedSize = width * height;
-  const labelSize = labels.length;
-  const graySize = grayscaleMap.length;
-
-  if (labelSize !== expectedSize || graySize !== expectedSize) {
-    console.warn(
-      `[detectEdges] ⚠️ Mismatch détecté : labels=${labelSize}, grayscale=${graySize}, attendu=${expectedSize}`
-    );
-
-    // Tentative de correction "intelligente"
-    const dim = Math.floor(Math.sqrt(Math.min(labelSize, graySize)));
-    width = dim;
-    height = Math.floor(Math.min(labelSize, graySize) / dim);
-
-    console.warn(`[detectEdges] Dimensions corrigées automatiquement → ${width}x${height}`);
-  }
-
-  // ✅ Vérification finale
   if (width <= 0 || height <= 0) {
-    console.warn("[detectEdges] Dimensions invalides après correction, utilisation de valeurs minimales 1x1.");
-    width = height = 1;
+    throw new Error("detectEdges: dimensions invalides.");
+  }
+  if (labels.length !== expectedSize || grayscaleMap.length !== expectedSize) {
+    throw new Error(
+      `detectEdges: taille incohérente (labels=${labels.length}, grayscale=${grayscaleMap.length}, attendu=${expectedSize}).`
+    );
   }
 
   const result = new ImageData(width, height);
@@ -2217,65 +2173,6 @@ function detectEdges(labels: Int32Array, grayscaleMap: Uint8Array, width: number
 }
 // ============= MAIN PROCESSING PIPELINE =============
 
-interface LoadedImageSource {
-  source: CanvasImageSource;
-  width: number;
-  height: number;
-  cleanup?: () => void;
-}
-
-async function loadImageSource(imageFile: File): Promise<LoadedImageSource> {
-  if (typeof document === 'undefined') {
-    if (typeof createImageBitmap !== 'function') {
-      throw new Error('Image decoding is not supported in this environment.');
-    }
-    const bitmap = await createImageBitmap(imageFile);
-    return {
-      source: bitmap,
-      width: bitmap.width,
-      height: bitmap.height,
-      cleanup: () => bitmap.close()
-    };
-  }
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-
-    const cleanup = () => {
-      reader.onload = null;
-      reader.onerror = null;
-      img.onload = null;
-      (img as any).onerror = null;
-    };
-
-    reader.onload = e => {
-      img.src = e.target?.result as string;
-    };
-
-    reader.onerror = () => {
-      cleanup();
-      reject(new Error('Impossible de lire le fichier image.'));
-    };
-
-    img.onload = () => {
-      cleanup();
-      resolve({
-        source: img,
-        width: img.naturalWidth || img.width,
-        height: img.naturalHeight || img.height
-      });
-    };
-
-    (img as any).onerror = () => {
-      cleanup();
-      reject(new Error('Impossible de charger l\'image fournie.'));
-    };
-
-    reader.readAsDataURL(imageFile);
-  });
-}
-
 /**
  * Process image: quantize, segment, merge, smooth, trace contours, generate SVG and numbered version
  * @param enableSmartPalette - Enable intelligent palette balancing (default: false)
@@ -2293,7 +2190,6 @@ export async function processImage(
   const GLOBAL_TIMEOUT = 30000; // 30 seconds max
   const startTime = Date.now();
   const progressLog: ProgressEvent[] = [];
-  let artisticMergeStats: ArtisticMergeStats | undefined;
 
   const report = (stage: string, progress: number, detail?: string) => {
     const timestamp = Date.now() - startTime;
@@ -2310,63 +2206,27 @@ export async function processImage(
           "Le traitement a dépassé le délai maximum de 30 secondes. Essayez avec une image plus petite ou moins de couleurs."
         )
       );
- }, GLOBAL_TIMEOUT);
+    }, GLOBAL_TIMEOUT);
 
-const run = async () => {
-  try {
-    const effectiveMinRegionSize = Math.max(minRegionSize, 20);
-    const effectiveMergeTolerance = Math.max(mergeTolerance, 1);
+    const run = async () => {
+      try {
+        const effectiveMinRegionSize = Math.max(minRegionSize, 20);
+        const effectiveMergeTolerance = Math.max(mergeTolerance, 1);
 
-    report(
-      "Initialisation du traitement",
-      2,
-      `Paramètres : ${numColors} couleurs, zone minimale ${effectiveMinRegionSize}px, lissage ${smoothness}, fusion ΔE ≤ ${effectiveMergeTolerance}`
-    );
+        report(
+          "Initialisation du traitement",
+          2,
+          `Paramètres : ${numColors} couleurs, zone minimale ${effectiveMinRegionSize}px, lissage ${smoothness}, fusion ΔE ≤ ${effectiveMergeTolerance}`
+        );
 
-    // 👉 C’est ici qu’on insère le nouveau bloc :
-    let imageData: ImageData;
-    let width: number;
-    let height: number;
+        report("Chargement de l'image", 5, "Préparation de la source");
+        const rawAnalysis = await analysisPipeline(imageFile, 1200);
+        const { referenceImageData } = rawAnalysis;
+        const width = referenceImageData.width;
+        const height = referenceImageData.height;
 
-    // 🔵 Nouveau bloc : gestion double mode
-    if (imageFile instanceof ImageData) {
-      imageData = imageFile;
-      width = imageFile.width;
-      height = imageFile.height;
-      report("Chargement de l'image", 5, `Image déjà décodée (${width}x${height})`);
-    } else {
-      report("Chargement de l'image", 5, "Décodage de la source");
-      const loadedImage = await loadImageSource(imageFile);
-      const maxDim = 1200;
-      width = loadedImage.width;
-      height = loadedImage.height;
-
-      if (width > maxDim || height > maxDim) {
-        if (width > height) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      report(
-        "Préparation du canevas",
-        8,
-        `Dimensions initiales ${loadedImage.width}x${loadedImage.height} → ${width}x${height}`
-      );
-
-      const { ctx } = canvasFactory.createCanvas(width, height);
-      ctx.drawImage(loadedImage.source, 0, 0, width, height);
-      imageData = ctx.getImageData(0, 0, width, height);
-      loadedImage.cleanup?.();
-    }
-
-  
-        // === Cache check ===
         report("Vérification du cache", 10, "Recherche d'un résultat existant");
-        const imageHash = await hashImageData(imageData);
+        const imageHash = await hashImageData(referenceImageData);
         const cacheKey = generateCacheKey({
           imageHash,
           numColors,
@@ -2375,7 +2235,7 @@ const run = async () => {
           mergeTolerance: effectiveMergeTolerance,
           enableArtisticMerge,
         });
-  
+
         const cached = getCachedResult(cacheKey);
         if (cached) {
           clearTimeout(timeoutId);
@@ -2399,501 +2259,91 @@ const run = async () => {
             },
           });
         }
-  
-        // === STEP 1: Quantization ===
-        report("Quantification des couleurs", 15, `K-means++ sur ${Math.round(imageData.data.length / 4)} pixels`);
-        const quantizationStart = Date.now();
-        let palette = quantizeColors(imageData, numColors);
-        palette = mergeNearIdenticalColors(palette, effectiveMergeTolerance); // Merge imperceptible color differences
-        
-        // Store raw palette before adaptation
-        const rawPalette = [...palette];
-        let averageDeltaE = 0;
-        
-        // === STEP 1.5: Smart Palette Adaptation (optional) ===
-        if (enableSmartPalette) {
-          report("Adaptation intelligente de la palette", 30, "Équilibrage chromatique");
-          const adaptedPalette = balancePalette(palette, {
-            targetLightness: 50,
-            targetSaturation: 60,
-            contrastBoost: 20,
-            preserveHue: true
-          });
-          averageDeltaE = averagePaletteDeltaE(palette, adaptedPalette);
-          palette = adaptedPalette;
-          report("Palette optimisée", 33, `ΔE moyen: ${averageDeltaE.toFixed(2)}`);
-        } else {
-          report("Palette générée", 28, `${palette.length} couleurs extraites en ${Date.now() - quantizationStart}ms`);
+
+        const { processed, averageDeltaE } = renderPipeline(rawAnalysis, {
+          numColors,
+          minRegionSize,
+          smoothness,
+          mergeTolerance,
+          enableArtisticMerge,
+          enableSmartPalette,
+          report
+        });
+
+        clearTimeout(timeoutId);
+        const totalTime = Date.now() - startTime;
+        console.log(
+          `✅ Processing complete: ${processed.zones.length} zones, ${processed.contours ? 1 : 0} contours in ${totalTime}ms`
+        );
+
+        report("Validation des données", 97, "Contrôle des zones et contours");
+
+        if (!processed.zones.length || !processed.palette.length || !processed.contours) {
+          throw new Error("Résultat de traitement invalide : zones, palette ou contours vides");
         }
-  
-// === STEP 2: Pixel mapping ===
-report("Attribution des pixels", 35, "Calcul des distances perceptuelles ΔE2000");
-const mappingStart = Date.now();
 
-// ⚡️ Utilisation d'un TypedArray pour éviter la surcharge de pile
-const colorMap = new Uint16Array(width * height);
-const quantizedData = new ImageData(width, height);
+        report("Mise en cache", 99, "Résultat prêt pour réutilisation");
+        report("Terminé", 100, `${processed.zones.length} zones en ${totalTime}ms`);
 
-// Pré-calcul du Lab pour la palette
-const paletteLabCache = new Array(palette.length);
-for (let i = 0; i < palette.length; i++) {
-  const [r, g, b] = hexToRgb(palette[i]);
-  paletteLabCache[i] = rgbToLab(r, g, b);
-}
+        console.groupCollapsed("🧩 Safe serialization diagnostics");
+        console.log("Zones:", processed.zones.length);
+        console.log("Palette:", processed.palette.length);
+        console.log("Contours:", processed.contours ? 1 : 0);
 
-let pixelIndex = 0;
-for (let i = 0; i < imageData.data.length; i += 4) {
-  const r = imageData.data[i];
-  const g = imageData.data[i + 1];
-  const b = imageData.data[i + 2];
-
-  const pixelLab = rgbToLab(r, g, b);
-  let minDist = Infinity;
-  let colorIndex = 0;
-
-  // Boucle optimisée
-  for (let idx = 0; idx < paletteLabCache.length; idx++) {
-    const dist = deltaE2000(pixelLab, paletteLabCache[idx]);
-    if (dist < minDist) {
-      minDist = dist;
-      colorIndex = idx;
-    }
-  }
-
-  // Affectation directe sans push()
-  colorMap[pixelIndex++] = colorIndex;
-
-  const [qr, qg, qb] = hexToRgb(palette[colorIndex]);
-  quantizedData.data[i] = qr;
-  quantizedData.data[i + 1] = qg;
-  quantizedData.data[i + 2] = qb;
-  quantizedData.data[i + 3] = 255;
-}
-
-report("Attribution terminée", 42, `Carte de couleurs générée en ${Date.now() - mappingStart}ms`);
-
-// === STEP 2.5: Consolidate near-identical colors ===
-report("Consolidation des couleurs", 44, "Fusion des couleurs perceptuellement identiques");
-const consolidationStart = Date.now();
-
-const { consolidatedPalette, consolidatedColorMap } = consolidateColorMap(
-  palette,
-  Array.from(colorMap), // ✅ convertit le TypedArray
-  paletteLabCache,
-  effectiveMergeTolerance
-);
-
-report(
-  "Consolidation terminée",
-  46,
-  `${palette.length - consolidatedPalette.length} couleurs fusionnées en ${Date.now() - consolidationStart}ms`
-);
-
-// ✅ Update palette et colorMap (reconstruit TypedArray propre)
-palette = consolidatedPalette;
-const newColorMap = new Uint16Array(consolidatedColorMap.length);
-for (let i = 0; i < consolidatedColorMap.length; i++) {
-  newColorMap[i] = consolidatedColorMap[i];
-}
-
-// ✅ Mise à jour du quantizedData consolidé
-const pixelCount = Math.min(consolidatedColorMap.length, width * height);
-for (let i = 0; i < pixelCount; i++) {
-  const colorIndex = consolidatedColorMap[i];
-  if (
-    typeof colorIndex !== "number" ||
-    colorIndex < 0 ||
-    colorIndex >= consolidatedPalette.length
-  ) continue;
-
-  const [qr, qg, qb] = hexToRgb(consolidatedPalette[colorIndex]);
-  const base = i * 4;
-  quantizedData.data[base] = qr;
-  quantizedData.data[base + 1] = qg;
-  quantizedData.data[base + 2] = qb;
-  quantizedData.data[base + 3] = 255;
-}
-
-// === STEP 3: Connected components ===
-report("Segmentation des zones", 48, "Étiquetage des composantes connexes");
-const segmentationStart = Date.now();
-const { labels: initialLabels, zones: initialZones } =
-  labelConnectedComponents(Array.from(newColorMap), width, height); // ✅ conversion Array
-report(
-  "Segmentation terminée",
-  52,
-  `${initialZones.length} zones détectées en ${Date.now() - segmentationStart}ms`
-);
-
-// === STEP 4: Merge small zones ===
-report("Fusion des petites zones", 56, `Taille minimale ${effectiveMinRegionSize}px`);
-const mergeStart = Date.now();
-const { mergedLabels, mergedZones } = mergeSmallZones(
-  initialZones,
-  initialLabels,
-  palette,
-  width,
-  height,
-  effectiveMinRegionSize
-);
-
-// === STEP 4.5: Merge adjacent zones sharing identical colors ===
-const adjacencyTolerance = Math.min(effectiveMergeTolerance / 2, 2);
-let postMergeLabels = mergedLabels;
-let postMergeZones = mergedZones;
-if (adjacencyTolerance > 0 && mergedZones.length > 0) {
-  report(
-    "Fusion des contours fantômes",
-    58,
-    `ΔE ≤ ${adjacencyTolerance.toFixed(2)} entre zones adjacentes`
-  );
-  const adjacencyStart = Date.now();
-  const mergedAdjacencyResult = mergeSimilarAdjacentZones(
-    mergedZones,
-    mergedLabels,
-    palette,
-    width,
-    height,
-    adjacencyTolerance
-  );
-  postMergeLabels = mergedAdjacencyResult.labels;
-  postMergeZones = mergedAdjacencyResult.zones;
-  report(
-    "Contours fantômes fusionnés",
-    59,
-    `${mergedZones.length - postMergeZones.length} regroupements en ${Date.now() - adjacencyStart}ms`
-  );
-}
-
-report(
-  "Fusion terminée",
-  60,
-  `${postMergeZones.length} zones après fusion en ${Date.now() - mergeStart}ms`
-);
-
-if (enableArtisticMerge && postMergeZones.length > 0) {
-  report(
-    "Fusion artistique",
-    61,
-    `ΔE ≤ ${effectiveMergeTolerance.toFixed(1)} / aire ≤ ${effectiveMinRegionSize}px`
-  );
-
-  const artisticResult = artisticMerge(postMergeZones, postMergeLabels, palette, {
-    mergeTolerance: effectiveMergeTolerance,
-    minMergeArea: effectiveMinRegionSize,
-    width,
-    height,
-  });
-
-  postMergeLabels = artisticResult.labels;
-  postMergeZones = artisticResult.zones;
-  artisticMergeStats = artisticResult.stats;
-
-  report(
-    "Fusion artistique terminée",
-    62,
-    `${artisticMergeStats.mergedCount} fusions en ${artisticMergeStats.timeMs.toFixed(1)}ms`
-  );
-}
-
-// === STEP 5: Smooth zones ===
-report("Lissage des bords", 64, `Itérations de lissage : ${Math.round(smoothness)}`);
-const smoothStart = Date.now();
-const smoothedLabels = smoothZones(
-  postMergeLabels,
-  width,
-  height,
-  Math.round(smoothness)
-);
-const smoothedZones = buildZonesFromLabels(
-  smoothedLabels,
-  palette,
-  width,
-  height,
-  postMergeZones
-);
-report(
-  "Lissage terminé",
-  68,
-  `${smoothedZones.length} zones prêtes en ${Date.now() - smoothStart}ms`
-);
-
-// === STEP 6: Contour tracing ===
-report("Traçage des contours", 72, "Marching Squares en cours");
-const contourStart = Date.now();
-const contours = traceContours(width, height, smoothedZones);
-report(
-  "Contours extraits",
-  76,
-  `${contours.length} chemins détectés en ${Date.now() - contourStart}ms`
-);
-
-// === STEP 6.5: Merge polygons of same color ===
-report("Fusion topologique", 80, "Regroupement des polygones par couleur");
-const topologyStart = Date.now();
-const mergedContours = mergeAdjacentPolygons(contours, smoothedZones);
-report(
-  "Topologie stabilisée",
-  83,
-  `${mergedContours.length} contours après fusion en ${Date.now() - topologyStart}ms`
-);
-
-// === STEP 7: Label placement refinement ===
-report("Placement des numéros", 86, "Calcul des centres visuels");
-const labelPlacementStart = Date.now();
-const refinedZones = refineZoneLabelPositions(
-  smoothedZones,
-  mergedContours,
-  width,
-  height
-);
-report(
-  "Positions des étiquettes",
-  88,
-  `Zones optimisées en ${Date.now() - labelPlacementStart}ms`
-);
-// === STEP 8: Generate contours image ===
-report("Génération des contours", 90, "Rasterisation des lignes de séparation");
-
-// --- DÉBOGAGE : Vérifions les variables juste avant l'appel ---
-console.log("[DEBUG AVANT DETECTEDGES] smoothedLabels est un tableau de", smoothedLabels?.length, "éléments.");
-console.log("[DEBUG AVANT DETECTEDGES] quantizedData est un ImageData de", quantizedData?.width, "x", quantizedData?.height);
-// --- FIN DU DÉBOGAGE ---
-
-
-// --- CORRECTION : On génère la carte de gris et on la passe en argument ---
-const grayscaleMapForContours = generateGrayscaleMap(quantizedData);
-console.log("[DEBUG AVANT DETECTEDGES] grayscaleMapForContours est un tableau de", grayscaleMapForContours?.length, "éléments.");
-
-const contoursData = detectEdges(smoothedLabels, grayscaleMapForContours, width, height);
-
-// === STEP 9: SVG generation ===
-report("Génération du SVG", 92, "Conversion des polygones en chemins");
-const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
-
-// === STEP 10: Numbered version ===
-report("Création de la version numérotée", 94, "Rendu des zones et numéros");
-const numberedData = createNumberedVersion(
-  quantizedData,
-  refinedZones,
-  palette,
-  smoothedLabels
-);
-
-// === STEP 11: True preview fusion ===
-report("Fusion de l'aperçu final", 96, "Superposition image + contours + numéros");
-
-const { ctx: previewCtx } = canvasFactory.createCanvas(width, height);
-previewCtx.putImageData(imageData, 0, 0);
-const originalImageData = previewCtx.getImageData(0, 0, width, height);
-
-const previewData = createPreviewFusion(
-  originalImageData,
-  contoursData,
-  numberedData,
-  width,
-  height
-);
-
-// === STEP 12: Legend generation ===
-report("Génération de la légende", 98, `${palette.length} couleurs ordonnées par surface`);
-const legend = generateLegend(refinedZones, palette, width * height);
-
-// === STEP 13: Build color->zone map ===
-const colorZoneMapping = new Map<number, number[]>();
-for (const zone of refinedZones) {
-  if (!colorZoneMapping.has(zone.colorIdx)) {
-    colorZoneMapping.set(zone.colorIdx, []);
-  }
-  colorZoneMapping.get(zone.colorIdx)!.push(zone.id);
-}
-// 🧩 Création d'une source ImageData brute si absente
-if (typeof imageData === "undefined" || !imageData) {
-  try {
-    const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = width;
-    tmpCanvas.height = height;
-    const ctx = tmpCanvas.getContext("2d");
-
-    if (ctx && newColorMap) {
-      const imgData = ctx.createImageData(width, height);
-      for (let i = 0; i < newColorMap.length; i++) {
-        const color = palette[newColorMap[i]];
-        const idx = i * 4;
-        const rgb = color.match(/[A-Fa-f0-9]{2}/g);
-        if (rgb) {
-          imgData.data[idx] = parseInt(rgb[0], 16);
-          imgData.data[idx + 1] = parseInt(rgb[1], 16);
-          imgData.data[idx + 2] = parseInt(rgb[2], 16);
-          imgData.data[idx + 3] = 255;
+        let totalPixels = 0, largestZone = 0;
+        for (const z of processed.zones) {
+          totalPixels += z.pixels.length;
+          largestZone = Math.max(largestZone, z.pixels.length);
         }
+        console.log("Taille totale pixels:", totalPixels);
+        console.log("Plus grande zone:", largestZone);
+
+        const safeZones = processed.zones.map((z) => ({
+          ...z,
+          pixels: z.area < 20000 ? z.pixels.slice(0, 20000) : new Uint32Array(0),
+        }));
+        console.log("Mapping couleurs:", processed.colorZoneMapping?.size ?? 0);
+
+        const estimatedSizeMb = (
+          JSON.stringify({ zones: safeZones.slice(0, 10).map(z => ({ ...z, pixels: [] })) }).length /
+          1024 /
+          1024
+        ).toFixed(2);
+        console.log("Taille JSON estimée:", `${estimatedSizeMb} MB`);
+        console.groupEnd();
+
+        const result: ProcessedResult = {
+          ...processed,
+          zones: safeZones,
+          progressLog: [...progressLog],
+          metadata: {
+            totalProcessingTimeMs: totalTime,
+            width,
+            height,
+            cacheKey,
+            wasCached: false,
+            averageDeltaE
+          },
+        };
+
+        try {
+          structuredClone(result);
+          console.log("✅ Structured clone test réussi — pas de références circulaires.");
+        } catch (cloneErr) {
+          console.error("❌ Structured clone échoué :", cloneErr);
+        }
+
+        setCachedResult(cacheKey, result);
+        resolve(result);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Erreur inconnue lors du traitement de l'image";
+        report("Erreur", 100, message);
+        reject(error instanceof Error ? error : new Error(message));
       }
-      ctx.putImageData(imgData, 0, 0);
-      imageData = imgData; // ✅ réaffectation sans redeclaration
-      console.log("[detectEdges] 🔧 ImageData reconstruite à partir de newColorMap");
-    }
-  } catch (e) {
-    console.warn("[detectEdges] Impossible de reconstruire l'image source :", e);
-  }
-}
-
-// ===  Détection des contours (ΔE + Sobel/Prewitt/Canny) ===
-let edges: ImageData | null = null;
-try {
-  report("Détection des contours", 70, "Fusion ΔE + Sobel/Prewitt + Canny");
-
-  // 🧩 1️⃣ Vérification que l'image source existe
-  let grayscaleSource: ImageData | null = null;
-  const isImageData = (obj: any): obj is ImageData =>
-    obj && typeof obj === "object" && "data" in obj && "width" in obj && "height" in obj;
-
-  // 🔍 Sélection intelligente de la meilleure source disponible
-  if (isImageData(imageData)) grayscaleSource = imageData;
-  else if (isImageData(previewData)) grayscaleSource = previewData;
-  else if (isImageData(contoursData)) grayscaleSource = contoursData;
-  else if (isImageData(numberedData)) grayscaleSource = numberedData;
-
-  if (!grayscaleSource) {
-    console.warn("[detectEdges] ⚠️ Aucune source ImageData valide trouvée — création d’un tampon blanc.");
-    grayscaleSource = new ImageData(width, height);
-  }
-
-  console.log("[detectEdges] ✅ Source ImageData sélectionnée :", grayscaleSource.width, "x", grayscaleSource.height);
-
- // 🧩 2️⃣ Génération fiable des niveaux de gris
-let grayscaleMap: Uint8Array;
-
-if (!grayscaleSource) {
-  console.warn("[detectEdges] ⚠️ Aucun buffer d'image valide trouvé, fallback blanc.");
-  const blank = new ImageData(width, height);
-  blank.data.fill(255);
-  grayscaleMap = generateGrayscaleMap(blank);
-} else {
-  try {
-    grayscaleMap = generateGrayscaleMap(grayscaleSource);
-  } catch (err) {
-    console.warn("[detectEdges] ⚠️ Erreur lors de la génération de la carte de gris :", err);
-    const blank = new ImageData(width, height);
-    blank.data.fill(255);
-    grayscaleMap = generateGrayscaleMap(blank);
-  }
-}
-
-// 🧩 Vérification de cohérence
-if (!grayscaleMap || grayscaleMap.length !== width * height) {
-  console.warn(
-    `[detectEdges] ⚠️ grayscaleMap incohérente : ${grayscaleMap?.length} (attendu ${width * height}), fallback blanc.`
-  );
-  const tmp = new Uint8Array(width * height);
-  tmp.fill(255);
-  grayscaleMap = tmp;
-}
-
-// ✅ Lancement final du détecteur de contours
-edges = detectEdges(initialLabels, grayscaleMap, width, height);
-
-
-  // 🧩 3️⃣ Validation du résultat
-  if (edges) {
-    report("Contours détectés avec succès", 70, `${edges.width}x${edges.height}px`);
-  } else {
-    console.warn("[detectEdges] Aucun contour détecté.");
-  }
-} catch (err) {
-  console.error("[processImage] Erreur lors de la détection des contours :", err);
-  report("Erreur de contours", 70, "Échec de detectEdges()");
-}
-
-
-// --- Début de la section de finalisation ---
-
-clearTimeout(timeoutId);
-const totalTime = Date.now() - startTime;
-console.log(
-  `✅ Processing complete: ${refinedZones.length} zones, ${mergedContours.length} contours in ${totalTime}ms`
-);
-
-report("Validation des données", 97, "Contrôle des zones et contours");
-
-if (!refinedZones.length || !palette.length || !mergedContours.length) {
-  throw new Error("Résultat de traitement invalide : zones, palette ou contours vides");
-}
-
-report("Mise en cache", 99, "Résultat prêt pour réutilisation");
-report("Terminé", 100, `${refinedZones.length} zones en ${totalTime}ms`);
-
-// 🧩 Safe serialization with deep logging
-console.groupCollapsed("🧩 Safe serialization diagnostics");
-console.log("Zones:", refinedZones.length);
-console.log("Palette:", palette.length);
-console.log("Contours:", mergedContours.length);
-
-let totalPixels = 0, largestZone = 0;
-for (const z of refinedZones) {
-  totalPixels += z.pixels.length;
-  largestZone = Math.max(largestZone, z.pixels.length);
-}
-console.log("Taille totale pixels:", totalPixels);
-console.log("Plus grande zone:", largestZone);
-
-const safeZones = refinedZones.map((z) => ({
-  ...z,
-  pixels: z.area < 20000 ? z.pixels.slice(0, 20000) : new Uint32Array(0),
-}));
-console.log("Mapping couleurs:", colorZoneMapping.size);
-
-const estimatedSizeMb = (
-  JSON.stringify({ zones: safeZones.slice(0, 10).map(z => ({ ...z, pixels: [] })) }).length /
-  1024 /
-  1024
-).toFixed(2);
-console.log("Taille JSON estimée:", `${estimatedSizeMb} MB`);
-console.groupEnd();
-
-const result: ProcessedResult = {
-  contours: contoursData,
-  numbered: numberedData,
-  colorized: previewData,
-  palette,
-  rawPalette: enableSmartPalette ? rawPalette : undefined,
-  zones: safeZones,
-  svg,
-  legend,
-  labels: smoothedLabels,
-  colorZoneMapping,
-  artisticMergeStats,
-  progressLog: [...progressLog],
-  metadata: {
-    totalProcessingTimeMs: totalTime, 
-    width, 
-    height, 
-    cacheKey, 
-    wasCached: false,
-    averageDeltaE: enableSmartPalette ? averageDeltaE : undefined
-  },
-};
-
-// 🔍 Structured clone test (maintenant valide sur l'objet complet)
-try {
-  structuredClone(result);
-  console.log("✅ Structured clone test réussi — pas de références circulaires.");
-} catch (cloneErr) {
-  console.error("❌ Structured clone échoué :", cloneErr);
-}
-
-setCachedResult(cacheKey, result);
-resolve(result);
-
-
-    } catch (error) {
-      clearTimeout(timeoutId);
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Erreur inconnue lors du traitement de l'image";
-      report("Erreur", 100, message);
-      reject(error instanceof Error ? error : new Error(message));
-    }
     };
 
     run();
