@@ -78,14 +78,10 @@ function IndexContent() {
       };
 
       studio.setResult(null);
+      studio.setAnalysis(null);
       studio.setCurrentProject(initialProject);
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
-
-      setIsAnalyzing(true);
-      const analysis = await analyzeImageColors(processingFile, () => {});
-      studio.setAnalysis(analysis);
-      toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées`);
 
       toast.success("Image chargée (aperçu)", {
         description: "Normalisation en cours…",
@@ -101,6 +97,26 @@ function IndexContent() {
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors du chargement de l'image");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAnalyze = async () => {
+    const file = studio.currentProject?.imageFile ?? lastFileRef.current;
+    if (!file) {
+      toast.error("Aucun fichier à analyser");
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      const analysis = await analyzeImageColors(file, () => {});
+      studio.setAnalysis(analysis);
+      toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de l'analyse de l'image");
     } finally {
       setIsAnalyzing(false);
     }
@@ -193,11 +209,13 @@ function IndexContent() {
               selectedImage={selectedImageUrl}
             />
 
-            {(studio.analysis || isAnalyzing) && (
+            {(studio.analysis || isAnalyzing || selectedImageUrl) && (
               <ColorAnalysisPanel
                 analysis={studio.analysis}
                 isAnalyzing={isAnalyzing}
                 processedResult={studio.result}
+                hasImage={Boolean(selectedImageUrl)}
+                onAnalyze={handleAnalyze}
               />
             )}
 

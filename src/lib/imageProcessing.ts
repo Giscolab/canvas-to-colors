@@ -213,47 +213,46 @@ export async function analyzeImageColors(
   imageSource: File,
   onProgress?: (progress: number) => void
 ): Promise<ColorAnalysis> {
-  const loadedImage = await loadImageSource(imageSource);
+  if (typeof createImageBitmap !== 'function') {
+    throw new Error('createImageBitmap est indisponible pour une analyse brute.');
+  }
+
+  const bitmap = await createImageBitmap(imageSource);
 
   // === 1️⃣ Analyse brute : aucune mise à l'échelle ni normalisation ===
-  const { width, height } = loadedImage;
+  const { width, height } = bitmap;
   const { ctx } = canvasFactory.createCanvas(width, height);
-  ctx.drawImage(loadedImage.source, 0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
-  loadedImage.cleanup?.();
+  bitmap.close();
 
-  // === 2️⃣ Premier passage rapide pour estimer la complexité brute ===
+  // === 2️⃣ Comptage précis (sans quantification ni échantillonnage) ===
   const totalPixels = imageData.width * imageData.height;
-  const roughSampleRate = Math.max(1, Math.floor(totalPixels / 100000));
-  const roughColors = new Set<string>();
-
-  for (let i = 0; i < imageData.data.length; i += 4 * roughSampleRate) {
-    const hex = rgbToHex(
-      imageData.data[i],
-      imageData.data[i + 1],
-      imageData.data[i + 2]
-    );
-    roughColors.add(hex);
-  }
-  const roughUniqueCount = roughColors.size;
-
-  // === 3️⃣ Échantillonnage et comptage précis (sans quantification) ===
   const colorCounts = new Map<string, number>();
   const colorSet = new Set<string>();
-  const sampleRate = Math.max(1, Math.floor(totalPixels / 80000));
+  const totalDataLength = imageData.data.length;
+  const progressInterval = Math.max(1, Math.floor(totalDataLength / 100));
+  const formatColor = (r: number, g: number, b: number, a: number) => {
+    if (a < 255) {
+      const alpha = Math.round((a / 255) * 1000) / 1000;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    return rgbToHex(r, g, b);
+  };
 
-  for (let i = 0; i < imageData.data.length; i += 4 * sampleRate) {
-    const hex = rgbToHex(
+  for (let i = 0; i < totalDataLength; i += 4) {
+    const hex = formatColor(
       imageData.data[i],
       imageData.data[i + 1],
-      imageData.data[i + 2]
+      imageData.data[i + 2],
+      imageData.data[i + 3]
     );
 
     colorSet.add(hex);
     colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
 
-    if (i % 20000 === 0 && onProgress) {
-      onProgress((i / imageData.data.length) * 80);
+    if (onProgress && i % progressInterval === 0) {
+      onProgress((i / totalDataLength) * 80);
     }
   }
 

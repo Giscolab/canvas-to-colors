@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { ColorAnalysis, ProcessedResult } from "@/lib/imageProcessing";
 import { ResponsiveContainer, BarChart, Bar, Tooltip, XAxis, YAxis, Cell } from "recharts";
 import type { TooltipProps } from "recharts";
@@ -11,6 +12,8 @@ interface ColorAnalysisPanelProps {
   analysis: ColorAnalysis | null;
   isAnalyzing: boolean;
   processedResult?: ProcessedResult | null;
+  hasImage: boolean;
+  onAnalyze: () => void;
 }
 
 const COMPLEXITY_THRESHOLDS = { simple: 30, medium: 60 } as const;
@@ -32,6 +35,8 @@ export function ColorAnalysisPanel({
   analysis,
   isAnalyzing,
   processedResult,
+  hasImage,
+  onAnalyze,
 }: ColorAnalysisPanelProps) {
   const [isDark, setIsDark] = useState(false);
 
@@ -97,7 +102,29 @@ export function ColorAnalysisPanel({
     );
   }
 
-  if (!analysis) return null;
+  if (!analysis) {
+    return (
+      <Card className="border bg-card/60 backdrop-blur">
+        <CardHeader className="p-2 pb-0">
+          <CardTitle className="text-sm flex items-center gap-1.5">📊 Analyse de l'image</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 p-2 text-xs text-muted-foreground">
+          <p>
+            L'analyse brute n'est pas déclenchée automatiquement. Cliquez pour analyser le fichier
+            original (sans resize ni compression).
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onAnalyze}
+            disabled={!hasImage}
+          >
+            Lancer l'analyse brute
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const uniqueColors = analysis.uniqueColorsCount ?? 0;
   const recommendedNum = analysis.recommendedNumColors ?? 0;
