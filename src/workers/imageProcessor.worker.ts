@@ -118,7 +118,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       minRegionSize,
       smoothness,
       mergeTolerance,
-      enableArtisticMerge ?? true,
+      enableArtisticMerge ?? false,
       progressCallback,
       enableSmartPalette ?? false
     );

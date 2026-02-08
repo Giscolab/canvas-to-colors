@@ -4,16 +4,17 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { ColorAnalysis, ProcessedResult } from "@/lib/imageProcessing";
+import { ColorAnalysis, ProcessedResult, Recommendations } from "@/lib/imageProcessing";
 import { ResponsiveContainer, BarChart, Bar, Tooltip, XAxis, YAxis, Cell } from "recharts";
 import type { TooltipProps } from "recharts";
 
 interface ColorAnalysisPanelProps {
   analysis: ColorAnalysis | null;
+  recommendations: Recommendations | null;
   isAnalyzing: boolean;
   processedResult?: ProcessedResult | null;
-  hasImage: boolean;
-  onAnalyze: () => void;
+  onApplyRecommendations: () => void;
+  onClose: () => void;
 }
 
 const COMPLEXITY_THRESHOLDS = { simple: 30, medium: 60 } as const;
@@ -33,10 +34,11 @@ function Swatch({ hex, title }: { hex: string; title?: string }) {
 
 export function ColorAnalysisPanel({
   analysis,
+  recommendations,
   isAnalyzing,
   processedResult,
-  hasImage,
-  onAnalyze,
+  onApplyRecommendations,
+  onClose,
 }: ColorAnalysisPanelProps) {
   const [isDark, setIsDark] = useState(false);
 
@@ -110,16 +112,11 @@ export function ColorAnalysisPanel({
         </CardHeader>
         <CardContent className="space-y-2 p-2 text-xs text-muted-foreground">
           <p>
-            L'analyse brute n'est pas déclenchée automatiquement. Cliquez pour analyser le fichier
-            original (sans resize ni compression).
+            L'analyse brute n'est pas disponible pour le moment. Lancez-la depuis le bouton
+            "Analyse brute" à côté de l'upload.
           </p>
-          <Button
-            type="button"
-            size="sm"
-            onClick={onAnalyze}
-            disabled={!hasImage}
-          >
-            Lancer l'analyse brute
+          <Button type="button" size="sm" onClick={onClose}>
+            Fermer
           </Button>
         </CardContent>
       </Card>
@@ -127,8 +124,6 @@ export function ColorAnalysisPanel({
   }
 
   const uniqueColors = analysis.uniqueColorsCount ?? 0;
-  const recommendedNum = analysis.recommendedNumColors ?? 0;
-  const recommendedMinRegion = analysis.recommendedMinRegionSize ?? 0;
   const complexityScore = Math.max(0, Math.min(100, analysis.complexityScore ?? 0));
   const modeLabel = analysis.mode === "vector" ? "Vectorielle" : "Photographique";
   const cx = complexityInfo(complexityScore);
@@ -136,9 +131,7 @@ export function ColorAnalysisPanel({
   const dominantCount = analysis.dominantColors?.length ?? 0;
   const summaryMessage = `Image ${cx.label.toLowerCase()} ${
     analysis.mode === "vector" ? "(formes nettes) " : ""
-  }avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes — cible: ${recommendedNum} couleur${
-    recommendedNum > 1 ? "s" : ""
-  }, min-région: ${recommendedMinRegion}px. Recommandations non appliquées automatiquement.`;
+  }avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes.`;
 
   const hasOptimizedPalette = Boolean(
     processedResult?.palette?.length && processedResult?.metadata?.averageDeltaE != null
@@ -151,23 +144,22 @@ export function ColorAnalysisPanel({
       </CardHeader>
 
       <CardContent className="space-y-2 p-2">
-        {/* KPI Cards */}
+        {/* Mesures */}
+        <div>
+          <Label className="text-[11px] text-muted-foreground">Mesures</Label>
+        </div>
         <div className="grid grid-cols-2 gap-1">
           <div className="rounded border bg-card p-1.5">
             <div className="text-muted-foreground text-[10px] leading-tight">Couleurs uniques</div>
             <div className="font-mono text-base tabular-nums">{uniqueColors}</div>
           </div>
           <div className="rounded border bg-card p-1.5">
-            <div className="text-muted-foreground text-[10px] leading-tight">
-              Reco couleurs (info)
-            </div>
-            <div className="font-mono text-base tabular-nums">{recommendedNum}</div>
+            <div className="text-muted-foreground text-[10px] leading-tight">Entropie</div>
+            <div className="font-mono text-base tabular-nums">{analysis.entropy.toFixed(2)}</div>
           </div>
           <div className="rounded border bg-card p-1.5">
-            <div className="text-muted-foreground text-[10px] leading-tight">
-              Reco min-region (info)
-            </div>
-            <div className="font-mono text-base tabular-nums">{recommendedMinRegion}px</div>
+            <div className="text-muted-foreground text-[10px] leading-tight">Pixels</div>
+            <div className="font-mono text-base tabular-nums">{analysis.totalPixels}</div>
           </div>
           <div className="rounded border bg-card p-1.5">
             <div className="text-muted-foreground text-[10px] leading-tight">Mode</div>
@@ -210,6 +202,53 @@ export function ColorAnalysisPanel({
             </div>
           ) : (
             <p className="text-[10px] text-muted-foreground mt-1">Aucune dominante détectée.</p>
+          )}
+        </div>
+
+        {/* Interprétation */}
+        <div className="pt-2 border-t border-border/40">
+          <Label className="text-[11px] text-muted-foreground">Interprétation</Label>
+          <div className="text-[10px] text-muted-foreground mt-1 space-y-1">
+            <p>Type détecté : {analysis.imageType?.type ?? "non déterminé"}.</p>
+            <p>Mode suggéré : {modeLabel}.</p>
+            <p>Dominantes : {dominantCount} couleur{dominantCount > 1 ? "s" : ""}.</p>
+          </div>
+        </div>
+
+        {/* Recommandations */}
+        <div className="pt-2 border-t border-border/40">
+          <Label className="text-[11px] text-muted-foreground">Recommandations</Label>
+          {recommendations ? (
+            <div className="mt-1 space-y-2 text-[10px] text-muted-foreground">
+              <div>
+                <span className="font-semibold text-foreground">
+                  {recommendations.recommendedNumColors} couleurs
+                </span>{" "}
+                — {recommendations.reasons.numColors}
+              </div>
+              <div>
+                <span className="font-semibold text-foreground">
+                  {recommendations.recommendedMinRegionSize}px min. région
+                </span>{" "}
+                — {recommendations.reasons.minRegionSize}
+              </div>
+              <div>
+                <span className="font-semibold text-foreground">
+                  ΔE {recommendations.recommendedDeltaE}
+                </span>{" "}
+                — {recommendations.reasons.deltaE}
+              </div>
+              <div>
+                <span className="font-semibold text-foreground">
+                  Mode {recommendations.mode === "vector" ? "vectoriel" : "photo"}
+                </span>{" "}
+                — {recommendations.reasons.mode}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Aucune recommandation disponible.
+            </p>
           )}
         </div>
 
@@ -267,6 +306,20 @@ export function ColorAnalysisPanel({
         {/* Résumé lisible */}
         <div className="pt-1.5 border-t border-border/60 text-[10px] leading-snug text-muted-foreground">
           {summaryMessage}
+        </div>
+
+        <div className="pt-2 flex flex-col gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onApplyRecommendations}
+            disabled={!recommendations}
+          >
+            Appliquer les recommandations
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={onClose}>
+            Modifier manuellement
+          </Button>
         </div>
       </CardContent>
     </Card>
