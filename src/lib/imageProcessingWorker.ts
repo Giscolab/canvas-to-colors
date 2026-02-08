@@ -169,7 +169,7 @@ export class ImageProcessingWorker {
           this.terminate();
         };
 
-        // Send processing request
+        // Send processing request (imageFile brut, sans normalisation)
         this.worker.postMessage({
           type: 'process',
           payload: {

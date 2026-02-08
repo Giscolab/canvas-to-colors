@@ -118,11 +118,6 @@ function rgbToHex(r: number, g: number, b: number): string {
   return rgbToHexColor(Math.round(r), Math.round(g), Math.round(b));
 }
 
-function quantizeChannel(value: number, step = 4): number {
-  const quantized = Math.round(value / step) * step;
-  return Math.min(255, Math.max(0, quantized));
-}
-
 function hexToRgb(hex: string): [number, number, number] {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? [
@@ -220,16 +215,8 @@ export async function analyzeImageColors(
 ): Promise<ColorAnalysis> {
   const loadedImage = await loadImageSource(imageSource);
 
-  // === 1️⃣ Mise à l'échelle (max 1200px) ===
-  const maxDim = 1200;
-  let { width, height } = loadedImage;
-
-  if (width > maxDim || height > maxDim) {
-    const ratio = Math.min(maxDim / width, maxDim / height);
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
-  }
-
+  // === 1️⃣ Analyse brute : aucune mise à l'échelle ni normalisation ===
+  const { width, height } = loadedImage;
   const { ctx } = canvasFactory.createCanvas(width, height);
   ctx.drawImage(loadedImage.source, 0, 0, width, height);
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -250,22 +237,17 @@ export async function analyzeImageColors(
   }
   const roughUniqueCount = roughColors.size;
 
-  // === 3️⃣ Détermination adaptative du pas de quantification ===
-  let quantStep: number;
-  if (roughUniqueCount < 50) quantStep = 2;
-  else if (roughUniqueCount < 500) quantStep = 4;
-  else quantStep = 8;
-
-  // === 4️⃣ Échantillonnage et comptage précis avec quantStep ===
+  // === 3️⃣ Échantillonnage et comptage précis (sans quantification) ===
   const colorCounts = new Map<string, number>();
   const colorSet = new Set<string>();
   const sampleRate = Math.max(1, Math.floor(totalPixels / 80000));
 
   for (let i = 0; i < imageData.data.length; i += 4 * sampleRate) {
-    const r = quantizeChannel(imageData.data[i], quantStep);
-    const g = quantizeChannel(imageData.data[i + 1], quantStep);
-    const b = quantizeChannel(imageData.data[i + 2], quantStep);
-    const hex = rgbToHex(r, g, b);
+    const hex = rgbToHex(
+      imageData.data[i],
+      imageData.data[i + 1],
+      imageData.data[i + 2]
+    );
 
     colorSet.add(hex);
     colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
@@ -477,16 +459,15 @@ console.log(`🧠 Analyse auto :
   • Mode : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}
 `);
 
-return {
-  uniqueColorsCount: uniqueCount,
-  dominantColors,
-  dominantWeights,
-  complexityScore,
-  recommendedNumColors,
-  recommendedMinRegionSize,
-  quantStep,
-  mode,
-};
+  return {
+    uniqueColorsCount: uniqueCount,
+    dominantColors,
+    dominantWeights,
+    complexityScore,
+    recommendedNumColors,
+    recommendedMinRegionSize,
+    mode,
+  };
 
 }
 /**

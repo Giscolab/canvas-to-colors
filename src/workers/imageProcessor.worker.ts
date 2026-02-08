@@ -77,7 +77,7 @@ self.onmessage = async (e: MessageEvent<WorkerMessage>) => {
       self.postMessage(progressResponse);
     };
     
-    // 🧩 Décodage robuste du fichier image en ImageData
+    // 🧩 Décodage robuste du fichier image brut en ImageData (sans resize/normalisation)
     let decodedImageData: ImageData;
     try {
       const arrayBuffer = await imageFile.arrayBuffer();
