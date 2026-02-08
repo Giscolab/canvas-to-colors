@@ -6,6 +6,7 @@ import { ProcessedResult } from "@/lib/imageProcessing";
 import { useStudio } from "@/contexts/StudioContext";
 import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
+import { CanvasViewport, CanvasViewportHandle } from "./CanvasViewport";
 import { ProfilerPanel } from "./ProfilerPanel";
 import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
 import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
@@ -13,7 +14,6 @@ import { CanvasHUD } from "@/components/studio/CanvasHUD";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 
 interface EnhancedViewTabsProps {
   originalImage: string | null;
@@ -29,6 +29,8 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<CanvasViewportHandle>(null);
+  const [viewportScroll, setViewportScroll] = useState({ left: 0, top: 0 });
   
   const {
     stats: profilerStats,
@@ -164,6 +166,12 @@ useEffect(() => {
     }
   }, [processedData?.colorized]);
 
+  useEffect(() => {
+    if (referenceDimensions) {
+      viewportRef.current?.fitToScreen();
+    }
+  }, [referenceDimensions?.height, referenceDimensions?.width]);
+
   const handleToggleProfiler = useCallback(
     (enabled: boolean) => {
       studio.updateSettings({ profilingEnabled: enabled });
@@ -210,6 +218,22 @@ useEffect(() => {
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
 }, []);
+
+  const handleZoomIn = useCallback(() => {
+    viewportRef.current?.zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    viewportRef.current?.zoomOut();
+  }, []);
+
+  const handleResetView = useCallback(() => {
+    viewportRef.current?.reset();
+  }, []);
+
+  const handleFitToScreen = useCallback(() => {
+    viewportRef.current?.fitToScreen();
+  }, []);
 
 
   // --- Onglets (UI) : styles Figma-like, tokens Tailwind ---
@@ -276,7 +300,7 @@ useEffect(() => {
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -284,7 +308,7 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -297,6 +321,14 @@ useEffect(() => {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Outil de déplacement</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ajuster à l'écran</p></TooltipContent>
                     </Tooltip>
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
@@ -319,32 +351,26 @@ useEffect(() => {
                 </div>
                 
                 {/* Conteneur d'image */}
-                <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div
-                    className="relative flex items-center justify-center"
-                    style={{
-                      width: referenceDimensions?.width || "auto",
-                      height: referenceDimensions?.height || "auto",
-                    }}
+                <div ref={imageContainerRef} className="flex-1 relative" onDoubleClick={handleResetView}>
+                  <CanvasViewport
+                    ref={viewportRef}
+                    width={imageInfo?.width ?? referenceDimensions?.width ?? 0}
+                    height={imageInfo?.height ?? referenceDimensions?.height ?? 0}
+                    zoomPercent={studio.zoomPercent}
+                    onZoomChange={studio.setZoomPercent}
+                    panTool={studio.panTool}
+                    initialScroll={viewportScroll}
+                    onScrollChange={setViewportScroll}
                   >
-                    <div className="relative group">
+                    <div className="relative w-full h-full">
                       <img
                         src={originalImage}
                         alt="Image originale du projet"
-                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                        style={{
-                          width: referenceDimensions?.width || "auto",
-                          height: referenceDimensions?.height || "auto",
-                          transform: `scale(${studio.zoomPercent / 100})`,
-                        }}
+                        className="absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image"
+                        draggable={false}
                       />
-                      
-                      {/* HUD de zoom */}
-                      <div className="studio-zoom-hud">
-                        {studio.zoomPercent}%
-                      </div>
                     </div>
-                  </div>
+                  </CanvasViewport>
                 </div>
               </div>
             ) : (
@@ -382,7 +408,7 @@ useEffect(() => {
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -390,7 +416,7 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -411,6 +437,14 @@ useEffect(() => {
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Pipette à couleurs</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ajuster à l'écran</p></TooltipContent>
                     </Tooltip>
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
@@ -433,34 +467,42 @@ useEffect(() => {
                 </div>
                 
                 {/* Conteneur d'image */}
-                <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div className="relative w-full h-full max-w-5xl">
-                    {/* Fond de texture subtil */}
-                    <div className="absolute inset-0 bg-studio-canvas-pattern opacity-5 pointer-events-none" />
-                    
-                    <img
-                      src={colorizedUrl}
-                      alt="Image colorisée avec effets appliqués"
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-studio-image transition-transform duration-200"
-                      style={{ transform: `scale(${studio.zoomPercent / 100})` }}
-                    />
+                <div ref={imageContainerRef} className="flex-1 relative" onDoubleClick={handleResetView}>
+                  <CanvasViewport
+                    ref={viewportRef}
+                    width={referenceDimensions?.width ?? processedData?.colorized?.width ?? 0}
+                    height={referenceDimensions?.height ?? processedData?.colorized?.height ?? 0}
+                    zoomPercent={studio.zoomPercent}
+                    onZoomChange={studio.setZoomPercent}
+                    panTool={studio.panTool}
+                    initialScroll={viewportScroll}
+                    onScrollChange={setViewportScroll}
+                  >
+                    <div className="relative w-full h-full">
+                      <div className="absolute inset-0 bg-studio-canvas-pattern opacity-5 pointer-events-none" />
+                      <img
+                        src={colorizedUrl}
+                        alt="Image colorisée avec effets appliqués"
+                        className="absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image"
+                        draggable={false}
+                      />
+                    </div>
+                  </CanvasViewport>
 
-                    {/* === HUD posé par-dessus l'image === */}
-                    <CanvasHUD
-                      zoomPercent={studio.zoomPercent}
-                      canZoomIn={studio.zoomPercent < 800}
-                      canZoomOut={studio.zoomPercent > 10}
-                      onZoomIn={studio.zoomIn}
-                      onZoomOut={studio.zoomOut}
-                      onTogglePan={studio.togglePanTool}
-                      onPickColor={studio.pickColor}
-                      numberedVisible={studio.overlay.numbered}
-                      onToggleNumbered={(v) => studio.setOverlay({ ...studio.overlay, numbered: v })}
-                      overlayOpacity={studio.overlay.opacity}
-                      onChangeOverlayOpacity={(v) => studio.setOverlay({ ...studio.overlay, opacity: v })}
-                      onFindNumber={(n) => studio.findZoneByNumber?.(n)}
-                    />
-                  </div>
+                  <CanvasHUD
+                    zoomPercent={studio.zoomPercent}
+                    canZoomIn={studio.zoomPercent < 800}
+                    canZoomOut={studio.zoomPercent > 10}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    onTogglePan={studio.togglePanTool}
+                    onPickColor={studio.pickColor}
+                    numberedVisible={studio.overlay.numbered}
+                    onToggleNumbered={(v) => studio.setOverlay({ ...studio.overlay, numbered: v })}
+                    overlayOpacity={studio.overlay.opacity}
+                    onChangeOverlayOpacity={(v) => studio.setOverlay({ ...studio.overlay, opacity: v })}
+                    onFindNumber={(n) => studio.findZoneByNumber?.(n)}
+                  />
                 </div>
               </div>
             ) : (
@@ -488,7 +530,7 @@ useEffect(() => {
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -496,13 +538,21 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Zoom arrière</p></TooltipContent>
                     </Tooltip>
                     <Separator orientation="vertical" className="h-4 mx-1" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ajuster à l'écran</p></TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
@@ -515,32 +565,26 @@ useEffect(() => {
                 </div>
                 
                 {/* Conteneur d'image */}
-                <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div
-                    className="relative flex items-center justify-center"
-                    style={{
-                      width: referenceDimensions?.width || "auto",
-                      height: referenceDimensions?.height || "auto",
-                    }}
+                <div ref={imageContainerRef} className="flex-1 relative" onDoubleClick={handleResetView}>
+                  <CanvasViewport
+                    ref={viewportRef}
+                    width={referenceDimensions?.width ?? processedData?.contours?.width ?? 0}
+                    height={referenceDimensions?.height ?? processedData?.contours?.height ?? 0}
+                    zoomPercent={studio.zoomPercent}
+                    onZoomChange={studio.setZoomPercent}
+                    panTool={studio.panTool}
+                    initialScroll={viewportScroll}
+                    onScrollChange={setViewportScroll}
                   >
-                    <div className="relative group">
+                    <div className="relative w-full h-full">
                       <img
                         src={contoursUrl}
                         alt="Contours extraits de l'image"
-                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                        style={{
-                          width: referenceDimensions?.width || "auto",
-                          height: referenceDimensions?.height || "auto",
-                          transform: `scale(${studio.zoomPercent / 100})`,
-                        }}
+                        className="absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image"
+                        draggable={false}
                       />
-                      
-                      {/* HUD de zoom */}
-                      <div className="studio-zoom-hud">
-                        {studio.zoomPercent}%
-                      </div>
                     </div>
-                  </div>
+                  </CanvasViewport>
                 </div>
               </div>
             ) : (
@@ -584,7 +628,7 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -592,13 +636,21 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Zoom arrière</p></TooltipContent>
                     </Tooltip>
                     <Separator orientation="vertical" className="h-4 mx-1" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ajuster à l'écran</p></TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
@@ -611,23 +663,28 @@ useEffect(() => {
                 </div>
                 
                 {/* Conteneur d'image */}
-                <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div
-                    className="relative flex items-center justify-center"
-                    style={{
-                      width: referenceDimensions?.width || "auto",
-                      height: referenceDimensions?.height || "auto",
-                    }}
+                <div ref={imageContainerRef} className="flex-1 relative" onDoubleClick={handleResetView}>
+                  <CanvasViewport
+                    ref={viewportRef}
+                    width={referenceDimensions?.width ?? processedData.numbered.width}
+                    height={referenceDimensions?.height ?? processedData.numbered.height}
+                    zoomPercent={studio.zoomPercent}
+                    onZoomChange={studio.setZoomPercent}
+                    panTool={studio.panTool}
+                    initialScroll={viewportScroll}
+                    onScrollChange={setViewportScroll}
                   >
-                    <InspectionOverlay
-                      imageData={processedData.numbered}
-                      zones={processedData.zones}
-                      palette={processedData.palette}
-                      labels={processedData.labels}
-                      width={referenceDimensions?.width || processedData.numbered.width}
-                      height={referenceDimensions?.height || processedData.numbered.height}
-                    />
-                  </div>
+                    <div className="relative w-full h-full">
+                      <InspectionOverlay
+                        imageData={processedData.numbered}
+                        zones={processedData.zones}
+                        palette={processedData.palette}
+                        labels={processedData.labels}
+                        width={referenceDimensions?.width || processedData.numbered.width}
+                        height={referenceDimensions?.height || processedData.numbered.height}
+                      />
+                    </div>
+                  </CanvasViewport>
                 </div>
               </div>
             ) : numberedUrl ? (
@@ -644,7 +701,7 @@ useEffect(() => {
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomIn()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -652,13 +709,21 @@ useEffect(() => {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.zoomOut()}>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Zoom arrière</p></TooltipContent>
                     </Tooltip>
                     <Separator orientation="vertical" className="h-4 mx-1" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Ajuster à l'écran</p></TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
@@ -671,32 +736,26 @@ useEffect(() => {
                 </div>
                 
                 {/* Conteneur d'image */}
-                <div ref={imageContainerRef} className="flex-1 flex items-center justify-center p-8 overflow-auto">
-                  <div
-                    className="relative flex items-center justify-center"
-                    style={{
-                      width: referenceDimensions?.width || "auto",
-                      height: referenceDimensions?.height || "auto",
-                    }}
+                <div ref={imageContainerRef} className="flex-1 relative" onDoubleClick={handleResetView}>
+                  <CanvasViewport
+                    ref={viewportRef}
+                    width={referenceDimensions?.width ?? processedData?.numbered?.width ?? 0}
+                    height={referenceDimensions?.height ?? processedData?.numbered?.height ?? 0}
+                    zoomPercent={studio.zoomPercent}
+                    onZoomChange={studio.setZoomPercent}
+                    panTool={studio.panTool}
+                    initialScroll={viewportScroll}
+                    onScrollChange={setViewportScroll}
                   >
-                    <div className="relative group">
+                    <div className="relative w-full h-full">
                       <img
                         src={numberedUrl}
                         alt="Image avec zones numérotées"
-                        className="object-contain rounded-lg shadow-studio-image transition-transform duration-200 group-hover:scale-[1.01]"
-                        style={{
-                          width: referenceDimensions?.width || "auto",
-                          height: referenceDimensions?.height || "auto",
-                          transform: `scale(${studio.zoomPercent / 100})`,
-                        }}
+                        className="absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image"
+                        draggable={false}
                       />
-                      
-                      {/* HUD de zoom */}
-                      <div className="studio-zoom-hud">
-                        {studio.zoomPercent}%
-                      </div>
                     </div>
-                  </div>
+                  </CanvasViewport>
                 </div>
               </div>
             ) : (

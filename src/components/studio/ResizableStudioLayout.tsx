@@ -106,7 +106,7 @@ export function ResizableStudioLayout({
           >
             <main
               role="main"
-              className="relative h-full overflow-hidden focus:outline-none"
+              className="relative h-full overflow-visible focus:outline-none"
               aria-label="Zone centrale du studio"
             >
               {centerPanel}

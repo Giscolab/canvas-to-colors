@@ -146,8 +146,7 @@ export const Canvas = ({
   const activeInteractions =
     activeTab === "original" ? null : interactions[activeTab as keyof typeof interactions];
 
-  // Note: Le zoom est déjà géré par le transform CSS ligne 342
-  // Pas besoin de synchroniser avec setScale du hook d'interactions
+  // Note: Le zoom du studio est géré par un viewport dédié dans la vue principale.
 
   const zonesCount = processedData?.zones?.length || 0;
 
@@ -290,7 +289,6 @@ export const Canvas = ({
               size="icon"
               variant="ghost"
               onClick={() => {
-                activeInteractions.resetTransform();
                 studio.resetZoom();
               }}
               className="h-7 w-7"
@@ -334,11 +332,6 @@ export const Canvas = ({
         <div className="flex items-center justify-center min-h-full p-8">
           <div
             className="relative bg-studio-panel shadow-2xl"
-            style={{
-              transform: `scale(${studio.zoomPercent / 100})`,
-              transformOrigin: "center",
-              transition: "transform 0.1s ease-out",
-            }}
             onDoubleClick={() => studio.resetZoom()}
           >
             {/* Damier background */}
