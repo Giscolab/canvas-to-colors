@@ -91,7 +91,7 @@ function IndexContent() {
         timestamp: Date.now(),
         imageUrl: tempUrl,
         imageFile: processingFile,
-        sourceType: isVectorSource ? "vector" : "raster",
+        sourceType: isVectorSource ? "vector" as const : "raster" as const,
         settings: { ...studio.settings, ...resetSettings },
       };
 

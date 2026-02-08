@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { ColorAnalysis, ProcessedResult, Recommendations } from "@/lib/imageProcessing";
 import { ResponsiveContainer, BarChart, Bar, Tooltip, XAxis, YAxis, Cell } from "recharts";
+import { SignalAnalysisSection } from "@/components/SignalAnalysisSection";
 import type { TooltipProps } from "recharts";
 
 interface ColorAnalysisPanelProps {
@@ -308,6 +309,11 @@ export function ColorAnalysisPanel({
               </ResponsiveContainer>
             </div>
           </div>
+        )}
+
+        {/* Analyse brute du signal */}
+        {analysis.bruteSignal && (
+          <SignalAnalysisSection report={analysis.bruteSignal} />
         )}
 
         {/* Résumé lisible */}
