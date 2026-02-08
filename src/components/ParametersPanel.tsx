@@ -143,6 +143,11 @@ export const ParametersPanel = ({
           {quality.label}
         </Badge>
       </div>
+      {(numColors === 0 || minRegionSize === 0) && (
+        <div className="text-[10px] text-muted-foreground">
+          Paramètres non définis : aucune recommandation appliquée.
+        </div>
+      )}
 
       {/* SECTION: Qualité & fusion de base */}
       <Section

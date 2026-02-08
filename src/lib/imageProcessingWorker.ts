@@ -316,7 +316,7 @@ export async function processImageWithWorker(
   mergeTolerance: number,
   onProgress?: (stage: string, progress: number) => void,
   enableSmartPalette: boolean = false,
-  enableArtisticMerge: boolean = true
+  enableArtisticMerge: boolean = false
 ): Promise<ProcessedResult> {
   const worker = getImageProcessingWorker();
   const result = await worker.processImage(

@@ -10,7 +10,7 @@ import { EnhancedViewTabs } from "@/components/studio/EnhancedViewTabs";
 import { ExportBar } from "@/components/studio/ExportBar";
 import { DebugPanel } from "@/components/studio/DebugPanel";
 import { StudioProvider, useStudio } from "@/contexts/StudioContext";
-import { analyzeImageColors } from "@/lib/imageProcessing";
+import { analyzeImageColors, getRecommendationsFromAnalysis } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
 import { isSvgFile, rasterizeSvgFile } from "@/lib/svgImport";
@@ -21,6 +21,8 @@ import { ProcessingProgress } from "@/components/ProcessingProgress";
 import { Zone } from "@/hooks/useCanvasInteractions";
 import { IMAGE_PROCESSING, UI } from "@/config/constants";
 import { useAutoSave } from "@/hooks/useAutoSave";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /**
  * ================================
@@ -43,6 +45,7 @@ function IndexContent() {
   const [processingStage, setProcessingStage] = useState("");
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
   const [zonesByColor, setZonesByColor] = useState<Map<number, Zone[]>>(
     new Map()
   );
@@ -54,9 +57,23 @@ function IndexContent() {
   const handleImageSelect = async (file: File) => {
     try {
       const originalName = file.name;
+      const isVectorSource = isSvgFile(file);
       let processingFile = file;
+      const resetSettings = {
+        numColors: 0,
+        minRegionSize: 0,
+        smoothness: 0,
+        mergeTolerance: 0,
+        enableArtisticMerge: false,
+        smartPalette: false,
+        paintEffect: "none",
+        paintIntensity: 0,
+        artisticEffect: "none",
+        artisticIntensity: 0,
+        profilingEnabled: false,
+      } as const;
 
-      if (isSvgFile(file)) {
+      if (isVectorSource) {
         toast.info("Rasterisation du SVG…", {
           description: "Conversion en image bitmap pour le traitement.",
         });
@@ -74,12 +91,16 @@ function IndexContent() {
         timestamp: Date.now(),
         imageUrl: tempUrl,
         imageFile: processingFile,
-        settings: studio.settings,
+        sourceType: isVectorSource ? "vector" : "raster",
+        settings: { ...studio.settings, ...resetSettings },
       };
 
       studio.setResult(null);
       studio.setAnalysis(null);
+      studio.setRecommendations(null);
       studio.setCurrentProject(initialProject);
+      setShowAnalysisDialog(false);
+      studio.updateSettings(resetSettings);
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
 
@@ -111,15 +132,27 @@ function IndexContent() {
 
     try {
       setIsAnalyzing(true);
-      const analysis = await analyzeImageColors(file, () => {});
+      const analysis = await analyzeImageColors(file, {
+        onProgress: () => {},
+        sourceType: studio.currentProject?.sourceType ?? "raster",
+      });
+      const recommendations = getRecommendationsFromAnalysis(analysis);
       studio.setAnalysis(analysis);
+      studio.setRecommendations(recommendations);
       toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées`);
+      setShowAnalysisDialog(true);
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors de l'analyse de l'image");
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleApplyRecommendations = () => {
+    studio.applyRecommendations();
+    toast.success("Recommandations appliquées aux paramètres");
+    setShowAnalysisDialog(false);
   };
 
   // ========== PROCESSING ==========
@@ -209,15 +242,45 @@ function IndexContent() {
               selectedImage={selectedImageUrl}
             />
 
-            {(studio.analysis || isAnalyzing || selectedImageUrl) && (
-              <ColorAnalysisPanel
-                analysis={studio.analysis}
-                isAnalyzing={isAnalyzing}
-                processedResult={studio.result}
-                hasImage={Boolean(selectedImageUrl)}
-                onAnalyze={handleAnalyze}
-              />
-            )}
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAnalyze}
+                disabled={!selectedImageUrl || isAnalyzing}
+              >
+                {isAnalyzing ? "Analyse en cours…" : "Analyse brute"}
+              </Button>
+              {studio.analysis && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAnalysisDialog(true)}
+                >
+                  Voir le rapport
+                </Button>
+              )}
+            </div>
+
+            <Dialog open={showAnalysisDialog} onOpenChange={setShowAnalysisDialog}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Analyse brute</DialogTitle>
+                  <DialogDescription>
+                    Rapport structuré : mesures brutes, interprétation et recommandations.
+                  </DialogDescription>
+                </DialogHeader>
+                <ColorAnalysisPanel
+                  analysis={studio.analysis}
+                  recommendations={studio.recommendations}
+                  isAnalyzing={isAnalyzing}
+                  processedResult={studio.result}
+                  onApplyRecommendations={handleApplyRecommendations}
+                  onClose={() => setShowAnalysisDialog(false)}
+                />
+              </DialogContent>
+            </Dialog>
 
             <ParametersPanel
               numColors={studio.settings.numColors}

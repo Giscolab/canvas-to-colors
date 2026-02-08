@@ -7,7 +7,7 @@ import {
   useEffect,
 } from "react";
 import { toast } from "sonner";
-import { ProcessedResult, ColorAnalysis } from "@/lib/imageProcessing";
+import { ProcessedResult, ColorAnalysis, Recommendations } from "@/lib/imageProcessing";
 import { useProfiler } from "@/hooks/useProfiler";
 
 // Note: Pour la fonctionnalité d'export ZIP, vous devrez installer ces dépendances:
@@ -55,8 +55,10 @@ export interface Project {
   timestamp: number;
   imageUrl: string;
   imageFile?: File;
+  sourceType?: 'vector' | 'raster';
   settings: StudioSettings;
   analysis?: ColorAnalysis;
+  recommendations?: Recommendations;
   result?: ProcessedResult;
     favorite?: boolean;
 }
@@ -79,6 +81,7 @@ export interface StudioContextValue {
   currentProject: Project | null;
   viewMode: ViewMode;
   analysis: ColorAnalysis | null;
+  recommendations: Recommendations | null;
   result: ProcessedResult | null;
   settings: StudioSettings;
   isProcessing: boolean;
@@ -88,9 +91,11 @@ export interface StudioContextValue {
   setCurrentProject: (project: Project | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setAnalysis: (analysis: ColorAnalysis | null) => void;
+  setRecommendations: (recommendations: Recommendations | null) => void;
   setResult: (result: ProcessedResult | null) => void;
   updateSettings: (settings: Partial<StudioSettings>) => void;
   setIsProcessing: (processing: boolean) => void;
+  applyRecommendations: () => void;
   updatePreferences: (prefs: Partial<UserPreferences>) => void;
 
   // --- Gestion projets ---
@@ -189,6 +194,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     useState<UserPreferences>(loadPreferences);
   const [viewMode, setViewMode] = useState<ViewMode>(preferences.lastViewMode);
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [result, setResult] = useState<ProcessedResult | null>(null);
   const [settings, setSettings] = useState<StudioSettings>(DEFAULT_SETTINGS);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -441,6 +447,15 @@ const renderToCanvas = useCallback((
     setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
+  const applyRecommendations = useCallback(() => {
+    if (!recommendations) return;
+    setSettings((prev) => ({
+      ...prev,
+      numColors: recommendations.recommendedNumColors,
+      minRegionSize: recommendations.recommendedMinRegionSize,
+    }));
+  }, [recommendations]);
+
   const getSavedProjects = useCallback((): Project[] => {
     try {
       const stored = localStorage.getItem("pbn-projects");
@@ -462,8 +477,10 @@ const renderToCanvas = useCallback((
         name: name.trim(),
         timestamp: Date.now(),
         imageUrl: currentProject.imageUrl,
+        sourceType: currentProject.sourceType,
         settings,
         analysis: analysis || undefined,
+        recommendations: recommendations || undefined,
         result,
       };
 
@@ -483,6 +500,7 @@ const renderToCanvas = useCallback((
         setCurrentProject(project);
         setSettings({ ...DEFAULT_SETTINGS, ...project.settings });
         setAnalysis(project.analysis || null);
+        setRecommendations(project.recommendations || null);
         setResult(project.result || null);
       }
     },
@@ -506,6 +524,7 @@ const renderToCanvas = useCallback((
     currentProject,
     viewMode,
     analysis,
+    recommendations,
     result,
     settings,
     isProcessing,
@@ -513,9 +532,11 @@ const renderToCanvas = useCallback((
     setCurrentProject,
     setViewMode,
     setAnalysis,
+    setRecommendations,
     setResult,
     updateSettings,
     setIsProcessing,
+    applyRecommendations,
     updatePreferences,
     saveProject,
     loadProject,

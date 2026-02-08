@@ -32,15 +32,42 @@ export interface ProgressEvent {
   timestamp: number;
 }
 
+export interface ColorHistogramEntry {
+  color: string;
+  count: number;
+}
+
+export interface ImageTypeInfo {
+  type: string;
+  realismScore: number;
+  stylizationScore: number;
+  confidence: number;
+}
+
 export interface ColorAnalysis {
   uniqueColorsCount: number;
   dominantColors: string[]; // Top 10 couleurs
   dominantWeights: number[]; // Proportion de chaque couleur dominante
+  entropy: number;
   complexityScore: number; // 0-100
+  histogram: ColorHistogramEntry[];
+  totalPixels: number;
+  mode: 'vector' | 'photo';
+  imageType?: ImageTypeInfo;
+  sourceType?: 'vector' | 'raster';
+}
+
+export interface Recommendations {
   recommendedNumColors: number;
   recommendedMinRegionSize: number;
-  quantStep?: number;
+  recommendedDeltaE: number;
   mode: 'vector' | 'photo';
+  reasons: {
+    numColors: string;
+    minRegionSize: string;
+    deltaE: string;
+    mode: string;
+  };
 }
 
 export interface ProcessedResult {
@@ -205,96 +232,7 @@ function setCachedResult(key: string, result: ProcessedResult): void {
 
 // ============= COLOR ANALYSIS =============
 
-/**
- * Analyze image colors before processing
- * Detects unique colors and recommends optimal parameters
- */
-export async function analyzeImageColors(
-  imageSource: File,
-  onProgress?: (progress: number) => void
-): Promise<ColorAnalysis> {
-  if (typeof createImageBitmap !== 'function') {
-    throw new Error('createImageBitmap est indisponible pour une analyse brute.');
-  }
-
-  const bitmap = await createImageBitmap(imageSource);
-
-  // === 1️⃣ Analyse brute : aucune mise à l'échelle ni normalisation ===
-  const { width, height } = bitmap;
-  const { ctx } = canvasFactory.createCanvas(width, height);
-  ctx.drawImage(bitmap, 0, 0);
-  const imageData = ctx.getImageData(0, 0, width, height);
-  bitmap.close();
-
-  // === 2️⃣ Comptage précis (sans quantification ni échantillonnage) ===
-  const totalPixels = imageData.width * imageData.height;
-  const colorCounts = new Map<string, number>();
-  const colorSet = new Set<string>();
-  const totalDataLength = imageData.data.length;
-  const progressInterval = Math.max(1, Math.floor(totalDataLength / 100));
-  const formatColor = (r: number, g: number, b: number, a: number) => {
-    if (a < 255) {
-      const alpha = Math.round((a / 255) * 1000) / 1000;
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return rgbToHex(r, g, b);
-  };
-
-  for (let i = 0; i < totalDataLength; i += 4) {
-    const hex = formatColor(
-      imageData.data[i],
-      imageData.data[i + 1],
-      imageData.data[i + 2],
-      imageData.data[i + 3]
-    );
-
-    colorSet.add(hex);
-    colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
-
-    if (onProgress && i % progressInterval === 0) {
-      onProgress((i / totalDataLength) * 80);
-    }
-  }
-
-// === 5️⃣ Calcul d'entropie (complexité visuelle) ===
-const entropy = Array.from(colorCounts.values())
-  .map(count => {
-    const p = count / totalPixels;
-    return p === 0 ? 0 : -p * Math.log2(p);
-  })
-  .reduce((sum, val) => sum + val, 0);
-
-const complexityScore = Math.min(100, Math.round(entropy * 10));
-
-// === 6️⃣ Recommandations intelligentes de base ===
-const uniqueCount = colorSet.size;
-let recommendedNumColors: number;
-let recommendedMinRegionSize: number;
-
-if (uniqueCount < 16) {
-  recommendedNumColors = Math.max(8, uniqueCount);
-  recommendedMinRegionSize = 20;
-} else if (uniqueCount < 100) {
-  recommendedNumColors = 16;
-  recommendedMinRegionSize = 50;
-} else if (uniqueCount < 1000) {
-  recommendedNumColors = 24;
-  recommendedMinRegionSize = 100;
-} else {
-  recommendedNumColors = 32;
-  recommendedMinRegionSize = 200;
-}
-
-// === 6️⃣.1 Sélection des couleurs dominantes ===
-const topDominantEntries = [...colorCounts.entries()]
-  .sort((a, b) => b[1] - a[1])
-  .slice(0, 10);
-const totalCount = Array.from(colorCounts.values()).reduce((a, b) => a + b, 0);
-
-// =========================================
-// 🧭 Détection du type d'image (statistique)
-// =========================================
-function detectImageType(imageData: ImageData) {
+function detectImageType(imageData: ImageData): ImageTypeInfo {
   const { data, width, height } = imageData;
   const totalPixels = width * height;
 
@@ -368,106 +306,222 @@ function detectImageType(imageData: ImageData) {
   };
 }
 
-// === 6.5️⃣ Détection du type d'image ===
-const typeInfo = detectImageType(imageData);
-console.log(
-  `🧩 Type détecté : ${typeInfo.type} (réalisme ${typeInfo.realismScore}, stylisation ${typeInfo.stylizationScore})`
-);
-
-// === Ajustement des recommandations selon le type détecté ===
-switch (typeInfo.type) {
-  case "photo":
-    recommendedNumColors = 36;
-    recommendedMinRegionSize = 20;
-    break;
-  case "ai-realistic":
-    recommendedNumColors = 30;
-    recommendedMinRegionSize = 25;
-    break;
-  case "painting":
-    recommendedNumColors = 26;
-    recommendedMinRegionSize = 50;
-    break;
-  case "illustration":
-    recommendedNumColors = 18;
-    recommendedMinRegionSize = 80;
-    break;
-  case "drawing":
-  case "sketch":
-    recommendedNumColors = 10;
-    recommendedMinRegionSize = 10;
-    break;
-  case "technical":
-    recommendedNumColors = 12;
-    recommendedMinRegionSize = 5;
-    break;
+/**
+ * Analyze image colors before processing
+ * Déclenche une analyse brute sans redimensionnement ni normalisation.
+ */
+export async function analyzeImageColors(
+  imageSource: File,
+  options?: {
+    onProgress?: (progress: number) => void;
+    sourceType?: 'vector' | 'raster';
+  }
+): Promise<ColorAnalysis> {
+  if (typeof createImageBitmap !== 'function') {
+    throw new Error('createImageBitmap est indisponible pour une analyse brute.');
   }
 
-// === 6.7️⃣ Ajustement perceptuel du ΔE selon le type ===
-function perceptualDeltaE(baseDeltaE: number, imageType: string): number {
-  if (imageType === "photo") return baseDeltaE * 1.2; // plus tolérant (transitions douces)
-  if (imageType === "illustration" || imageType === "drawing") return baseDeltaE * 0.8; // plus strict (bords nets)
-  return baseDeltaE;
-}
+  const { onProgress, sourceType = 'raster' } = options ?? {};
 
-// Valeur de base pour ΔE
-let recommendedDeltaE = perceptualDeltaE(5, typeInfo.type);
-
-// Ajustement fin selon la complexité visuelle
-recommendedDeltaE *= 1 - Math.min(0.4, complexityScore / 250);
-
-// === 6.8️⃣ Détection du mode de traitement (fusion simplifiée) ===
-let mode: 'vector' | 'photo' = 'photo';
-
-  if (
-    typeInfo.type === "illustration" ||
-    typeInfo.type === "drawing" ||
-    typeInfo.type === "technical"
-  ) {
-    mode = 'vector';
-  } else if (
-    uniqueCount < 300 &&
-    complexityScore < 25 &&
-    topDominantEntries.length <= 10
-  ) {
-    // Cas hybride — image peu complexe mais détectée comme photo simplifiée
-    mode = 'vector';
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(imageSource, { imageOrientation: "from-image" } as ImageBitmapOptions);
+  } catch (error) {
+    console.warn("Impossible d'appliquer l'orientation EXIF, fallback brut.", error);
+    bitmap = await createImageBitmap(imageSource);
   }
 
-  // Ajustement complémentaire du profil selon le mode
-  if (mode === 'vector') {
-    recommendedNumColors = Math.min(recommendedNumColors, 14);
-    recommendedMinRegionSize = Math.max(10, recommendedMinRegionSize);
-    recommendedDeltaE = Math.min(4, recommendedDeltaE); // contours plus précis
+  // === 1️⃣ Analyse brute : aucune mise à l'échelle ni normalisation ===
+  const { width, height } = bitmap;
+  const { ctx } = canvasFactory.createCanvas(width, height);
+  ctx.drawImage(bitmap, 0, 0);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  bitmap.close();
+
+  // === 2️⃣ Comptage précis (sans quantification ni échantillonnage) ===
+  const totalPixels = imageData.width * imageData.height;
+  const colorCounts = new Map<string, number>();
+  const colorSet = new Set<string>();
+  const totalDataLength = imageData.data.length;
+  const progressInterval = Math.max(1, Math.floor(totalDataLength / 100));
+  const formatColor = (r: number, g: number, b: number, a: number) => {
+    if (a < 255) {
+      const alpha = Math.round((a / 255) * 1000) / 1000;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    return rgbToHex(r, g, b);
+  };
+
+  for (let i = 0; i < totalDataLength; i += 4) {
+    const hex = formatColor(
+      imageData.data[i],
+      imageData.data[i + 1],
+      imageData.data[i + 2],
+      imageData.data[i + 3]
+    );
+
+    colorSet.add(hex);
+    colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
+
+    if (onProgress && i % progressInterval === 0) {
+      onProgress((i / totalDataLength) * 80);
+    }
   }
 
-  // === 7️⃣ Tri et pondération des couleurs dominantes ===
+  // === 3️⃣ Calcul d'entropie (complexité visuelle) ===
+  const entropy = Array.from(colorCounts.values())
+    .map((count) => {
+      const p = count / totalPixels;
+      return p === 0 ? 0 : -p * Math.log2(p);
+    })
+    .reduce((sum, val) => sum + val, 0);
 
-const dominantColors = topDominantEntries.map(([hex]) => hex);
-const dominantWeights = topDominantEntries.map(([_, count]) =>
-  totalCount ? count / totalCount : 0
-);
+  const complexityScore = Math.min(100, Math.round(entropy * 10));
 
-if (onProgress) onProgress(100);
+  // === 4️⃣ Couleurs dominantes ===
+  const topDominantEntries = [...colorCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  const totalCount = Array.from(colorCounts.values()).reduce((a, b) => a + b, 0);
 
-console.log(`🧠 Analyse auto :
-  • Couleurs uniques : ${uniqueCount}
-  • Complexité : ${complexityScore}/100
-  • Palette recommandée : ${recommendedNumColors} couleurs
-  • Taille min. région : ${recommendedMinRegionSize}px
-  • Mode : ${mode === 'vector' ? 'Vectoriel' : 'Photo'}
-`);
+  const dominantColors = topDominantEntries.map(([hex]) => hex);
+  const dominantWeights = topDominantEntries.map(([_, count]) =>
+    totalCount ? count / totalCount : 0
+  );
+
+  // === 5️⃣ Histogramme complet ===
+  const histogram = [...colorCounts.entries()].map(([color, count]) => ({
+    color,
+    count,
+  }));
+
+  // === 6️⃣ Détection du type d'image ===
+  const typeInfo = detectImageType(imageData);
+
+  // === 7️⃣ Mode (interprétation) ===
+  const uniqueCount = colorSet.size;
+  let mode: 'vector' | 'photo' = sourceType === 'vector' ? 'vector' : 'photo';
+
+  if (sourceType !== 'vector') {
+    if (
+      typeInfo.type === "illustration" ||
+      typeInfo.type === "drawing" ||
+      typeInfo.type === "technical"
+    ) {
+      mode = 'vector';
+    } else if (
+      uniqueCount < 300 &&
+      complexityScore < 25 &&
+      topDominantEntries.length <= 10
+    ) {
+      mode = 'vector';
+    }
+  }
+
+  if (onProgress) onProgress(100);
 
   return {
     uniqueColorsCount: uniqueCount,
     dominantColors,
     dominantWeights,
+    entropy,
     complexityScore,
-    recommendedNumColors,
-    recommendedMinRegionSize,
+    histogram,
+    totalPixels,
     mode,
+    imageType: typeInfo,
+    sourceType,
+  };
+}
+
+export function getRecommendationsFromAnalysis(
+  analysis: ColorAnalysis
+): Recommendations {
+  const uniqueCount = analysis.uniqueColorsCount;
+  const complexityScore = analysis.complexityScore ?? 0;
+  const typeInfo = analysis.imageType;
+
+  let recommendedNumColors: number;
+  let recommendedMinRegionSize: number;
+
+  if (uniqueCount < 16) {
+    recommendedNumColors = Math.max(8, uniqueCount);
+    recommendedMinRegionSize = 20;
+  } else if (uniqueCount < 100) {
+    recommendedNumColors = 16;
+    recommendedMinRegionSize = 50;
+  } else if (uniqueCount < 1000) {
+    recommendedNumColors = 24;
+    recommendedMinRegionSize = 100;
+  } else {
+    recommendedNumColors = 32;
+    recommendedMinRegionSize = 200;
+  }
+
+  if (typeInfo) {
+    switch (typeInfo.type) {
+      case "photo":
+        recommendedNumColors = 36;
+        recommendedMinRegionSize = 20;
+        break;
+      case "ai-realistic":
+        recommendedNumColors = 30;
+        recommendedMinRegionSize = 25;
+        break;
+      case "painting":
+        recommendedNumColors = 26;
+        recommendedMinRegionSize = 50;
+        break;
+      case "illustration":
+        recommendedNumColors = 18;
+        recommendedMinRegionSize = 80;
+        break;
+      case "drawing":
+      case "sketch":
+        recommendedNumColors = 10;
+        recommendedMinRegionSize = 10;
+        break;
+      case "technical":
+        recommendedNumColors = 12;
+        recommendedMinRegionSize = 5;
+        break;
+    }
+  }
+
+  const mode: 'vector' | 'photo' = analysis.mode;
+
+  if (mode === 'vector') {
+    recommendedNumColors = Math.min(recommendedNumColors, 14);
+    recommendedMinRegionSize = Math.max(10, recommendedMinRegionSize);
+  }
+
+  const perceptualDeltaE = (baseDeltaE: number, imageType: string) => {
+    if (imageType === "photo") return baseDeltaE * 1.2;
+    if (imageType === "illustration" || imageType === "drawing") return baseDeltaE * 0.8;
+    return baseDeltaE;
   };
 
+  let recommendedDeltaE = perceptualDeltaE(5, typeInfo?.type ?? "unknown");
+  recommendedDeltaE *= 1 - Math.min(0.4, complexityScore / 250);
+
+  if (mode === 'vector') {
+    recommendedDeltaE = Math.min(4, recommendedDeltaE);
+  }
+
+  const reasons = {
+    numColors: `Recommandé car l'image contient ${uniqueCount} couleurs uniques et une complexité de ${complexityScore}/100.`,
+    minRegionSize: `Recommandé pour limiter le bruit visuel et les micro-zones (${uniqueCount} couleurs uniques).`,
+    deltaE: `Recommandé pour équilibrer la séparation perceptuelle (complexité ${complexityScore}/100${typeInfo ? `, type ${typeInfo.type}` : ""}).`,
+    mode: `Recommandé car le profil détecté est "${mode}"${analysis.sourceType === "vector" ? " (source SVG/Vectorielle)" : ""}.`,
+  };
+
+  return {
+    recommendedNumColors,
+    recommendedMinRegionSize,
+    recommendedDeltaE: Number(recommendedDeltaE.toFixed(2)),
+    mode,
+    reasons,
+  };
 }
 /**
  * Merge near-identical colors to avoid splitting visually identical regions

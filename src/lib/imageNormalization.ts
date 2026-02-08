@@ -185,7 +185,7 @@ export async function normalizeImage(
 
 /**
  * Resize image for display purposes (lighter version).
- * Ne pas appeler avant l'analyse des couleurs.
+ * ⚠️ Ne pas utiliser pour l'analyse brute : réservé uniquement à l'aperçu.
  */
 export async function resizeForDisplay(
   file: File,
