@@ -214,7 +214,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
       }
       if (zoomPercent !== lastZoomRef.current) {
         lastZoomRef.current = zoomPercent;
-        centerOnScale(scale);
+        
       }
     }, [centerOnScale, scale, zoomPercent]);
 
@@ -227,8 +227,9 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
           x: event.clientX - rect.left,
           y: event.clientY - rect.top,
         };
-        const direction = event.deltaY > 0 ? -0.1 : 0.1;
-        applyZoom(scale + direction, anchor);
+        const direction = event.deltaY > 0 ? 0.1 : -0.1;
+				applyZoom(scale + direction, anchor);
+
       },
       [applyZoom, scale]
     );
