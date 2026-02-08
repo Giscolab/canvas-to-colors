@@ -17,6 +17,7 @@ interface UseCanvasInteractionsProps {
   onZoneSelect?: (zone: Zone | null) => void;
   onColorSelect?: (colorIdx: number | null, zones: Zone[] | null) => void;
   labels?: Int32Array;
+  viewScale?: number;
 }
 
 export function useCanvasInteractions({
@@ -26,23 +27,17 @@ export function useCanvasInteractions({
   onZoneSelect,
   onColorSelect,
   labels,
+  viewScale = 1,
 }: UseCanvasInteractionsProps) {
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
   const [highlightMode, setHighlightMode] = useState<'zone' | 'color'>('zone');
   const [highlightProgress, setHighlightProgress] = useState(0);
   
-  const animationFrameRef = useRef<number>();
   const originalImageDataRef = useRef<ImageData | null>(null);
   const highlightAnimationRef = useRef<number | null>(null);
   const zonePathsRef = useRef<Map<number, Path2D>>(new Map());
   const imageBitmapRef = useRef<ImageBitmap | null>(null);
-  const initialScaleRef = useRef<number>(1);
-  const initialOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Création de la map inverse zonesByColor pour un accès rapide
   const zonesByColor = useMemo(() => {
@@ -136,7 +131,6 @@ export function useCanvasInteractions({
     
     // Utiliser ImageBitmap pour un rendu beaucoup plus rapide
     if (imageBitmapRef.current) {
-      ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
       ctx.drawImage(imageBitmapRef.current, 0, 0);
     } else {
       // Fallback si le bitmap n'est pas encore créé
@@ -147,7 +141,6 @@ export function useCanvasInteractions({
       if (!tempCtx) return;
       tempCtx.putImageData(originalImageDataRef.current, 0, 0);
       
-      ctx.setTransform(scale, 0, 0, scale, offset.x, offset.y);
       ctx.drawImage(tempCanvas, 0, 0);
     }
 
@@ -168,7 +161,7 @@ export function useCanvasInteractions({
       ctx.strokeStyle = `rgba(255, 200, 0, ${0.6 + 0.4 * highlightProgress})`;
       
       // Largeur de contour adaptative selon le zoom
-      ctx.lineWidth = Math.max(1, 2 / scale);
+      ctx.lineWidth = Math.max(1, 2 / viewScale);
       
       // Effet de lueur pour une meilleure visibilité
       ctx.shadowBlur = 3 + 2 * highlightProgress;
@@ -186,7 +179,7 @@ export function useCanvasInteractions({
       // Réinitialiser l'ombre pour ne pas affecter les dessins suivants
       ctx.shadowBlur = 0;
     }
-  }, [canvasRef, scale, offset, selectedZoneId, selectedColorIdx, zonesByColor, zones, highlightProgress]);
+  }, [canvasRef, selectedZoneId, selectedColorIdx, zonesByColor, zones, highlightProgress, viewScale]);
 
   // Update ref and create ImageBitmap when originalImageData changes
   useEffect(() => {
@@ -219,10 +212,6 @@ export function useCanvasInteractions({
     // Set canvas dimensions to image dimensions
     canvas.width = originalImageData.width;
     canvas.height = originalImageData.height;
-
-    // Initialiser les valeurs par défaut de scale et offset
-    initialScaleRef.current = 1;
-    initialOffsetRef.current = { x: 0, y: 0 };
 
     // Draw the image at native resolution
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -272,67 +261,8 @@ export function useCanvasInteractions({
     redraw(); // Forcer un redraw immédiat
   }, [onZoneSelect, onColorSelect, redraw]);
 
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.min(Math.max(0.1, scale * delta), 10);
-
-    const scaleFactor = newScale / scale;
-    const newOffsetX = mouseX - scaleFactor * (mouseX - offset.x);
-    const newOffsetY = mouseY - scaleFactor * (mouseY - offset.y);
-
-    setScale(newScale);
-    setOffset({ x: newOffsetX, y: newOffsetY });
-  }, [canvasRef, scale, offset]);
-
-  const handleMouseDown = useCallback((e: MouseEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    if (e.button === 0) {
-      setIsPanning(true);
-      setLastMouse({ x: e.clientX, y: e.clientY });
-    }
-  }, [canvasRef]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isPanning) return;
-
-    const dx = e.clientX - lastMouse.x;
-    const dy = e.clientY - lastMouse.y;
-
-    setOffset(prev => ({
-      x: prev.x + dx,
-      y: prev.y + dy,
-    }));
-    setLastMouse({ x: e.clientX, y: e.clientY });
-  }, [isPanning, lastMouse]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
-
-  // CORRECTION COMPLÈTE DE LA FONCTION handleClick
-  const handleClick = useCallback((e: MouseEvent) => {
-    if (isPanning) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas || !zones.length || !labels || !originalImageDataRef.current) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Conversion coordonnées écran -> coordonnées image
-    const imgX = Math.floor((mouseX - offset.x) / scale);
-    const imgY = Math.floor((mouseY - offset.y) / scale);
+  const handleImageClick = useCallback((imgX: number, imgY: number, isCtrlPressed = false) => {
+    if (!zones.length || !labels || !originalImageDataRef.current) return;
 
     const width = originalImageDataRef.current.width;
     const height = originalImageDataRef.current.height;
@@ -340,29 +270,20 @@ export function useCanvasInteractions({
     if (imgX >= 0 && imgX < width && imgY >= 0 && imgY < height) {
       const idx = imgY * width + imgX;
       const zoneId = labels[idx];
-      
-      // Vérifier si on a appuyé sur Ctrl/Cmd pour la sélection par couleur
-      const isCtrlPressed = e.ctrlKey || e.metaKey;
-      
+
       if (zoneId >= 0) {
         const zone = zones.find(z => z.id === zoneId);
         if (zone) {
           if (isCtrlPressed) {
-            // Mode sélection par couleur (Ctrl+clic)
             if (selectedColorIdx === zone.colorIdx) {
-              // Si on clique sur la même couleur déjà sélectionnée → désélection
               clearSelection();
             } else {
-              // Sélectionner toutes les zones de cette couleur
               selectByColor(zone.colorIdx);
             }
           } else {
-            // Mode sélection par zone (clic normal)
             if (selectedZoneId === zoneId && highlightMode === 'zone') {
-              // Si on clique sur la même zone déjà sélectionnée → désélection
               clearSelection();
             } else {
-              // Sélectionner cette zone spécifique
               selectByZone(zoneId);
             }
           }
@@ -371,9 +292,8 @@ export function useCanvasInteractions({
       }
     }
 
-    // Clic hors zone → désélection
     clearSelection();
-  }, [canvasRef, zones, labels, isPanning, scale, offset, selectedZoneId, selectedColorIdx, highlightMode, selectByColor, selectByZone, clearSelection]);
+  }, [zones, labels, selectedColorIdx, selectedZoneId, highlightMode, selectByColor, selectByZone, clearSelection]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -382,50 +302,24 @@ export function useCanvasInteractions({
   }, [clearSelection]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // Nettoyer les listeners avant de les ajouter (évite les doublons en dev mode)
-    canvas.removeEventListener('wheel', handleWheel);
-    canvas.removeEventListener('mousedown', handleMouseDown);
-    canvas.removeEventListener('click', handleClick);
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('mouseup', handleMouseUp);
     window.removeEventListener('keydown', handleKeyDown);
-
-    // Ajouter les listeners
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-    canvas.addEventListener('mousedown', handleMouseDown);
-    canvas.addEventListener('click', handleClick);
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      canvas.removeEventListener('wheel', handleWheel);
-      canvas.removeEventListener('mousedown', handleMouseDown);
-      canvas.removeEventListener('click', handleClick);
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
       window.removeEventListener('keydown', handleKeyDown);
-      
+
       if (highlightAnimationRef.current) {
         cancelAnimationFrame(highlightAnimationRef.current);
       }
     };
-  }, [canvasRef, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, handleKeyDown]);
+  }, [handleKeyDown]);
 
   return {
-    scale,
-    offset,
     selectedZoneId,
     selectedColorIdx,
     highlightMode,
     zonesByColor,
-    resetTransform: () => {
-      setScale(initialScaleRef.current);
-      setOffset(initialOffsetRef.current);
-    },
+    handleImageClick,
     selectByColor,
     selectByZone,
     clearSelection,

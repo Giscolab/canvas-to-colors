@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Card } from "@/components/ui/card";
+import { createPortal } from "react-dom";
 import { Zone } from "@/lib/imageProcessing";
 import { Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCanvasViewport } from "./CanvasViewport";
 
 interface InspectionOverlayProps {
   imageData: ImageData | null;
@@ -29,19 +30,8 @@ export function InspectionOverlay({
   width,
   height,
 }: InspectionOverlayProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Taille affichée (après fit) et offsets pour centrage
-  const [layout, setLayout] = useState({
-    cw: 0,        // container width
-    ch: 0,        // container height
-    drawW: 0,     // drawn width (fit)
-    drawH: 0,     // drawn height (fit)
-    offX: 0,      // left offset (centering)
-    offY: 0,      // top offset (centering)
-    dpr: 1,
-  });
+  const { clientToImage, dpr, wrapperRef, overlayRef } = useCanvasViewport();
 
   // Interaction
   const [mouseClient, setMouseClient] = useState<{ x: number; y: number } | null>(null);
@@ -96,40 +86,14 @@ export function InspectionOverlay({
     setHighlightCanvas(c);
   }, [labels, palette, zones, selectedZone, width, height]);
 
-  // Recalcule le fit object-contain + HiDPI sur resize
   useEffect(() => {
-    const ro = new ResizeObserver(() => {
-      const el = containerRef.current;
-      const cnv = canvasRef.current;
-      if (!el || !cnv) return;
-
-      const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-      const cw = el.clientWidth;
-      const ch = el.clientHeight;
-
-      if (cw <= 0 || ch <= 0 || width <= 0 || height <= 0) return;
-
-      // Fit object-contain
-      const scale = Math.min(cw / width, ch / height);
-      const drawW = Math.max(1, Math.floor(width * scale));
-      const drawH = Math.max(1, Math.floor(height * scale));
-      const offX = Math.floor((cw - drawW) / 2);
-      const offY = Math.floor((ch - drawH) / 2);
-
-      // Canvas device pixels
-      cnv.width = Math.max(1, Math.floor(cw * dpr));
-      cnv.height = Math.max(1, Math.floor(ch * dpr));
-      cnv.style.width = `${cw}px`;
-      cnv.style.height = `${ch}px`;
-
-      setLayout({ cw, ch, drawW, drawH, offX, offY, dpr });
-    });
-
-    if (containerRef.current) {
-      ro.observe(containerRef.current);
-    }
-    return () => ro.disconnect();
-  }, [width, height]);
+    const cnv = canvasRef.current;
+    if (!cnv || width <= 0 || height <= 0) return;
+    cnv.width = Math.max(1, Math.floor(width * dpr));
+    cnv.height = Math.max(1, Math.floor(height * dpr));
+    cnv.style.width = `${width}px`;
+    cnv.style.height = `${height}px`;
+  }, [dpr, height, width]);
 
   // Dessin
   const draw = useCallback(() => {
@@ -139,21 +103,16 @@ export function InspectionOverlay({
     const ctx = cnv.getContext("2d");
     if (!ctx) return;
 
-    const { drawW, drawH, offX, offY, dpr, cw, ch } = layout;
-    if (cw === 0 || ch === 0 || drawW === 0 || drawH === 0) return;
-
     // Clear
-    ctx.clearRect(0, 0, cnv.width, cnv.height);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
 
     // Dessine l'image source (offscreen -> display)
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(
       base,
       0, 0, width, height,
-      Math.floor(offX * dpr),
-      Math.floor(offY * dpr),
-      Math.floor(drawW * dpr),
-      Math.floor(drawH * dpr)
+      0, 0, width, height
     );
 
     // Surbrillance (si sélection)
@@ -161,21 +120,18 @@ export function InspectionOverlay({
       ctx.drawImage(
         highlightCanvas,
         0, 0, width, height,
-        Math.floor(offX * dpr),
-        Math.floor(offY * dpr),
-        Math.floor(drawW * dpr),
-        Math.floor(drawH * dpr)
+        0, 0, width, height
       );
     }
 
     // Curseur "loupe" minimaliste (optionnel)
-    if (mouseImg && pointInDraw(mouseClient, layout)) {
+    if (mouseImg) {
       ctx.save();
       const radius = Math.max(8, Math.floor(6 * dpr));
       ctx.beginPath();
       ctx.arc(
-        Math.floor((offX + mouseImg.x * (drawW / width)) * dpr),
-        Math.floor((offY + mouseImg.y * (drawH / height)) * dpr),
+        Math.floor(mouseImg.x * dpr),
+        Math.floor(mouseImg.y * dpr),
         radius,
         0,
         Math.PI * 2
@@ -185,36 +141,12 @@ export function InspectionOverlay({
       ctx.stroke();
       ctx.restore();
     }
-  }, [offscreen, highlightCanvas, layout, width, height, mouseImg, mouseClient]);
+  }, [offscreen, highlightCanvas, width, height, mouseImg, dpr]);
 
   // Redraw on deps
   useEffect(() => {
     draw();
   }, [draw]);
-
-  // Conversion coordonnées : client -> image pixels
-  const clientToImage = useCallback(
-    (clientX: number, clientY: number) => {
-      const el = containerRef.current;
-      if (!el) return null;
-
-      const rect = el.getBoundingClientRect();
-      const { drawW, drawH, offX, offY, cw, ch } = layout;
-      if (cw === 0 || ch === 0) return null;
-
-      const xIn = clientX - rect.left - offX;
-      const yIn = clientY - rect.top - offY;
-      if (xIn < 0 || yIn < 0 || xIn > drawW || yIn > drawH) return null;
-
-      const scaleX = width / drawW;
-      const scaleY = height / drawH;
-      const x = Math.floor(xIn * scaleX);
-      const y = Math.floor(yIn * scaleY);
-      if (x < 0 || x >= width || y < 0 || y >= height) return null;
-      return { x, y, within: true as const };
-    },
-    [layout, width, height]
-  );
 
   const handleMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const pt = clientToImage(e.clientX, e.clientY);
@@ -257,8 +189,8 @@ export function InspectionOverlay({
 
   // Placement tooltip (dans le container, pas en pixels image)
   const tooltipPos = useMemo(() => {
-    if (!mouseClient || !containerRef.current) return null;
-    const rect = containerRef.current.getBoundingClientRect();
+    if (!mouseClient || !wrapperRef.current) return null;
+    const rect = wrapperRef.current.getBoundingClientRect();
     // position locale au container
     const localX = mouseClient.x - rect.left;
     const localY = mouseClient.y - rect.top;
@@ -272,57 +204,53 @@ export function InspectionOverlay({
   if (!imageData) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full bg-studio-canvas-pattern overflow-hidden rounded-md shadow-studio-image"
-      role="img"
-      aria-label="Aperçu numéroté avec inspection des zones"
-    >
-<canvas
-  ref={canvasRef}
-  className={cn(
-    "absolute inset-0 w-full h-full outline-none studio-transition studio-image-container",
-    selectedZone ? "cursor-pointer" : "cursor-crosshair"
-  )}
-  onMouseMove={handleMove}
-  onMouseLeave={handleLeave}
-  onClick={handleClick}
-/>
+    <>
+      <canvas
+        ref={canvasRef}
+        className={cn(
+          "absolute inset-0 w-full h-full outline-none studio-transition studio-image-container",
+          selectedZone ? "cursor-pointer" : "cursor-crosshair"
+        )}
+        role="img"
+        aria-label="Aperçu numéroté avec inspection des zones"
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
+        onClick={handleClick}
+      />
 
-
-      {/* Tooltip */}
-      {hoverInfo && tooltipPos && (
-<div
-  className="absolute z-30 p-3 rounded-md shadow-studio-panel-right bg-studio-panel/85 backdrop-blur-md border border-studio-border/50 text-xs space-y-1 pointer-events-none studio-fade-in"
-  style={{ left: tooltipPos.left, top: tooltipPos.top, width: 200 }}
-  aria-live="polite"
->
-
-          <div className="flex items-center gap-2">
-            <Maximize2 className="w-3 h-3 text-studio-foreground/60" aria-hidden="true" />
-            <span className="font-medium text-studio-foreground">Zone #{hoverInfo.zoneId}</span>
-            {selectedZone === hoverInfo.zoneId && (
-              <span className="ml-auto studio-status-badge studio-status-badge--success text-[10px]">✓ Sélectionnée</span>
-
-            )}
-          </div>
-          <div className="flex items-center gap-2">
+      {hoverInfo && tooltipPos && overlayRef.current
+        ? createPortal(
             <div
-              className="w-4 h-4 rounded border border-studio-border shadow-inner"
-              style={{ backgroundColor: hoverInfo.color, transition: 'background-color 0.2s ease' }}
-            />
-            <span className="text-studio-foreground/80 font-mono">{hoverInfo.color}</span>
-          </div>
-          <div className="text-studio-foreground/70">Couleur #{hoverInfo.colorIdx + 1}</div>
-          <div className="text-studio-foreground/70">
-            Surface: {hoverInfo.area.toLocaleString()}px²
-          </div>
-          <div className="text-[10px] text-studio-foreground/50 border-t border-studio-border/40 pt-1 mt-1 font-mono">
-            Cliquez pour sélectionner
-          </div>
-        </div>
-      )}
-    </div>
+              className="absolute z-30 p-3 rounded-md shadow-studio-panel-right bg-studio-panel/85 backdrop-blur-md border border-studio-border/50 text-xs space-y-1 pointer-events-none studio-fade-in"
+              style={{ left: tooltipPos.left, top: tooltipPos.top, width: 200 }}
+              aria-live="polite"
+            >
+              <div className="flex items-center gap-2">
+                <Maximize2 className="w-3 h-3 text-studio-foreground/60" aria-hidden="true" />
+                <span className="font-medium text-studio-foreground">Zone #{hoverInfo.zoneId}</span>
+                {selectedZone === hoverInfo.zoneId && (
+                  <span className="ml-auto studio-status-badge studio-status-badge--success text-[10px]">✓ Sélectionnée</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded border border-studio-border shadow-inner"
+                  style={{ backgroundColor: hoverInfo.color, transition: 'background-color 0.2s ease' }}
+                />
+                <span className="text-studio-foreground/80 font-mono">{hoverInfo.color}</span>
+              </div>
+              <div className="text-studio-foreground/70">Couleur #{hoverInfo.colorIdx + 1}</div>
+              <div className="text-studio-foreground/70">
+                Surface: {hoverInfo.area.toLocaleString()}px²
+              </div>
+              <div className="text-[10px] text-studio-foreground/50 border-t border-studio-border/40 pt-1 mt-1 font-mono">
+                Cliquez pour sélectionner
+              </div>
+            </div>,
+            overlayRef.current
+          )
+        : null}
+    </>
   );
 }
 
@@ -343,16 +271,4 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
     g: (num >> 8) & 255,
     b: num & 255,
   };
-}
-
-function pointInDraw(
-  mouse: { x: number; y: number } | null,
-  layout: { offX: number; offY: number; drawW: number; drawH: number; cw: number; ch: number }
-) {
-  if (!mouse) return false;
-  const { offX, offY, drawW, drawH, cw, ch } = layout;
-  if (cw === 0 || ch === 0) return false;
-  // Ici mouse est en coordonnées client; on l'emploie juste pour désactiver le halo hors zone
-  // (le test précis se fait déjà via clientToImage)
-  return true && drawW > 0 && drawH > 0 && offX >= 0 && offY >= 0;
 }
