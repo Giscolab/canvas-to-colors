@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Recommendations } from "@/lib/imageProcessing";
 
 interface ParametersPanelProps {
   numColors: number;
@@ -46,6 +47,8 @@ interface ParametersPanelProps {
   onArtisticIntensityChange: (intensity: number) => void;
   profilingEnabled: boolean;
   onProfilingEnabledChange: (enabled: boolean) => void;
+  analysisReady: boolean;
+  recommendations: Recommendations | null;
   onProcess: () => void;
   isProcessing: boolean;
 }
@@ -117,6 +120,8 @@ export const ParametersPanel = ({
   onArtisticIntensityChange,
   profilingEnabled,
   onProfilingEnabledChange,
+  analysisReady,
+  recommendations,
   onProcess,
   isProcessing,
 }: ParametersPanelProps) => {
@@ -143,11 +148,11 @@ export const ParametersPanel = ({
           {quality.label}
         </Badge>
       </div>
-      {(numColors === 0 || minRegionSize === 0) && (
-        <div className="text-[10px] text-muted-foreground">
-          Paramètres non définis : aucune recommandation appliquée.
-        </div>
-      )}
+      <div className="text-[10px] text-muted-foreground">
+        {analysisReady
+          ? "Analyse terminée : vous pouvez ajuster les paramètres puis lancer le traitement."
+          : "Analyse requise : lancez l'analyse brute pour obtenir des recommandations."}
+      </div>
 
       {/* SECTION: Qualité & fusion de base */}
       <Section
@@ -177,10 +182,15 @@ export const ParametersPanel = ({
                 {numColors}
               </span>
             </div>
+            {recommendations && (
+              <div className="text-[9px] text-muted-foreground">
+                Recommandation&nbsp;: {recommendations.recommendedNumColors} couleurs
+              </div>
+            )}
             <Slider
               id="colors"
               min={0}
-              max={40}
+              max={80}
               step={1}
               value={[numColors]}
               onValueChange={(v) => onNumColorsChange(v[0])}
@@ -189,7 +199,7 @@ export const ParametersPanel = ({
             />
             <div className="flex justify-between text-[9px] text-muted-foreground">
               <span>0 (Non défini)</span>
-              <span>40 (Complexe)</span>
+              <span>80 (Complexe)</span>
             </div>
           </div>
 
@@ -204,6 +214,11 @@ export const ParametersPanel = ({
                 {minRegionSize} px
               </span>
             </div>
+            {recommendations && (
+              <div className="text-[9px] text-muted-foreground">
+                Recommandation&nbsp;: {recommendations.recommendedMinRegionSize}px
+              </div>
+            )}
             <Slider
               id="region"
               min={0}
@@ -464,7 +479,7 @@ export const ParametersPanel = ({
       {/* CTA Générer (parité fonctionnelle) */}
       <Button
         onClick={onProcess}
-        disabled={isProcessing}
+        disabled={isProcessing || !analysisReady}
         className="w-full h-8 text-xs rounded-md bg-primary text-primary-foreground shadow hover:opacity-90 disabled:opacity-60"
         size="sm"
         aria-live="polite"
@@ -478,10 +493,15 @@ export const ParametersPanel = ({
         ) : (
           <>
             <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-            Générer le modèle
+            Lancer le traitement
           </>
         )}
       </Button>
+      {!analysisReady && (
+        <div className="text-[9px] text-muted-foreground text-center">
+          Analyse nécessaire avant génération.
+        </div>
+      )}
     </Card>
   );
 };

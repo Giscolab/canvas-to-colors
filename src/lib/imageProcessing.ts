@@ -49,6 +49,7 @@ export interface ColorAnalysis {
   dominantColors: string[]; // Top 10 couleurs
   dominantWeights: number[]; // Proportion de chaque couleur dominante
   entropy: number;
+  edgeDensity: number;
   complexityScore: number; // 0-100
   histogram: ColorHistogramEntry[];
   totalPixels: number;
@@ -306,6 +307,64 @@ function detectImageType(imageData: ImageData): ImageTypeInfo {
   };
 }
 
+function computeEdgeDensity(imageData: ImageData): number {
+  const { data, width, height } = imageData;
+  if (!width || !height) return 0;
+
+  let edgeCount = 0;
+  let samples = 0;
+  const stride = 2;
+  const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+  const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+  const threshold = 120;
+
+  for (let y = 1; y < height - 1; y += stride) {
+    for (let x = 1; x < width - 1; x += stride) {
+      let gx = 0;
+      let gy = 0;
+      let k = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const idx = ((y + ky) * width + (x + kx)) * 4;
+          const lum =
+            0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+          gx += lum * sobelX[k];
+          gy += lum * sobelY[k];
+          k++;
+        }
+      }
+      const mag = Math.sqrt(gx * gx + gy * gy);
+      if (mag > threshold) edgeCount++;
+      samples++;
+    }
+  }
+
+  return samples ? edgeCount / samples : 0;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function estimateCoverageColors(
+  colorCounts: Map<string, number>,
+  totalPixels: number,
+  coverageTarget = 0.95
+): number {
+  if (totalPixels === 0 || colorCounts.size === 0) return 0;
+  const sortedCounts = Array.from(colorCounts.values()).sort((a, b) => b - a);
+  let cumulative = 0;
+  let count = 0;
+  for (const value of sortedCounts) {
+    cumulative += value;
+    count += 1;
+    if (cumulative / totalPixels >= coverageTarget) {
+      break;
+    }
+  }
+  return count;
+}
+
 /**
  * Analyze image colors before processing
  * Déclenche une analyse brute sans redimensionnement ni normalisation.
@@ -376,7 +435,13 @@ export async function analyzeImageColors(
     })
     .reduce((sum, val) => sum + val, 0);
 
-  const complexityScore = Math.min(100, Math.round(entropy * 10));
+  const edgeDensity = computeEdgeDensity(imageData);
+  const maxEntropy = Math.log2(Math.max(1, totalPixels));
+  const normalizedEntropy = maxEntropy ? entropy / maxEntropy : 0;
+  const normalizedEdgeDensity = clampNumber(edgeDensity * 1.8, 0, 1);
+  const complexityScore = Math.round(
+    clampNumber((normalizedEntropy * 0.55 + normalizedEdgeDensity * 0.45) * 100, 0, 100)
+  );
 
   // === 4️⃣ Couleurs dominantes ===
   const topDominantEntries = [...colorCounts.entries()]
@@ -425,6 +490,7 @@ export async function analyzeImageColors(
     dominantColors,
     dominantWeights,
     entropy,
+    edgeDensity,
     complexityScore,
     histogram,
     totalPixels,
@@ -440,52 +506,34 @@ export function getRecommendationsFromAnalysis(
   const uniqueCount = analysis.uniqueColorsCount;
   const complexityScore = analysis.complexityScore ?? 0;
   const typeInfo = analysis.imageType;
+  const edgeDensity = analysis.edgeDensity ?? 0;
+  const totalPixels = analysis.totalPixels || 0;
 
-  let recommendedNumColors: number;
-  let recommendedMinRegionSize: number;
+  const coverageColors = estimateCoverageColors(
+    new Map(analysis.histogram.map((entry) => [entry.color, entry.count])),
+    totalPixels,
+    0.95
+  );
+  const effectiveColors = Math.pow(2, analysis.entropy || 0);
+  const weightedColors =
+    coverageColors * 0.7 + clampNumber(effectiveColors, 1, 128) * 0.3;
 
-  if (uniqueCount < 16) {
-    recommendedNumColors = Math.max(8, uniqueCount);
-    recommendedMinRegionSize = 20;
-  } else if (uniqueCount < 100) {
-    recommendedNumColors = 16;
-    recommendedMinRegionSize = 50;
-  } else if (uniqueCount < 1000) {
-    recommendedNumColors = 24;
-    recommendedMinRegionSize = 100;
-  } else {
-    recommendedNumColors = 32;
-    recommendedMinRegionSize = 200;
+  let recommendedNumColors = Math.round(
+    weightedColors * (0.9 + clampNumber(edgeDensity, 0, 1) * 0.3)
+  );
+  recommendedNumColors = Math.round(
+    clampNumber(recommendedNumColors, 8, analysis.mode === "vector" ? 24 : 64)
+  );
+
+  const baseMinRegion =
+    totalPixels * (0.00002 + clampNumber(edgeDensity, 0, 1) * 0.00012);
+  let recommendedMinRegionSize = Math.round(clampNumber(baseMinRegion, 5, 500));
+
+  if (typeInfo?.type === "technical" || typeInfo?.type === "drawing") {
+    recommendedMinRegionSize = Math.round(clampNumber(recommendedMinRegionSize * 0.7, 5, 200));
   }
-
-  if (typeInfo) {
-    switch (typeInfo.type) {
-      case "photo":
-        recommendedNumColors = 36;
-        recommendedMinRegionSize = 20;
-        break;
-      case "ai-realistic":
-        recommendedNumColors = 30;
-        recommendedMinRegionSize = 25;
-        break;
-      case "painting":
-        recommendedNumColors = 26;
-        recommendedMinRegionSize = 50;
-        break;
-      case "illustration":
-        recommendedNumColors = 18;
-        recommendedMinRegionSize = 80;
-        break;
-      case "drawing":
-      case "sketch":
-        recommendedNumColors = 10;
-        recommendedMinRegionSize = 10;
-        break;
-      case "technical":
-        recommendedNumColors = 12;
-        recommendedMinRegionSize = 5;
-        break;
-    }
+  if (analysis.mode === "vector") {
+    recommendedMinRegionSize = Math.max(10, recommendedMinRegionSize);
   }
 
   const mode: 'vector' | 'photo' = analysis.mode;
@@ -503,15 +551,16 @@ export function getRecommendationsFromAnalysis(
 
   let recommendedDeltaE = perceptualDeltaE(5, typeInfo?.type ?? "unknown");
   recommendedDeltaE *= 1 - Math.min(0.4, complexityScore / 250);
+  recommendedDeltaE *= 1 + Math.min(0.3, edgeDensity);
 
   if (mode === 'vector') {
     recommendedDeltaE = Math.min(4, recommendedDeltaE);
   }
 
   const reasons = {
-    numColors: `Recommandé car l'image contient ${uniqueCount} couleurs uniques et une complexité de ${complexityScore}/100.`,
-    minRegionSize: `Recommandé pour limiter le bruit visuel et les micro-zones (${uniqueCount} couleurs uniques).`,
-    deltaE: `Recommandé pour équilibrer la séparation perceptuelle (complexité ${complexityScore}/100${typeInfo ? `, type ${typeInfo.type}` : ""}).`,
+    numColors: `Couvre ~95% des pixels avec ${coverageColors} couleurs dominantes, ajusté par l'entropie (${complexityScore}/100).`,
+    minRegionSize: `Basé sur la densité d'arêtes ${(edgeDensity * 100).toFixed(1)}% et la résolution.`,
+    deltaE: `Ajusté pour la complexité ${complexityScore}/100 et la densité de contours.`,
     mode: `Recommandé car le profil détecté est "${mode}"${analysis.sourceType === "vector" ? " (source SVG/Vectorielle)" : ""}.`,
   };
 

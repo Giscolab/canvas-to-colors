@@ -134,10 +134,10 @@ export interface StudioContextValue {
 // ---------------------------------------------
 
 const DEFAULT_SETTINGS: StudioSettings = {
-  numColors: 0,
-  minRegionSize: 0,
+  numColors: 36,
+  minRegionSize: 20,
   smoothness: 0,
-  mergeTolerance: 0,
+  mergeTolerance: 5,
   enableArtisticMerge: false,
   smartPalette: false,
   paintEffect: "none",
@@ -453,6 +453,7 @@ const renderToCanvas = useCallback((
       ...prev,
       numColors: recommendations.recommendedNumColors,
       minRegionSize: recommendations.recommendedMinRegionSize,
+      mergeTolerance: recommendations.recommendedDeltaE,
     }));
   }, [recommendations]);
 
