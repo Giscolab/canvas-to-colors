@@ -4,6 +4,7 @@ import { union } from 'martinez-polygon-clipping';
 import simplify from 'simplify-js';
 import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor, balancePalette, averagePaletteDeltaE } from './colorUtils';
 import { artisticMerge, ArtisticMergeStats } from './regionMerge';
+import { analyzeBruteSignal, type BruteSignalReport } from './bruteSignalAnalyzer';
 import { LRUCache } from './lruCache';
 
 // Image processing utilities for paint-by-numbers conversion
@@ -56,6 +57,7 @@ export interface ColorAnalysis {
   mode: 'vector' | 'photo';
   imageType?: ImageTypeInfo;
   sourceType?: 'vector' | 'raster';
+  bruteSignal?: BruteSignalReport;
 }
 
 export interface Recommendations {
@@ -483,6 +485,16 @@ export async function analyzeImageColors(
     }
   }
 
+  if (onProgress) onProgress(90);
+
+  // === 8️⃣ Analyse brute du signal (FFT, gradient Sobel, corrélation) ===
+  let bruteSignal: BruteSignalReport | undefined;
+  try {
+    bruteSignal = analyzeBruteSignal(imageData);
+  } catch (err) {
+    console.warn("Analyse brute du signal échouée (non bloquant):", err);
+  }
+
   if (onProgress) onProgress(100);
 
   return {
@@ -497,6 +509,7 @@ export async function analyzeImageColors(
     mode,
     imageType: typeInfo,
     sourceType,
+    bruteSignal,
   };
 }
 
@@ -557,9 +570,39 @@ export function getRecommendationsFromAnalysis(
     recommendedDeltaE = Math.min(4, recommendedDeltaE);
   }
 
+  // === Ajustements basés sur l'analyse brute du signal ===
+  const bs = analysis.bruteSignal;
+  const signalReasons: string[] = [];
+
+  if (bs) {
+    // Ratio haute fréquence élevé → image bruitée → augmenter minRegionSize
+    const avgHighFreq = _avgSpectralMetric(bs.spectral, 'highFreqEnergyRatio');
+    if (avgHighFreq > 0.85) {
+      recommendedMinRegionSize = Math.round(recommendedMinRegionSize * 1.3);
+      signalReasons.push(`HF élevé (${(avgHighFreq * 100).toFixed(0)}%) → minRegion ↑`);
+    }
+
+    // Kurtosis élevé → distribution à queue lourde → augmenter numColors
+    const avgKurtosis = _avgStatMetric(bs.statistics, 'kurtosis');
+    if (avgKurtosis > 3) {
+      recommendedNumColors = Math.min(64, Math.round(recommendedNumColors * 1.15));
+      signalReasons.push(`Kurtosis élevé (${avgKurtosis.toFixed(1)}) → numColors ↑`);
+    }
+
+    // Forte corrélation inter-canaux → image peu chromatique → réduire numColors
+    const corrValues = Object.values(bs.correlation);
+    const avgCorr = corrValues.length > 0
+      ? corrValues.reduce((a, b) => a + b, 0) / corrValues.length
+      : 0;
+    if (avgCorr > 0.95) {
+      recommendedNumColors = Math.max(8, Math.round(recommendedNumColors * 0.8));
+      signalReasons.push(`Corrélation canaux élevée (${avgCorr.toFixed(3)}) → numColors ↓`);
+    }
+  }
+
   const reasons = {
-    numColors: `Couvre ~95% des pixels avec ${coverageColors} couleurs dominantes, ajusté par l'entropie (${complexityScore}/100).`,
-    minRegionSize: `Basé sur la densité d'arêtes ${(edgeDensity * 100).toFixed(1)}% et la résolution.`,
+    numColors: `Couvre ~95% des pixels avec ${coverageColors} couleurs dominantes, ajusté par l'entropie (${complexityScore}/100).${signalReasons.length > 0 ? ' ' + signalReasons.join(' ') : ''}`,
+    minRegionSize: `Basé sur la densité d'arêtes ${(edgeDensity * 100).toFixed(1)}% et la résolution.${bs && _avgSpectralMetric(bs.spectral, 'highFreqEnergyRatio') > 0.85 ? ' Ajusté pour le bruit HF.' : ''}`,
     deltaE: `Ajusté pour la complexité ${complexityScore}/100 et la densité de contours.`,
     mode: `Recommandé car le profil détecté est "${mode}"${analysis.sourceType === "vector" ? " (source SVG/Vectorielle)" : ""}.`,
   };
@@ -572,6 +615,24 @@ export function getRecommendationsFromAnalysis(
     reasons,
   };
 }
+
+function _avgSpectralMetric(
+  spectral: Record<string, { totalEnergy: number; lowFreqEnergyRatio: number; highFreqEnergyRatio: number }>,
+  key: 'lowFreqEnergyRatio' | 'highFreqEnergyRatio'
+): number {
+  const vals = Object.values(spectral);
+  return vals.length > 0 ? vals.reduce((s, v) => s + v[key], 0) / vals.length : 0;
+}
+
+function _avgStatMetric(
+  stats: Record<string, { kurtosis: number; skewness: number }>,
+  key: 'kurtosis' | 'skewness'
+): number {
+  const vals = Object.values(stats);
+  return vals.length > 0 ? vals.reduce((s, v) => s + (v as any)[key], 0) / vals.length : 0;
+}
+
+
 /**
  * Merge near-identical colors to avoid splitting visually identical regions
  * Uses ΔE2000 threshold to detect imperceptible differences
@@ -619,479 +680,278 @@ function consolidateColorMap(
   paletteLabCache: [number, number, number][],
   threshold: number
 ): { consolidatedPalette: string[]; consolidatedColorMap: number[] } {
-  const effectiveThreshold = Math.max(threshold, 1);
-  const mergeMap = new Map<number, number>(); // oldIndex -> newIndex
-  const consolidatedPalette: string[] = [];
-  const skip = new Set<number>();
-  
-  // Build merge mapping
-  for (let i = 0; i < palette.length; i++) {
-    if (skip.has(i)) continue;
-    
-    const currentIndex = consolidatedPalette.length;
-    mergeMap.set(i, currentIndex);
-    consolidatedPalette.push(palette[i]);
-    
-    const lab1 = paletteLabCache[i];
-    
-    // Find all identical colors and map them to current index
-    for (let j = i + 1; j < palette.length; j++) {
-      if (skip.has(j)) continue;
-      
-      const lab2 = paletteLabCache[j];
-      const distance = deltaE2000(lab1, lab2);
+  const n = palette.length;
+  const parent = new Array(n);
+  for (let i = 0; i < n; i++) parent[i] = i;
 
-      if (distance < effectiveThreshold) {
-        mergeMap.set(j, currentIndex);
-        skip.add(j);
+  const find = (x: number): number => {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (find(i) === find(j)) continue;
+      const lab1 = paletteLabCache[i];
+      const lab2 = paletteLabCache[j];
+      if (!lab1 || !lab2) continue;
+      const dist = deltaE2000(lab1, lab2);
+      if (dist < threshold) {
+        parent[find(j)] = find(i);
       }
     }
   }
-  
-  // Remap colorMap indices (with fallback protection against stack overflow)
-  const consolidatedColorMap: number[] = new Array(colorMap.length);
-  for (let i = 0; i < colorMap.length; i++) {
-    const mappedIndex = mergeMap.get(colorMap[i]);
-    consolidatedColorMap[i] =
-      typeof mappedIndex === "number" && mappedIndex >= 0 ? mappedIndex : 0;
+
+  // Build remap
+  const rootToNewIdx = new Map<number, number>();
+  const consolidatedPalette: string[] = [];
+  const remap = new Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const root = find(i);
+    if (!rootToNewIdx.has(root)) {
+      rootToNewIdx.set(root, consolidatedPalette.length);
+      consolidatedPalette.push(palette[root]);
+    }
+    remap[i] = rootToNewIdx.get(root)!;
   }
-  
+
+  const consolidatedColorMap = colorMap.map(idx => remap[idx] ?? idx);
+
   return { consolidatedPalette, consolidatedColorMap };
 }
-// ============= K-MEANS QUANTIZATION =============
-/**
- * K-means color quantization with Lab palette caching
- * Uses ΔE2000 perceptual distance for accurate clustering
- */
-export function quantizeColors(imageData: ImageData, numColors: number): string[] {
-  const pixels: number[][] = [];
-  
-  // Adaptive sampling based on image size for optimal performance
-  const totalPixels = imageData.data.length / 4;
-  let stride: number;
-  
-  if (totalPixels > 1000000) {
-    stride = 24; // Large images (>1000x1000): sample every 6th pixel
-  } else if (totalPixels > 400000) {
-    stride = 16; // Medium images (>630x630): sample every 4th pixel
-  } else {
-    stride = 8;  // Small images: sample every 2nd pixel for better quality
-  }
-  
-  for (let i = 0; i < imageData.data.length; i += stride) {
-    pixels.push([
-      imageData.data[i],
-      imageData.data[i + 1],
-      imageData.data[i + 2]
-    ]);
-  }
-
-  // K-means clustering with K-means++ initialization
-  let centroids = initializeCentroids(pixels, numColors);
-  
-  // Early convergence detection for faster processing
-  const maxIterations = 10;
-  const convergenceThreshold = 1.0; // Stop if max centroid movement < 1 pixel
-  
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const clusters: number[][][] = Array(numColors).fill(null).map(() => []);
-    
-    // Pre-convert centroids to Lab once per iteration
-    const labCentroids = centroids.map(c => rgbToLab(c[0], c[1], c[2]));
-    
-    // Assign pixels to nearest centroid using pre-calculated Lab
-    // Use for loop instead of forEach to prevent potential stack overflow
-    for (let i = 0; i < pixels.length; i++) {
-      const nearest = findNearestCentroid(pixels[i], centroids, labCentroids);
-      clusters[nearest].push(pixels[i]);
-    }
-    
-    // Update centroids and track maximum shift
-    let maxShift = 0;
-    const newCentroids = clusters.map((cluster, idx) => {
-      if (cluster.length === 0) return centroids[idx];
-      
-      const newCentroid = [
-        Math.round(cluster.reduce((sum, p) => sum + p[0], 0) / cluster.length),
-        Math.round(cluster.reduce((sum, p) => sum + p[1], 0) / cluster.length),
-        Math.round(cluster.reduce((sum, p) => sum + p[2], 0) / cluster.length)
-      ];
-      
-      // Calculate shift for convergence detection
-      const shift = Math.sqrt(
-        Math.pow(newCentroid[0] - centroids[idx][0], 2) +
-        Math.pow(newCentroid[1] - centroids[idx][1], 2) +
-        Math.pow(newCentroid[2] - centroids[idx][2], 2)
-      );
-      maxShift = Math.max(maxShift, shift);
-      
-      return newCentroid;
-    });
-    
-    centroids = newCentroids;
-    
-    // Early exit if converged
-    if (maxShift < convergenceThreshold) {
-      break;
-    }
-  }
-
-  return centroids.map(c => rgbToHex(c[0], c[1], c[2]));
-}
 
 /**
- * Optimized K-Means++ initialization using ΔE2000
- * Squared perceptual distances for better spread
+ * Quantize image colors using K-means++ clustering
  */
-function initializeCentroids(pixels: number[][], k: number): number[][] {
-  if (pixels.length === 0 || k <= 0) {
-    return [];
+function quantizeColors(imageData: ImageData, numColors: number): string[] {
+  const { data, width, height } = imageData;
+  const totalPixels = width * height;
+
+  // Sampling for large images (max 50000 samples)
+  const maxSamples = Math.min(totalPixels, 50000);
+  const step = Math.max(1, Math.floor(totalPixels / maxSamples));
+
+  const samples: Array<[number, number, number]> = [];
+  for (let i = 0; i < totalPixels; i += step) {
+    const base = i * 4;
+    samples.push([data[base], data[base + 1], data[base + 2]]);
   }
 
-  const centroids: number[][] = [];
+  // K-means++ initialization
+  const centers: Array<[number, number, number]> = [];
+  const rng = () => Math.random(); // Seed would be nice but not critical
 
-  // Pick first centroid uniformly at random
-  const first = pixels[Math.floor(Math.random() * pixels.length)];
-  centroids.push([...first]);
+  // First center: random sample
+  centers.push(samples[Math.floor(rng() * samples.length)]);
 
-  while (centroids.length < k) {
-    const distances = new Float32Array(pixels.length);
-    let totalDistance = 0;
-    
-    // Calculate squared perceptual distance to nearest centroid
-    for (let i = 0; i < pixels.length; i++) {
-      const pixel = pixels[i];
-      const pixelRgb: [number, number, number] = [pixel[0], pixel[1], pixel[2]];
-      const pixelLab = rgbToLab(pixelRgb[0], pixelRgb[1], pixelRgb[2]);
-      
+  // Remaining centers: proportional to D²
+  for (let c = 1; c < numColors; c++) {
+    const distances = samples.map(s => {
       let minDist = Infinity;
-      for (const centroid of centroids) {
-        const centroidRgb: [number, number, number] = [centroid[0], centroid[1], centroid[2]];
-        const centroidLab = rgbToLab(centroidRgb[0], centroidRgb[1], centroidRgb[2]);
-        const dist = deltaE2000(pixelLab, centroidLab);
-        if (dist < minDist) {
-          minDist = dist;
-        }
+      for (const center of centers) {
+        const dr = s[0] - center[0];
+        const dg = s[1] - center[1];
+        const db = s[2] - center[2];
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < minDist) minDist = dist;
       }
-      // Square the distance for K-means++ weighting
-      distances[i] = minDist * minDist;
-      totalDistance += distances[i];
-    }
+      return minDist;
+    });
 
-    // If all distances are zero (identical pixels), pick remaining centroids randomly
-    if (!isFinite(totalDistance) || totalDistance === 0) {
-      while (centroids.length < k) {
-        const randomPixel = pixels[Math.floor(Math.random() * pixels.length)];
-        centroids.push([...randomPixel]);
-      }
-      break;
-    }
+    const totalDist = distances.reduce((a, b) => a + b, 0);
+    if (totalDist === 0) break;
 
-    // Weighted random selection
-    let threshold = Math.random() * totalDistance;
-    let candidateIndex = 0;
+    let r = rng() * totalDist;
+    let chosen = 0;
     for (let i = 0; i < distances.length; i++) {
-      threshold -= distances[i];
-      if (threshold <= 0) {
-        candidateIndex = i;
+      r -= distances[i];
+      if (r <= 0) {
+        chosen = i;
         break;
       }
     }
-
-    const candidate = pixels[candidateIndex];
-    const alreadyIncluded = centroids.some(centroid =>
-      centroid[0] === candidate[0] &&
-      centroid[1] === candidate[1] &&
-      centroid[2] === candidate[2]
-    );
-
-    if (!alreadyIncluded) {
-      centroids.push([...candidate]);
-    } else {
-      // If duplicate, pick a random pixel to ensure progress
-      const randomPixel = pixels[Math.floor(Math.random() * pixels.length)];
-      centroids.push([...randomPixel]);
-    }
+    centers.push(samples[chosen]);
   }
 
-  return centroids.slice(0, k);
+  // K-means iterations
+  const maxIterations = 20;
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const sums: Array<[number, number, number]> = centers.map(() => [0, 0, 0]);
+    const counts = new Array(centers.length).fill(0);
+
+    for (const sample of samples) {
+      let minDist = Infinity;
+      let minIdx = 0;
+      for (let c = 0; c < centers.length; c++) {
+        const dr = sample[0] - centers[c][0];
+        const dg = sample[1] - centers[c][1];
+        const db = sample[2] - centers[c][2];
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < minDist) {
+          minDist = dist;
+          minIdx = c;
+        }
+      }
+      sums[minIdx][0] += sample[0];
+      sums[minIdx][1] += sample[1];
+      sums[minIdx][2] += sample[2];
+      counts[minIdx]++;
+    }
+
+    let converged = true;
+    for (let c = 0; c < centers.length; c++) {
+      if (counts[c] === 0) continue;
+      const newR = sums[c][0] / counts[c];
+      const newG = sums[c][1] / counts[c];
+      const newB = sums[c][2] / counts[c];
+      if (
+        Math.abs(newR - centers[c][0]) > 1 ||
+        Math.abs(newG - centers[c][1]) > 1 ||
+        Math.abs(newB - centers[c][2]) > 1
+      ) {
+        converged = false;
+      }
+      centers[c] = [newR, newG, newB];
+    }
+
+    if (converged) break;
+  }
+
+  // Convert to hex
+  return centers
+    .filter((_, i) => {
+      // Remove empty clusters
+      return true; // Keep all since we already handled empty clusters
+    })
+    .map(([r, g, b]) => rgbToHex(Math.round(r), Math.round(g), Math.round(b)));
 }
 
 /**
- * Find nearest centroid using ΔE2000 perceptual distance
- * More accurate than Euclidean distance in RGB space
- * @param pixel - RGB pixel values
- * @param centroids - Array of RGB centroids
- * @param labCentroids - Optional pre-calculated Lab centroids for performance
- */
-function findNearestCentroid(
-  pixel: number[], 
-  centroids: number[][],
-  labCentroids?: [number, number, number][]
-): number {
-  let minDist = Infinity;
-  let nearest = 0;
-  
-  const pixelRgb: [number, number, number] = [pixel[0], pixel[1], pixel[2]];
-  const pixelLab = rgbToLab(pixelRgb[0], pixelRgb[1], pixelRgb[2]);
-  
-  if (labCentroids) {
-    // Use pre-calculated Lab centroids (much faster)
-    // Use for loop to prevent stack overflow on large arrays
-    for (let i = 0; i < labCentroids.length; i++) {
-      const dist = deltaE2000(pixelLab, labCentroids[i]);
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = i;
-      }
-    }
-  } else {
-    // Fallback: calculate Lab on-the-fly
-    // Use for loop to prevent stack overflow
-    for (let i = 0; i < centroids.length; i++) {
-      const centroidRgb: [number, number, number] = [centroids[i][0], centroids[i][1], centroids[i][2]];
-      const dist = perceptualDistance(pixelRgb, centroidRgb);
-      
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = i;
-      }
-    }
-  }
-  
-  return nearest;
-}
-
-// ============= CONNECTED COMPONENTS LABELING =============
-
-/**
- * Optimized label connected components using BFS queue (8-neighbors)
- * More stable than stack-based flood-fill, prevents overflow on large zones
+ * Label connected components using flood fill
+ * Returns zone labels and zone metadata
  */
 function labelConnectedComponents(
   colorMap: number[],
   width: number,
   height: number
 ): { labels: Int32Array; zones: Zone[] } {
-  const labels = new Int32Array(width * height).fill(-1);
+  const totalPixels = width * height;
+  const labels = new Int32Array(totalPixels).fill(-1);
+  let nextLabel = 0;
   const zones: Zone[] = [];
-  let currentLabel = 0;
-  
-  // Use BFS queue instead of stack for better memory stability
-  const INITIAL_QUEUE_CAPACITY = Math.max(64, Math.min(width * height, 1024));
-  let queueX = new Uint32Array(INITIAL_QUEUE_CAPACITY);
-  let queueY = new Uint32Array(INITIAL_QUEUE_CAPACITY);
-  let queueCapacity = INITIAL_QUEUE_CAPACITY;
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      
-      if (labels[idx] === -1) {
-        const colorIdx = colorMap[idx];
-        const pixels: number[] = []; // Temporary array, converted to Uint32Array later
-        let sumX = 0;
-        let sumY = 0;
-        
-        // BFS queue-based flood fill
-        let queueHead = 0;
-        let queueTail = 0;
+  for (let i = 0; i < totalPixels; i++) {
+    if (labels[i] !== -1) continue;
 
-        const compactQueue = () => {
-          if (queueHead > 0) {
-            if (queueTail > queueHead) {
-              queueX.copyWithin(0, queueHead, queueTail);
-              queueY.copyWithin(0, queueHead, queueTail);
-            }
-            queueTail -= queueHead;
-            queueHead = 0;
-          }
-        };
+    const colorIdx = colorMap[i];
+    const pixels: number[] = [];
+    const queue: number[] = [i];
+    labels[i] = nextLabel;
 
-        const ensureQueueSpace = (additionalSlots: number) => {
-          if (queueTail + additionalSlots <= queueCapacity) {
-            return;
-          }
+    while (queue.length > 0) {
+      const px = queue.pop()!;
+      pixels.push(px);
+      const x = px % width;
+      const y = Math.floor(px / width);
 
-          compactQueue();
+      // 4-connected neighbors
+      const neighbors = [];
+      if (x > 0) neighbors.push(px - 1);
+      if (x < width - 1) neighbors.push(px + 1);
+      if (y > 0) neighbors.push(px - width);
+      if (y < height - 1) neighbors.push(px + width);
 
-          if (queueTail + additionalSlots <= queueCapacity) {
-            return;
-          }
-
-          let newCapacity = queueCapacity;
-          const requiredCapacity = queueTail + additionalSlots;
-          while (newCapacity < requiredCapacity) {
-            newCapacity *= 2;
-          }
-
-          const newQueueX = new Uint32Array(newCapacity);
-          const newQueueY = new Uint32Array(newCapacity);
-
-          if (queueTail > 0) {
-            newQueueX.set(queueX.subarray(0, queueTail));
-            newQueueY.set(queueY.subarray(0, queueTail));
-          }
-
-          queueX = newQueueX;
-          queueY = newQueueY;
-          queueCapacity = newCapacity;
-        };
-
-        const enqueue = (qx: number, qy: number) => {
-          ensureQueueSpace(1);
-          queueX[queueTail] = qx;
-          queueY[queueTail] = qy;
-          queueTail++;
-        };
-
-        enqueue(x, y);
-        
-        let iterations = 0;
-        const MAX_ITERATIONS = 2000000;
-        
-        while (queueHead < queueTail && iterations < MAX_ITERATIONS) {
-          iterations++;
-          
-          const cx = queueX[queueHead];
-          const cy = queueY[queueHead];
-          queueHead++;
-          
-          const cidx = cy * width + cx;
-          
-          if (cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
-          if (labels[cidx] !== -1) continue;
-          if (colorMap[cidx] !== colorIdx) continue;
-          
-          labels[cidx] = currentLabel;
-          pixels.push(cidx);
-          sumX += cx;
-          sumY += cy;
-          
-          // Add 8-neighbors to queue (check bounds)
-          ensureQueueSpace(8);
-
-          // 4-connected neighbors
-          if (cx > 0 && labels[cy * width + (cx - 1)] === -1 && colorMap[cy * width + (cx - 1)] === colorIdx) {
-            enqueue(cx - 1, cy);
-          }
-          if (cx < width - 1 && labels[cy * width + (cx + 1)] === -1 && colorMap[cy * width + (cx + 1)] === colorIdx) {
-            enqueue(cx + 1, cy);
-          }
-          if (cy > 0 && labels[(cy - 1) * width + cx] === -1 && colorMap[(cy - 1) * width + cx] === colorIdx) {
-            enqueue(cx, cy - 1);
-          }
-          if (cy < height - 1 && labels[(cy + 1) * width + cx] === -1 && colorMap[(cy + 1) * width + cx] === colorIdx) {
-            enqueue(cx, cy + 1);
-          }
-
-          // Diagonal neighbors
-          if (cx > 0 && cy > 0 && labels[(cy - 1) * width + (cx - 1)] === -1 && colorMap[(cy - 1) * width + (cx - 1)] === colorIdx) {
-            enqueue(cx - 1, cy - 1);
-          }
-          if (cx < width - 1 && cy > 0 && labels[(cy - 1) * width + (cx + 1)] === -1 && colorMap[(cy - 1) * width + (cx + 1)] === colorIdx) {
-            enqueue(cx + 1, cy - 1);
-          }
-          if (cx > 0 && cy < height - 1 && labels[(cy + 1) * width + (cx - 1)] === -1 && colorMap[(cy + 1) * width + (cx - 1)] === colorIdx) {
-            enqueue(cx - 1, cy + 1);
-          }
-          if (cx < width - 1 && cy < height - 1 && labels[(cy + 1) * width + (cx + 1)] === -1 && colorMap[(cy + 1) * width + (cx + 1)] === colorIdx) {
-            enqueue(cx + 1, cy + 1);
-          }
-        }
-
-        if (iterations >= MAX_ITERATIONS) {
-          console.warn(`Max iterations reached for zone at (${x}, ${y})`);
-        }
-
-        if (pixels.length > 0) {
-          zones.push({
-            id: currentLabel,
-            colorIdx,
-            area: pixels.length,
-            pixels: new Uint32Array(pixels), // Convert to Uint32Array for memory efficiency
-            centroid: {
-              x: Math.round(sumX / pixels.length),
-              y: Math.round(sumY / pixels.length)
-            }
-          });
-          currentLabel++;
+      for (const n of neighbors) {
+        if (labels[n] === -1 && colorMap[n] === colorIdx) {
+          labels[n] = nextLabel;
+          queue.push(n);
         }
       }
     }
+
+    // Calculate centroid
+    let sumX = 0, sumY = 0;
+    for (const px of pixels) {
+      sumX += px % width;
+      sumY += Math.floor(px / width);
+    }
+
+    zones.push({
+      id: nextLabel,
+      colorIdx,
+      area: pixels.length,
+      pixels: new Uint32Array(pixels),
+      centroid: {
+        x: Math.round(sumX / pixels.length),
+        y: Math.round(sumY / pixels.length),
+      },
+    });
+
+    nextLabel++;
   }
 
   return { labels, zones };
 }
 
-// ============= ZONE MERGING =============
-
 /**
- * Rebuild zones from a label map.
- * Optionally uses reference zones to keep consistent color assignments.
+ * Rebuild zone metadata from a modified label map
+ * Uses reference zones to preserve color assignments
  */
 function buildZonesFromLabels(
   labels: Int32Array,
   palette: string[],
   width: number,
   height: number,
-  referenceZones: Zone[] = []
+  referenceZones: Zone[]
 ): Zone[] {
-  const zoneMap = new Map<number, Zone>();
-  const labelToColor = new Map<number, number>();
+  const zonePixels = new Map<number, number[]>();
+  const zoneColorIdx = new Map<number, number>();
 
-  for (const zone of referenceZones) {
-    labelToColor.set(zone.id, zone.colorIdx);
+  // Build reference map
+  const refMap = new Map<number, Zone>();
+  for (const z of referenceZones) {
+    refMap.set(z.id, z);
   }
 
   for (let i = 0; i < labels.length; i++) {
     const label = labels[i];
     if (label === -1) continue;
-
-    if (!zoneMap.has(label)) {
-      const colorIdx = labelToColor.get(label) ?? (palette.length > 0 ? label % palette.length : 0);
-      zoneMap.set(label, {
-        id: label,
-        colorIdx,
-        area: 0,
-        pixels: [] as any, // Temporary array, converted to Uint32Array later
-        centroid: { x: 0, y: 0 }
-      });
+    if (!zonePixels.has(label)) {
+      zonePixels.set(label, []);
+      // Use reference zone's color if available
+      const ref = refMap.get(label);
+      zoneColorIdx.set(label, ref?.colorIdx ?? 0);
     }
-
-    const zone = zoneMap.get(label)!;
-    (zone.pixels as any).push(i);
-    zone.area++;
+    zonePixels.get(label)!.push(i);
   }
 
-  return Array.from(zoneMap.values()).map(zone => {
-    const usePole = zone.area > 50;
-    let centroid: { x: number; y: number };
-
-    // Convert pixels array to Uint32Array for memory efficiency
-    const pixelsArray = new Uint32Array(zone.pixels as any);
-
-    if (usePole) {
-      centroid = findPoleOfInaccessibility(pixelsArray, width, height);
-    } else {
-      let sumX = 0;
-      let sumY = 0;
-      for (const pixelIdx of pixelsArray) {
-        sumX += pixelIdx % width;
-        sumY += Math.floor(pixelIdx / width);
-      }
-      centroid = {
-        x: Math.round(sumX / zone.area),
-        y: Math.round(sumY / zone.area)
-      };
+  const zones: Zone[] = [];
+  for (const [id, pixels] of zonePixels) {
+    let sumX = 0, sumY = 0;
+    for (const px of pixels) {
+      sumX += px % width;
+      sumY += Math.floor(px / width);
     }
-
-    return {
-      ...zone,
-      pixels: pixelsArray,
-      centroid
+    const pixelsArray = new Uint32Array(pixels);
+    const centroid = {
+      x: Math.round(sumX / pixels.length),
+      y: Math.round(sumY / pixels.length),
     };
-  });
+
+    zones.push({
+      id,
+      colorIdx: zoneColorIdx.get(id) ?? 0,
+      area: pixels.length,
+      pixels: pixelsArray,
+      centroid,
+    });
+  }
+
+  return zones;
 }
 
 function mergeSimilarAdjacentZones(
