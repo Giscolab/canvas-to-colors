@@ -111,7 +111,7 @@ export function ColorAnalysisPanel({
     analysis.mode === "vector" ? "(formes nettes) " : ""
   }avec ${dominantCount} couleur${dominantCount > 1 ? "s" : ""} dominantes — cible: ${recommendedNum} couleur${
     recommendedNum > 1 ? "s" : ""
-  }, min-région: ${recommendedMinRegion}px.`;
+  }, min-région: ${recommendedMinRegion}px. Recommandations non appliquées automatiquement.`;
 
   const hasOptimizedPalette = Boolean(
     processedResult?.palette?.length && processedResult?.metadata?.averageDeltaE != null
@@ -131,11 +131,15 @@ export function ColorAnalysisPanel({
             <div className="font-mono text-base tabular-nums">{uniqueColors}</div>
           </div>
           <div className="rounded border bg-card p-1.5">
-            <div className="text-muted-foreground text-[10px] leading-tight">Reco couleurs</div>
+            <div className="text-muted-foreground text-[10px] leading-tight">
+              Reco couleurs (info)
+            </div>
             <div className="font-mono text-base tabular-nums">{recommendedNum}</div>
           </div>
           <div className="rounded border bg-card p-1.5">
-            <div className="text-muted-foreground text-[10px] leading-tight">Reco min-region</div>
+            <div className="text-muted-foreground text-[10px] leading-tight">
+              Reco min-region (info)
+            </div>
             <div className="font-mono text-base tabular-nums">{recommendedMinRegion}px</div>
           </div>
           <div className="rounded border bg-card p-1.5">

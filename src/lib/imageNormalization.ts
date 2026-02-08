@@ -1,5 +1,6 @@
 /**
- * Image normalization utilities for EXIF orientation and resizing
+ * Image normalization utilities for EXIF orientation and resizing.
+ * Réservé à l'affichage (pas d'analyse brute ni de traitement Worker).
  */
 
 /**
@@ -102,7 +103,8 @@ function applyOrientation(
 }
 
 /**
- * Normalize image: fix EXIF orientation and resize to max dimension
+ * Normalize image: fix EXIF orientation and resize to max dimension.
+ * À utiliser uniquement pour l'aperçu d'affichage.
  */
 export async function normalizeImage(
   file: File,
@@ -182,7 +184,8 @@ export async function normalizeImage(
 }
 
 /**
- * Resize image for display purposes (lighter version)
+ * Resize image for display purposes (lighter version).
+ * Ne pas appeler avant l'analyse des couleurs.
  */
 export async function resizeForDisplay(
   file: File,

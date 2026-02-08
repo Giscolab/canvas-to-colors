@@ -129,19 +129,19 @@ export interface StudioContextValue {
 // ---------------------------------------------
 
 const DEFAULT_SETTINGS: StudioSettings = {
-  numColors: 20,
-  minRegionSize: 100,
-  smoothness: 50,
-  mergeTolerance: 12,
-  enableArtisticMerge: true,
+  numColors: 0,
+  minRegionSize: 0,
+  smoothness: 0,
+  mergeTolerance: 0,
+  enableArtisticMerge: false,
   smartPalette: false,
   paintEffect: "none",
-  paintIntensity: 50,
+  paintIntensity: 0,
   artisticEffect: "none",
-  artisticIntensity: 50,
+  artisticIntensity: 0,
   profilingEnabled: false,
   watermarkEnabled: false,
-  watermarkText: "@FranckStudio",
+  watermarkText: "",
 };
 
 const DEFAULT_PREFERENCES: UserPreferences = {

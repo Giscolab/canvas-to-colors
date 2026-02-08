@@ -81,6 +81,12 @@ function IndexContent() {
       studio.setCurrentProject(initialProject);
       setZonesByColor(new Map());
       setSelectedColorIdx(null);
+
+      setIsAnalyzing(true);
+      const analysis = await analyzeImageColors(processingFile, () => {});
+      studio.setAnalysis(analysis);
+      toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées`);
+
       toast.success("Image chargée (aperçu)", {
         description: "Normalisation en cours…",
       });
@@ -92,17 +98,6 @@ function IndexContent() {
       setSelectedImageUrl(normalizedUrl);
       studio.setCurrentProject({ ...initialProject, imageUrl: normalizedUrl });
       URL.revokeObjectURL(tempUrl);
-
-      setIsAnalyzing(true);
-      const analysis = await analyzeImageColors(processingFile, () => {});
-      studio.setAnalysis(analysis);
-      studio.updateSettings({
-        numColors: analysis.recommendedNumColors,
-        minRegionSize: analysis.recommendedMinRegionSize,
-        mergeTolerance: analysis.mode === "vector" ? 10 : 5,
-        smoothness: analysis.mode === "vector" ? 0 : 50,
-      });
-      toast.success(`✨ ${analysis.uniqueColorsCount} couleurs détectées`);
     } catch (err) {
       console.error(err);
       toast.error("Erreur lors du chargement de l'image");

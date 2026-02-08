@@ -121,7 +121,9 @@ export const ParametersPanel = ({
   isProcessing,
 }: ParametersPanelProps) => {
   const quality =
-    numColors <= 15
+    numColors <= 0
+      ? { label: "Non défini", className: "bg-slate-500" }
+      : numColors <= 15
       ? { label: "Simple", className: "bg-blue-500" }
       : numColors <= 25
       ? { label: "Détaillé", className: "bg-purple-500" }
@@ -172,7 +174,7 @@ export const ParametersPanel = ({
             </div>
             <Slider
               id="colors"
-              min={5}
+              min={0}
               max={40}
               step={1}
               value={[numColors]}
@@ -181,7 +183,7 @@ export const ParametersPanel = ({
               className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
             />
             <div className="flex justify-between text-[9px] text-muted-foreground">
-              <span>5 (Simple)</span>
+              <span>0 (Non défini)</span>
               <span>40 (Complexe)</span>
             </div>
           </div>
@@ -199,7 +201,7 @@ export const ParametersPanel = ({
             </div>
             <Slider
               id="region"
-              min={10}
+              min={0}
               max={500}
               step={10}
               value={[minRegionSize]}
@@ -208,7 +210,7 @@ export const ParametersPanel = ({
               className="w-full [&_.relative]:h-1 [&_[role=slider]]:h-3.5 [&_[role=slider]]:w-3.5 [&_[role=slider]]:border-2 [&_[role=slider]]:shadow-sm"
             />
             <div className="flex justify-between text-[9px] text-muted-foreground">
-              <span>10 (Précis)</span>
+              <span>0 (Non défini)</span>
               <span>500 (Simplifié)</span>
             </div>
           </div>
@@ -280,7 +282,7 @@ export const ParametersPanel = ({
                 </span>
               </div>
               <Slider
-                min={1}
+                min={0}
                 max={30}
                 step={1}
                 value={[mergeTolerance]}
