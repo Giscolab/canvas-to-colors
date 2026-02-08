@@ -11,7 +11,9 @@ interface ImageUploadProps {
   selectedImage: string | null;
 }
 
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
+const isSupportedFile = (file: File) =>
+  ACCEPTED_TYPES.includes(file.type) || file.name.toLowerCase().endsWith(".svg");
 
 export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,10 +39,10 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     (file: File | undefined | null) => {
       if (!file) return;
 
-      if (!ACCEPTED_TYPES.includes(file.type)) {
+      if (!isSupportedFile(file)) {
         toast({
           title: "Format invalide",
-          description: "Veuillez sélectionner une image PNG, JPG ou JPEG.",
+          description: "Veuillez sélectionner une image PNG, JPG, JPEG ou SVG.",
           variant: "destructive",
         });
         return;
@@ -128,7 +130,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
     e.preventDefault();
     setIsDragging(false);
     const fileList = Array.from(e.dataTransfer.files || []);
-    const firstImage = fileList.find((f) => ACCEPTED_TYPES.includes(f.type));
+    const firstImage = fileList.find((f) => isSupportedFile(f));
     validateAndAccept(firstImage);
   };
 
@@ -197,7 +199,7 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
               Glissez-déposez ou cliquez pour choisir
             </p>
             <Badge variant="secondary" className="mt-0.5 text-[9px] px-1.5 py-0">
-              PNG, JPG ou JPEG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB
+              PNG, JPG, JPEG ou SVG • Max {IMAGE_PROCESSING.MAX_FILE_SIZE_MB} MB
             </Badge>
           </div>
 

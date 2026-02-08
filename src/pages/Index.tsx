@@ -13,6 +13,7 @@ import { StudioProvider, useStudio } from "@/contexts/StudioContext";
 import { analyzeImageColors } from "@/lib/imageProcessing";
 import { processImageWithWorker } from "@/lib/imageProcessingWorker";
 import { resizeForDisplay } from "@/lib/imageNormalization";
+import { isSvgFile, rasterizeSvgFile } from "@/lib/svgImport";
 import { toast } from "sonner";
 import Confetti from "react-confetti";
 import { useWindowSize } from "@/hooks/useWindowSize";
@@ -52,16 +53,27 @@ function IndexContent() {
   // ========== IMAGE SELECTION ==========
   const handleImageSelect = async (file: File) => {
     try {
-      lastFileRef.current = file;
-      const tempUrl = URL.createObjectURL(file);
+      const originalName = file.name;
+      let processingFile = file;
+
+      if (isSvgFile(file)) {
+        toast.info("Rasterisation du SVG…", {
+          description: "Conversion en image bitmap pour le traitement.",
+        });
+        const rasterized = await rasterizeSvgFile(file);
+        processingFile = rasterized.file;
+      }
+
+      lastFileRef.current = processingFile;
+      const tempUrl = URL.createObjectURL(processingFile);
       setSelectedImageUrl(tempUrl);
 
       const initialProject = {
         id: Date.now().toString(),
-        name: file.name,
+        name: originalName,
         timestamp: Date.now(),
         imageUrl: tempUrl,
-        imageFile: file,
+        imageFile: processingFile,
         settings: studio.settings,
       };
 
@@ -74,7 +86,7 @@ function IndexContent() {
       });
 
       const normalizedUrl = await resizeForDisplay(
-        file,
+        processingFile,
         IMAGE_PROCESSING.MAX_DISPLAY_WIDTH
       );
       setSelectedImageUrl(normalizedUrl);
@@ -82,7 +94,7 @@ function IndexContent() {
       URL.revokeObjectURL(tempUrl);
 
       setIsAnalyzing(true);
-      const analysis = await analyzeImageColors(file, () => {});
+      const analysis = await analyzeImageColors(processingFile, () => {});
       studio.setAnalysis(analysis);
       studio.updateSettings({
         numColors: analysis.recommendedNumColors,
