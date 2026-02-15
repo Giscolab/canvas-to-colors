@@ -3,11 +3,20 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
+interface StudioImageInfo {
+  width?: number | null;
+  height?: number | null;
+  zoomPercent?: number | null;
+  colorSpace?: string | null;
+  bitDepth?: number | null;
+}
+
 interface StudioLayoutProps {
   leftPanel: ReactNode;
   centerPanel: ReactNode;
   rightPanel?: ReactNode;
   bottomBar?: ReactNode;
+  imageInfo?: StudioImageInfo;
   className?: string;
 }
 
@@ -16,8 +25,17 @@ export function StudioLayout({
   centerPanel,
   rightPanel,
   bottomBar,
+  imageInfo,
   className,
 }: StudioLayoutProps) {
+  const hasDimensions = Boolean(imageInfo?.width && imageInfo?.height);
+  const zoomPercent =
+    typeof imageInfo?.zoomPercent === "number"
+      ? Math.round(imageInfo.zoomPercent)
+      : null;
+  const colorSpace = imageInfo?.colorSpace ?? "sRGB";
+  const bitDepth = imageInfo?.bitDepth ?? 8;
+
   return (
 <div
   className={cn(
@@ -53,9 +71,8 @@ export function StudioLayout({
           </aside>
         )}
       </div>
-
  {/* --- Barre du bas fixe --- */}
-{bottomBar && imageInfo && (
+{(bottomBar || imageInfo) && (
   <footer className="h-8 bg-studio-status-bar/85 border-t border-studio-border/60 flex items-center justify-between px-3 text-xs text-studio-foreground/70 shrink-0">
     
     <div className="flex items-center gap-4">
@@ -66,22 +83,17 @@ export function StudioLayout({
 
       <Separator orientation="vertical" className="h-4 bg-studio-border/40" />
 
-      <span>
-        {imageInfo.width} × {imageInfo.height}
-      </span>
+      <span>{hasDimensions ? `${imageInfo?.width} × ${imageInfo?.height}` : "—"}</span>
 
       <Separator orientation="vertical" className="h-4 bg-studio-border/40" />
 
-      <span>
-        {imageInfo.colorSpace} / {imageInfo.bitDepth}
-      </span>
+      <span>{`${colorSpace} / ${bitDepth} bits`}</span>
     </div>
 
-    <div className="flex items-center gap-2">
-      <span>Zoom:</span>
-      <button className="px-2 py-0.5 text-xs rounded hover:bg-studio-hover">
-        {Math.round(imageInfo.zoom)}%
-      </button>
+    <div className="flex items-center gap-3">
+      {bottomBar}
+      {bottomBar && <Separator orientation="vertical" className="h-4 bg-studio-border/40" />}
+      <span>Zoom: {zoomPercent !== null ? `${zoomPercent}%` : "—"}</span>
     </div>
 
   </footer>
