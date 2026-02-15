@@ -157,73 +157,73 @@ export function CanvasHUD({
 
       {/* ===== HUD BOTTOM ===== */}
       <div className="pointer-events-auto p-4">
-        <div className="hud-panel neon-border px-4 py-2 text-xs font-mono flex justify-between items-center text-teal-400/80">
-          {/* Left */}
-          <div className="flex items-center gap-4">
-            <span>DIM: {dimensions}</span>
-            <span className="text-teal-500/40">|</span>
-            <span>COL: {colorsCount}</span>
-            <span className="text-teal-500/40">|</span>
-            <span>SIZE: {fileSize}</span>
-          </div>
+        
 
-          {/* Center – Opacité */}
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="overlay-opacity"
-              className="text-[11px] text-teal-300/80">
 
-              OPAC:
-            </label>
-            <input
-              id="overlay-opacity"
-              type="range"
-              min={0}
-              max={100}
-              value={overlayOpacity}
-              onChange={(e) => onChangeOverlayOpacity(Number(e.target.value))}
-              className="h-1.5 w-24 accent-teal-400/70 cursor-pointer" />
 
-            <span className="text-[11px] w-8 text-center">
-              {overlayOpacity}%
-            </span>
-          </div>
 
-          {/* Right – Finder + status */}
-          <div className="flex items-center gap-3">
-            {onFindNumber &&
-            <form onSubmit={handleFindSubmit} className="flex items-center gap-1">
-                <div className="relative">
-                  <Hash className="h-3 w-3 text-teal-500/50 absolute left-1 top-[6px]" />
-                  <input
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="N°"
-                  value={findNumber}
-                  onChange={(e) =>
-                  setFindNumber(e.target.value === "" ? "" : Number(e.target.value))
-                  }
-                  className="pl-5 pr-2 h-6 w-16 rounded-md border border-teal-500/30 bg-teal-950/30 text-xs text-teal-200 outline-none focus-visible:ring-1 focus-visible:ring-teal-500/40" />
 
-                </div>
-              </form>
-            }
-            <span className="text-orange-400/80">PROC: 16.57s</span>
-            <span className="text-teal-500/40">|</span>
-            <span
-              className={cn(
-                "font-semibold",
-                status === "READY" ?
-                "text-green-400" :
-                status === "BUSY" ?
-                "text-orange-400" :
-                "text-red-400"
-              )}>
 
-              STATUS: {status}
-            </span>
-          </div>
-        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       </div>
     </div>);
 
