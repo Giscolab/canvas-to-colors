@@ -77,7 +77,7 @@ Le traitement suit **7 étapes optimisées** :
 
 ## 📸 Aperçu du studio
 
-![screenshot](docs/demo.png)
+![screenshot](https://github.com/<username>/<repo>/raw/main/docs/demo.PNG)
 
 ---
 
