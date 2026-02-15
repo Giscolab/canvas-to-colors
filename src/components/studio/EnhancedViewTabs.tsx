@@ -271,9 +271,9 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         className="h-full flex flex-col">
 
         {/* --- Barre d'onglets --- 
-               1) Si #topbar-tabs existe, on monte la barre dans la TopBar via portal
-               2) Sinon, fallback inline sous forme de bandeau (comme avant)
-           */}
+                1) Si #topbar-tabs existe, on monte la barre dans la TopBar via portal
+                2) Sinon, fallback inline sous forme de bandeau (comme avant)
+            */}
         {tabsHost ?
         createPortal(TabsBar, tabsHost) :
 
@@ -374,7 +374,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                 </div>
               </div> :
 
-            <div className="h-full flex items-center justify-center text-studio-foreground/50">
+            <div className="h-full border-dotted border-primary border-2 flex-row py-0 my-[10px] mx-[10px] px-[10px] flex items-center justify-center gap-0 bg-sidebar-border text-[studio-canvas-header] text-primary">
                 <div className="text-center">
                   <ImageIcon className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p className="text-sm text-studio-foreground/70">Chargez une image pour commencer</p>
