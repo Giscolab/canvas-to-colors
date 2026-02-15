@@ -76,42 +76,7 @@ export function CanvasHUD({
       )}>
 
       {/* ===== HUD TOP ===== */}
-      <div className="pointer-events-auto flex justify-between items-start p-4">
-        {/* Mode / Pan / Pipette / Numbered */}
-        <div className="hud-panel neon-border px-3 py-2 flex items-center gap-2">
-          <button
-            onClick={onTogglePan}
-            className="h-7 w-7 rounded-md flex items-center justify-center text-teal-400 hover:text-teal-200 hover:bg-teal-500/10 transition"
-            aria-label="Outil main">
-
-            <Hand className="w-4 h-4" />
-          </button>
-
-          {onPickColor &&
-          <button
-            onClick={onPickColor}
-            className="h-7 w-7 rounded-md flex items-center justify-center text-teal-400 hover:text-teal-200 hover:bg-teal-500/10 transition"
-            aria-label="Pipette">
-
-              <Pipette className="w-4 h-4" />
-            </button>
-          }
-
-          <button
-            onClick={() => onToggleNumbered(!numberedVisible)}
-            className="h-7 w-7 rounded-md flex items-center justify-center text-teal-400 hover:text-teal-200 hover:bg-teal-500/10 transition"
-            aria-label="Numéros on/off">
-
-            {numberedVisible ?
-            <EyeOff className="w-4 h-4" /> :
-
-            <Eye className="w-4 h-4" />
-            }
-          </button>
-        </div>
-
-        {/* Zoom Controls */}
-        
+      
 
 
 
@@ -148,7 +113,42 @@ export function CanvasHUD({
 
 
 
-      </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       {/* Crosshair overlay (centré) */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
