@@ -77,7 +77,7 @@ Le traitement suit **7 étapes optimisées** :
 
 ## 📸 Aperçu du studio
 
-![screenshot](https://github.com/<username>/<repo>/raw/main/docs/demo.PNG)
+https://raw.githubusercontent.com/Giscolab/paint-by-numbers-generator/main/docs/demo.png
 
 ---
 
