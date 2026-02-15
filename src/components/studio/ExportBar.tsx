@@ -227,10 +227,12 @@ export function ExportBar() {
 
             </div>
             <div>
-              <Label>Couleur de fond</Label>
+              <Label htmlFor="export-background-color">Couleur de fond</Label>
               <Input
+                id="export-background-color"
                 type="color"
                 value={backgroundColor}
+                aria-label="Couleur de fond"
                 onChange={(e) => setBackgroundColor(e.target.value)} />
 
             </div>
