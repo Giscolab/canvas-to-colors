@@ -1,15 +1,32 @@
+@import "./styles/theme-pro.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "./styles/theme-pro.css";
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: hsl(var(--border));
+    --tw-content: '';
+  }
+
   :root {
+    font-family: "Inter", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-variation-settings: normal;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    -webkit-tap-highlight-color: transparent;
+
     --background: 240 20% 99%;
     --foreground: 260 40% 12%;
 
@@ -68,6 +85,15 @@ All colors MUST be HSL.
     
     --glass-bg: hsl(240 20% 99% / 0.7);
     --glass-border: hsl(240 15% 90% / 0.5);
+
+    --tw-ring-inset: ;
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
   }
 
   .dark {
@@ -130,6 +156,26 @@ All colors MUST be HSL.
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+
   * {
     @apply border-border;
   }
@@ -138,6 +184,7 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
     background-image: var(--gradient-mesh);
     background-attachment: fixed;
+    font-family: inherit;
   }
   
   /* Glassmorphism utilities */
@@ -160,16 +207,6 @@ All colors MUST be HSL.
   .hover-glow:hover {
     box-shadow: var(--shadow-glow);
   }
-}
-
-/* === CANVAS FULLSIZE FIX === */
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden; 
-  overflow-y: auto; 
 }
 
 .canvas-container {
