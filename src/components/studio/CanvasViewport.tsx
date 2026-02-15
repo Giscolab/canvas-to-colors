@@ -9,20 +9,20 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
-  useState,
-} from "react";
+  useState } from
+"react";
 import { cn } from "@/lib/utils";
 
-type ScrollState = { left: number; top: number };
+type ScrollState = {left: number;top: number;};
 
 export interface CanvasViewportHandle {
   zoomIn: () => void;
   zoomOut: () => void;
-  zoomTo: (percent: number, anchor?: { x: number; y: number }) => void;
+  zoomTo: (percent: number, anchor?: {x: number;y: number;}) => void;
   reset: () => void;
   fitToScreen: () => void;
   center: () => void;
-  clientToImage: (clientX: number, clientY: number) => { x: number; y: number } | null;
+  clientToImage: (clientX: number, clientY: number) => {x: number;y: number;} | null;
 }
 
 export interface CanvasViewportProps {
@@ -45,7 +45,7 @@ interface CanvasViewportContextValue {
   containerRef: RefObject<HTMLDivElement>;
   overlayRef: RefObject<HTMLDivElement>;
   wrapperRef: RefObject<HTMLDivElement>;
-  clientToImage: (clientX: number, clientY: number) => { x: number; y: number } | null;
+  clientToImage: (clientX: number, clientY: number) => {x: number;y: number;} | null;
 }
 
 const CanvasViewportContext = createContext<CanvasViewportContextValue | null>(null);
@@ -62,19 +62,19 @@ const clampScale = (value: number) => Math.min(8, Math.max(0.1, value));
 
 export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportProps>(
   (
-    {
-      width,
-      height,
-      zoomPercent,
-      onZoomChange,
-      panTool = false,
-      initialScroll,
-      onScrollChange,
-      className,
-      children,
-    },
-    ref
-  ) => {
+  {
+    width,
+    height,
+    zoomPercent,
+    onZoomChange,
+    panTool = false,
+    initialScroll,
+    onScrollChange,
+    className,
+    children
+  },
+  ref) =>
+  {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
@@ -101,7 +101,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         if (entry) {
           setContainerSize({
             width: entry.contentRect.width,
-            height: entry.contentRect.height,
+            height: entry.contentRect.height
           });
         }
       });
@@ -121,7 +121,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
       if (!scrollRef.current) return;
       onScrollChange?.({
         left: scrollRef.current.scrollLeft,
-        top: scrollRef.current.scrollTop,
+        top: scrollRef.current.scrollTop
       });
     }, [onScrollChange]);
 
@@ -152,7 +152,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
     );
 
     const applyZoom = useCallback(
-      (targetScale: number, anchor?: { x: number; y: number }) => {
+      (targetScale: number, anchor?: {x: number;y: number;}) => {
         const container = scrollRef.current;
         if (!container) return;
         const rect = container.getBoundingClientRect();
@@ -181,7 +181,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
     const zoomOut = useCallback(() => applyZoom(scale - 0.1), [applyZoom, scale]);
 
     const zoomTo = useCallback(
-      (percent: number, anchor?: { x: number; y: number }) => {
+      (percent: number, anchor?: {x: number;y: number;}) => {
         applyZoom(percent / 100, anchor);
       },
       [applyZoom]
@@ -214,7 +214,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
       }
       if (zoomPercent !== lastZoomRef.current) {
         lastZoomRef.current = zoomPercent;
-        
+
       }
     }, [centerOnScale, scale, zoomPercent]);
 
@@ -225,10 +225,10 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         const rect = scrollRef.current.getBoundingClientRect();
         const anchor = {
           x: event.clientX - rect.left,
-          y: event.clientY - rect.top,
+          y: event.clientY - rect.top
         };
         const direction = event.deltaY > 0 ? 0.1 : -0.1;
-				applyZoom(scale + direction, anchor);
+        applyZoom(scale + direction, anchor);
 
       },
       [applyZoom, scale]
@@ -242,7 +242,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
           x: event.clientX,
           y: event.clientY,
           left: scrollRef.current.scrollLeft,
-          top: scrollRef.current.scrollTop,
+          top: scrollRef.current.scrollTop
         };
       },
       [panTool]
@@ -279,7 +279,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         reset,
         fitToScreen,
         center,
-        clientToImage,
+        clientToImage
       }),
       [center, clientToImage, fitToScreen, reset, zoomIn, zoomOut, zoomTo]
     );
@@ -293,7 +293,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         containerRef: scrollRef,
         overlayRef,
         wrapperRef,
-        clientToImage,
+        clientToImage
       }),
       [clientToImage, dpr, height, scale, width]
     );
@@ -303,37 +303,37 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         <div ref={wrapperRef} className={cn("relative h-full w-full", className)}>
           <div
             ref={scrollRef}
-            className={cn(
-              "absolute inset-0 overflow-auto bg-studio-canvas",
-              panTool ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+            className={cn("absolute inset-0 overflow-auto bg-studio-canvas px-[100px]",
+
+            panTool ? "cursor-grab active:cursor-grabbing" : "cursor-default"
             )}
             onWheel={handleWheel}
             onMouseDown={handleMouseDown}
-            onScroll={reportScroll}
-          >
+            onScroll={reportScroll}>
+
             <div
               className="relative"
               style={{
                 width: width > 0 ? `${width * scale}px` : "100%",
-                height: height > 0 ? `${height * scale}px` : "100%",
-              }}
-            >
+                height: height > 0 ? `${height * scale}px` : "100%"
+              }}>
+
               <div
                 className="absolute left-0 top-0 origin-top-left"
                 style={{
                   width: width || "auto",
                   height: height || "auto",
-                  transform: `scale(${scale})`,
-                }}
-              >
+                  transform: `scale(${scale})`
+                }}>
+
                 {children}
               </div>
             </div>
           </div>
           <div ref={overlayRef} className="pointer-events-none absolute inset-0" />
         </div>
-      </CanvasViewportContext.Provider>
-    );
+      </CanvasViewportContext.Provider>);
+
   }
 );
 
