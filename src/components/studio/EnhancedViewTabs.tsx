@@ -374,7 +374,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                 </div>
               </div> :
 
-            <div className="h-full border-dotted border-primary border-2 flex-row py-0 my-[10px] mx-[10px] flex items-center justify-center gap-0 bg-sidebar-border text-[studio-canvas-header] text-primary px-[150px]">
+            <div className="h-full border-dotted border-primary border-2 flex-row py-0 flex items-center justify-center gap-0 bg-sidebar-border text-[studio-canvas-header] text-primary px-[150px] mx-0 my-0">
                 <div className="text-center">
                   <ImageIcon className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p className="text-sm text-studio-foreground/70">Chargez une image pour commencer</p>
