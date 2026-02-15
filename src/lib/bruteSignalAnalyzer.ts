@@ -50,6 +50,13 @@ export interface GradientStats {
   stdAngleRad: number;
 }
 
+export interface SpectralHeatmap {
+  width: number;
+  height: number;
+  /** Normalized 0-255 log-magnitude values (luminance average of R/G/B) */
+  data: Uint8Array;
+}
+
 export interface BruteSignalReport {
   physical: PhysicalProperties;
   statistics: Record<string, ChannelStatistics>;
@@ -57,6 +64,7 @@ export interface BruteSignalReport {
   spectral: Record<string, SpectralEnergy>;
   gradient: Record<string, GradientStats>;
   correlation: Record<string, number>;
+  spectralHeatmap?: SpectralHeatmap;
 }
 
 // ===================== WORKER SINGLETON =====================
@@ -91,10 +99,9 @@ function computeSpectralViaWorker(
   channels: Float64Array[],
   width: number,
   height: number
-): Promise<Record<string, SpectralEnergy>> {
+): Promise<{ spectral: Record<string, SpectralEnergy>; heatmap?: SpectralHeatmap }> {
   if (typeof Worker === 'undefined') {
-    // Fallback sync
-    return Promise.resolve(computeSpectralSync(channels, width, height));
+    return Promise.resolve({ spectral: computeSpectralSync(channels, width, height) });
   }
 
   return new Promise((resolve, reject) => {
@@ -107,7 +114,15 @@ function computeSpectralViaWorker(
       clearTimeout(timeout);
       worker.removeEventListener('message', handler);
       if (e.data.type === 'result') {
-        resolve(e.data.spectral);
+        let heatmap: SpectralHeatmap | undefined;
+        if (e.data.heatmap) {
+          heatmap = {
+            width: e.data.heatmap.width,
+            height: e.data.heatmap.height,
+            data: new Uint8Array(e.data.heatmap.data),
+          };
+        }
+        resolve({ spectral: e.data.spectral, heatmap });
       } else {
         reject(new Error(e.data.error || 'FFT Worker error'));
       }
@@ -115,7 +130,6 @@ function computeSpectralViaWorker(
 
     worker.addEventListener('message', handler);
 
-    // Transfer ArrayBuffers for zero-copy
     const buffers = channels.map(ch => ch.buffer.slice(0));
     worker.postMessage(
       { type: 'computeSpectral', channels: buffers, width, height },
@@ -194,14 +208,17 @@ export async function analyzeBruteSignal(imageData: ImageData): Promise<BruteSig
 
   // 4. Spectral (async via Worker)
   let spectral: Record<string, SpectralEnergy>;
+  let spectralHeatmap: SpectralHeatmap | undefined;
   try {
-    spectral = await computeSpectralViaWorker(channels, width, height);
+    const result = await computeSpectralViaWorker(channels, width, height);
+    spectral = result.spectral;
+    spectralHeatmap = result.heatmap;
   } catch (err) {
     console.warn("[BruteSignal] FFT Worker failed, falling back to sync:", err);
     spectral = computeSpectralSync(channels, width, height);
   }
 
-  return { physical, statistics, entropy, spectral, gradient, correlation };
+  return { physical, statistics, entropy, spectral, gradient, correlation, spectralHeatmap };
 }
 
 // ===================== SYNC FALLBACK FFT =====================
