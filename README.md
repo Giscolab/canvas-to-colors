@@ -1,116 +1,167 @@
-# 🎨 Canvas to Colors
+# Canvas to Colors
 
 ![Canvas to Colors](https://img.shields.io/badge/Canvas_to_Colors-Professional_Web_Studio-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
-![React](https://img.shields.io/badge/react-18.3.1-blue?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue?style=for-the-badge&logo=typescript)
 
-> **Transformez n'importe quelle photo en planche de peinture numérotée**  
-> Interface studio professionnelle façon Figma, avec pipeline d'analyse colorimétrique avancé.
+Canvas to Colors is a web studio for transforming images into paint-by-numbers outputs. It combines a configurable color/region processing pipeline with an interactive React UI, multiple visualization modes, and export tools for printable or programmable outputs.
 
----
+## Description
 
-## 🚀 Aperçu rapide
+This project is built with **React + TypeScript + Vite** and focuses on generating paint-by-numbers assets from uploaded images (raster and SVG).
 
-**Canvas to Colors** est un studio web de niveau pro pour générer des kits *Paint-by-Numbers* complets à partir d'images.  
-Conçu pour **studios créatifs**, **imprimeurs** et **artistes**, il combine rigueur scientifique et expérience visuelle fluide.
+Core workflow:
+1. Upload an image.
+2. Analyze detected colors and recommendations.
+3. Tune processing parameters (palette size, region size, smoothing, merge behavior, artistic effects).
+4. Generate outputs (numbered, contour, colorized).
+5. Export as PNG, JSON, or SVG.
 
-### Fonctionnalités clés
-- 🎨 **Analyse intelligente des couleurs** (ΔE2000, K-means++, histogramme interactif)
-- ⚙️ **Pipeline paramétrable** : fusion, adoucissement, effets artistiques
-- 🖼️ **Canvas Figma-like** : zoom 10%-800%, pan fluide, overlays et sélection
-- 💾 **Gestion de projets** : favoris, recherche, import/export `.pbnproj`
-- 📤 **Exports pro** : PNG, JSON, SVG vectoriel
-- 📊 **Profiling intégré** : timeline de performance et cache LRU
-- 🌓 **Thème dark/light/système** + design system HSL uniforme
+The application includes optional Supabase integration for authentication/profile features and SQL migrations for persisted data structures and RLS policies.
 
----
+## Installation
 
-## ⚡ Installation rapide
+### Prerequisites
 
-### Prérequis
 - Node.js 18+
-- npm ou yarn  
-- Navigateur moderne (Chrome, Edge, Firefox, Safari)
+- npm
+- (Optional) Supabase project for auth/profile features
 
-### Commandes
+### Steps
+
 ```bash
-git clone <repo-url>
+git clone <your-repository-url>
 cd paint-by-numbers-generator
 npm install
+```
+
+Create a `.env` file in the project root for Supabase-powered features:
+
+```bash
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-anon-publishable-key>
+```
+
+If you want the database objects locally/in your Supabase project, apply migrations from:
+
+```text
+supabase/migrations/
+```
+
+## Usage
+
+### Development
+
+```bash
 npm run dev
 ```
 
-Accès sur [http://localhost:5173](http://localhost:5173)
+> Vite is configured to run on port `8080`.
 
----
+### Build and preview
 
-## 🧠 Pipeline & Architecture
+```bash
+npm run build
+npm run preview
+```
 
-Le traitement suit **7 étapes optimisées** :
+### Lint
 
-1. Normalisation & cache
-2. Quantification K-means++ (ΔE2000)
-3. Segmentation & fusion artistique
-4. Extraction des contours
-5. Placement intelligent des labels
-6. Effets peinture & artistiques
-7. Exports multi-format
+```bash
+npm run lint
+```
 
-🔬 Détails complets : [`docs/pipeline.md`](./docs/pipeline.md)
-🏗️ Architecture et design system : [`docs/architecture.md`](./docs/architecture.md)
+### Typical in-app flow
 
----
+1. **Upload** an image (PNG/JPG or SVG).
+2. Click **Analyze image** to generate analysis/recommendations.
+3. Adjust studio parameters in the left panel.
+4. Launch processing and monitor progress.
+5. Use the export bar to save generated results.
 
-## 🧩 Stack Technique
+## Features
 
-| Catégorie            | Technologies                                       |
-| -------------------- | -------------------------------------------------- |
-| **Front-end**        | React 18, TypeScript 5, Vite, Tailwind, shadcn/ui  |
-| **Image Processing** | Canvas API, Path2D, K-means++, Martinez, Polylabel |
-| **Backend**          | Supabase (Auth, DB, Storage)                       |
-| **Performance**      | Web Workers, LRU Cache, Profiler custom            |
-| **UI/UX**            | Design tokens HSL, thèmes dark/light               |
+- Interactive studio layout with dedicated panels and bottom export bar.
+- Upload support for raster and SVG input (SVG rasterization is handled before processing).
+- Color analysis + recommendation flow before generation.
+- Worker-based processing with progress updates.
+- Visualization modes: original, contours, numbered, colorized, compare.
+- Zoom/pan interactions and processing profiler hooks.
+- Exports:
+  - PNG (`paint-by-numbers.png`)
+  - JSON (`paint-by-numbers-data.json`)
+  - SVG (`pbn-<timestamp>.svg`)
+- Optional Supabase-backed auth/profile integration.
+- Supabase SQL migrations with row-level security policies.
 
----
+## Configuration
 
-## 📸 Aperçu du studio
+### App constants
 
-![Démo du générateur](https://raw.githubusercontent.com/Giscolab/paint-by-numbers-generator/main/docs/demo.png)
----
+Processing, UI, cache, canvas, and export defaults are centralized in:
 
-## 🤝 Contribution
+```text
+src/config/constants.ts
+```
 
-Les PR sont bienvenues !
+Examples include max file size, worker timeouts, zoom bounds, and default export filenames.
 
-1. Fork le projet
-2. `git checkout -b feature/amazing-feature`
-3. `git commit -m "feat: add amazing feature"`
-4. `git push origin feature/amazing-feature`
-5. Ouvre ta Pull Request 🎉
+### Vite
 
-### Règles de code
+Project build/dev behavior is configured in:
 
-* TypeScript strict
-* Aucune couleur hardcodée (utiliser les tokens HSL)
-* Documenter les fonctions complexes
-* Profilage avant chaque merge
+```text
+vite.config.ts
+```
 
----
+Notable defaults:
+- dev host: `::`
+- dev port: `8080`
+- source maps enabled
+- manual vendor chunk splitting
 
+### Tailwind and theme
 
-## 📄 Licence
+Tailwind setup and design tokens are defined in:
 
-MIT © 2025 — **Franck**
+```text
+tailwind.config.ts
+src/styles/theme-pro.css
+```
 
----
+### Supabase
 
-## 🙏 Remerciements
+- Client integration: `src/integrations/supabase/client.ts`
+- Local project config: `supabase/config.toml`
+- SQL schema/policies: `supabase/migrations/*.sql`
 
-Merci à la communauté open-source ❤️
-React • TypeScript • Tailwind • Supabase • shadcn/ui • Recharts • Martinez • Polylabel • Simplify.js
+## Contributing
 
----
+Contributions are welcome.
 
-**[⬆ Retour en haut](#-paint-by-numbers-generator--v20)**
+1. Fork the repository.
+2. Create a feature branch:
+
+```bash
+git checkout -b feature/your-change
+```
+
+3. Implement changes following existing architecture patterns (components/hooks/lib/context split).
+4. Validate locally:
+
+```bash
+npm run lint
+npm run build
+```
+
+5. If processing behavior changes, run/extend manual checks in:
+
+```text
+docs/manual-tests.md
+```
+
+6. Commit with a clear message and open a pull request describing scope, rationale, and validation evidence.
+
+## License
+
+MIT.
+
+If you distribute this project, keep the license information and consider adding/maintaining an explicit `LICENSE` file in the repository root for clarity.
