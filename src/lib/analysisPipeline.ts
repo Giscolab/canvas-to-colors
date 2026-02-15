@@ -140,7 +140,7 @@ export async function analysisPipeline(
 
   validateImageData(referenceImageData);
 
-  const bruteSignal = analyzeBruteSignal(referenceImageData);
+  const bruteSignal = await analyzeBruteSignal(referenceImageData);
   const referenceGrayscaleMap = generateGrayscaleMap(referenceImageData);
 
   if (referenceGrayscaleMap.length !== referenceImageData.width * referenceImageData.height) {

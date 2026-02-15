@@ -2,13 +2,13 @@
  * BruteImageSignalAnalyzer — Port TypeScript du script Python
  *
  * Analyse stricte d'un signal 2D multicanal (ImageData du navigateur).
- * Aucune interprétation perceptuelle, aucune conversion colorimétrique.
+ * La FFT 2D est déléguée à un Web Worker dédié pour ne pas bloquer le thread principal.
  *
  * Sections :
  *  1. Propriétés physiques
  *  2. Statistiques descriptives brutes par canal (R/G/B)
  *  3. Théorie de l'information (Shannon)
- *  4. Énergie spectrale (FFT 2D Cooley-Tukey)
+ *  4. Énergie spectrale (FFT 2D via Worker)
  *  5. Gradient spatial (Sobel 3×3)
  *  6. Corrélation inter-canaux (Pearson)
  */
@@ -52,21 +52,91 @@ export interface GradientStats {
 
 export interface BruteSignalReport {
   physical: PhysicalProperties;
-  statistics: Record<string, ChannelStatistics>; // channel_0, channel_1, channel_2
-  entropy: Record<string, number>;               // channel_0 → H(bits)
+  statistics: Record<string, ChannelStatistics>;
+  entropy: Record<string, number>;
   spectral: Record<string, SpectralEnergy>;
   gradient: Record<string, GradientStats>;
-  correlation: Record<string, number>;            // ch_0_vs_1 → r
+  correlation: Record<string, number>;
 }
 
-// ===================== MAIN =====================
+// ===================== WORKER SINGLETON =====================
 
-export function analyzeBruteSignal(imageData: ImageData): BruteSignalReport {
+let spectralWorker: Worker | null = null;
+let workerIdleTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function getSpectralWorker(): Worker {
+  if (!spectralWorker) {
+    spectralWorker = new Worker(
+      new URL('../workers/signalAnalysis.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+  }
+  // Reset idle timeout
+  if (workerIdleTimeout !== null) {
+    clearTimeout(workerIdleTimeout);
+  }
+  workerIdleTimeout = setTimeout(() => {
+    spectralWorker?.terminate();
+    spectralWorker = null;
+    workerIdleTimeout = null;
+  }, 60_000);
+  return spectralWorker;
+}
+
+/**
+ * Compute spectral energy via Web Worker (async, non-blocking).
+ * Falls back to sync computation if Workers are unavailable.
+ */
+function computeSpectralViaWorker(
+  channels: Float64Array[],
+  width: number,
+  height: number
+): Promise<Record<string, SpectralEnergy>> {
+  if (typeof Worker === 'undefined') {
+    // Fallback sync
+    return Promise.resolve(computeSpectralSync(channels, width, height));
+  }
+
+  return new Promise((resolve, reject) => {
+    const worker = getSpectralWorker();
+    const timeout = setTimeout(() => {
+      reject(new Error('FFT Worker timeout (2 min)'));
+    }, 120_000);
+
+    const handler = (e: MessageEvent) => {
+      clearTimeout(timeout);
+      worker.removeEventListener('message', handler);
+      if (e.data.type === 'result') {
+        resolve(e.data.spectral);
+      } else {
+        reject(new Error(e.data.error || 'FFT Worker error'));
+      }
+    };
+
+    worker.addEventListener('message', handler);
+
+    // Transfer ArrayBuffers for zero-copy
+    const buffers = channels.map(ch => ch.buffer.slice(0));
+    worker.postMessage(
+      { type: 'computeSpectral', channels: buffers, width, height },
+      buffers
+    );
+  });
+}
+
+// ===================== MAIN (ASYNC) =====================
+
+/**
+ * Analyse complète du signal image.
+ * Les sections 1-3, 5-6 sont synchrones (rapides).
+ * La section 4 (FFT 2D) est déléguée au Worker.
+ */
+export async function analyzeBruteSignal(imageData: ImageData): Promise<BruteSignalReport> {
   const { data, width, height } = imageData;
   const totalPixels = width * height;
-  const CHANNELS = 3; // R, G, B (on ignore A)
+  const CHANNELS = 3;
 
-  // --- Extraire les canaux dans des Float64Array pour la précision ---
+  // --- Extraire les canaux ---
   const channels: Float64Array[] = [];
   for (let c = 0; c < CHANNELS; c++) {
     channels.push(new Float64Array(totalPixels));
@@ -96,31 +166,25 @@ export function analyzeBruteSignal(imageData: ImageData): BruteSignalReport {
     maxValueGlobal: maxGlobal,
   };
 
-  // 2. Statistics
+  // 2. Statistics (sync)
   const statistics: Record<string, ChannelStatistics> = {};
   for (let c = 0; c < CHANNELS; c++) {
     statistics[`channel_${c}`] = computeChannelStats(channels[c]);
   }
 
-  // 3. Entropy
+  // 3. Entropy (sync)
   const entropy: Record<string, number> = {};
   for (let c = 0; c < CHANNELS; c++) {
     entropy[`channel_${c}`] = computeShannonEntropy(channels[c], totalPixels);
   }
 
-  // 4. Spectral
-  const spectral: Record<string, SpectralEnergy> = {};
-  for (let c = 0; c < CHANNELS; c++) {
-    spectral[`channel_${c}`] = computeSpectralEnergy(channels[c], width, height);
-  }
-
-  // 5. Gradient
+  // 5. Gradient (sync)
   const gradient: Record<string, GradientStats> = {};
   for (let c = 0; c < CHANNELS; c++) {
     gradient[`channel_${c}`] = computeGradientStats(channels[c], width, height);
   }
 
-  // 6. Correlation
+  // 6. Correlation (sync)
   const correlation: Record<string, number> = {};
   for (let i = 0; i < CHANNELS; i++) {
     for (let j = i + 1; j < CHANNELS; j++) {
@@ -128,87 +192,31 @@ export function analyzeBruteSignal(imageData: ImageData): BruteSignalReport {
     }
   }
 
+  // 4. Spectral (async via Worker)
+  let spectral: Record<string, SpectralEnergy>;
+  try {
+    spectral = await computeSpectralViaWorker(channels, width, height);
+  } catch (err) {
+    console.warn("[BruteSignal] FFT Worker failed, falling back to sync:", err);
+    spectral = computeSpectralSync(channels, width, height);
+  }
+
   return { physical, statistics, entropy, spectral, gradient, correlation };
 }
 
-// ===================== 2. STATISTIQUES =====================
+// ===================== SYNC FALLBACK FFT =====================
 
-function computeChannelStats(channel: Float64Array): ChannelStatistics {
-  const n = channel.length;
-  if (n === 0) {
-    return { mean: 0, variance: 0, stdDev: 0, min: 0, max: 0, skewness: 0, kurtosis: 0, uniqueSymbols: 0 };
+function computeSpectralSync(
+  channels: Float64Array[],
+  width: number,
+  height: number
+): Record<string, SpectralEnergy> {
+  const result: Record<string, SpectralEnergy> = {};
+  for (let c = 0; c < channels.length; c++) {
+    result[`channel_${c}`] = computeSpectralEnergySingle(channels[c], width, height);
   }
-
-  let sum = 0;
-  let minV = Infinity;
-  let maxV = -Infinity;
-  const uniqueSet = new Set<number>();
-
-  for (let i = 0; i < n; i++) {
-    const v = channel[i];
-    sum += v;
-    if (v < minV) minV = v;
-    if (v > maxV) maxV = v;
-    uniqueSet.add(v);
-  }
-
-  const mean = sum / n;
-
-  // Variance, skewness, kurtosis (single pass)
-  let m2 = 0;
-  let m3 = 0;
-  let m4 = 0;
-
-  for (let i = 0; i < n; i++) {
-    const d = channel[i] - mean;
-    const d2 = d * d;
-    m2 += d2;
-    m3 += d2 * d;
-    m4 += d2 * d2;
-  }
-
-  const variance = m2 / n;
-  const stdDev = Math.sqrt(variance);
-
-  // Skewness = E[(X-μ)³] / σ³
-  const skewness = stdDev > 0 ? (m3 / n) / (stdDev * stdDev * stdDev) : 0;
-
-  // Excess kurtosis = E[(X-μ)⁴] / σ⁴ - 3
-  const kurtosis = stdDev > 0 ? (m4 / n) / (variance * variance) - 3 : 0;
-
-  return {
-    mean: round4(mean),
-    variance: round4(variance),
-    stdDev: round4(stdDev),
-    min: minV,
-    max: maxV,
-    skewness: round4(skewness),
-    kurtosis: round4(kurtosis),
-    uniqueSymbols: uniqueSet.size,
-  };
+  return result;
 }
-
-// ===================== 3. ENTROPIE =====================
-
-function computeShannonEntropy(channel: Float64Array, totalPixels: number): number {
-  // Histogramme 256 bins (uint8)
-  const hist = new Uint32Array(256);
-  for (let i = 0; i < channel.length; i++) {
-    hist[channel[i]]++;
-  }
-
-  let H = 0;
-  for (let i = 0; i < 256; i++) {
-    if (hist[i] > 0) {
-      const p = hist[i] / totalPixels;
-      H -= p * Math.log2(p);
-    }
-  }
-
-  return round4(H);
-}
-
-// ===================== 4. FFT 2D =====================
 
 function nextPow2(n: number): number {
   let p = 1;
@@ -216,39 +224,26 @@ function nextPow2(n: number): number {
   return p;
 }
 
-/**
- * Cooley-Tukey radix-2 FFT in-place
- * real/imag sont des Float64Array de longueur N (puissance de 2)
- */
 function fft1d(real: Float64Array, imag: Float64Array): void {
   const N = real.length;
-  // Bit reversal
   for (let i = 1, j = 0; i < N; i++) {
     let bit = N >> 1;
-    while (j & bit) {
-      j ^= bit;
-      bit >>= 1;
-    }
+    while (j & bit) { j ^= bit; bit >>= 1; }
     j ^= bit;
     if (i < j) {
       [real[i], real[j]] = [real[j], real[i]];
       [imag[i], imag[j]] = [imag[j], imag[i]];
     }
   }
-
-  // Butterfly
   for (let len = 2; len <= N; len <<= 1) {
     const half = len >> 1;
     const angle = -2 * Math.PI / len;
     const wR = Math.cos(angle);
     const wI = Math.sin(angle);
-
     for (let i = 0; i < N; i += len) {
-      let curR = 1;
-      let curI = 0;
+      let curR = 1, curI = 0;
       for (let j = 0; j < half; j++) {
-        const u = i + j;
-        const v = u + half;
+        const u = i + j, v = u + half;
         const tR = curR * real[v] - curI * imag[v];
         const tI = curR * imag[v] + curI * real[v];
         real[v] = real[u] - tR;
@@ -263,22 +258,18 @@ function fft1d(real: Float64Array, imag: Float64Array): void {
   }
 }
 
-function computeSpectralEnergy(channel: Float64Array, width: number, height: number): SpectralEnergy {
+function computeSpectralEnergySingle(channel: Float64Array, width: number, height: number): SpectralEnergy {
   const paddedW = nextPow2(width);
   const paddedH = nextPow2(height);
-
-  // Allouer la grille 2D (row-major)
   const real = new Float64Array(paddedW * paddedH);
   const imag = new Float64Array(paddedW * paddedH);
 
-  // Copier les données (zero-padding automatique)
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       real[y * paddedW + x] = channel[y * width + x];
     }
   }
 
-  // FFT par lignes
   const rowR = new Float64Array(paddedW);
   const rowI = new Float64Array(paddedW);
   for (let y = 0; y < paddedH; y++) {
@@ -290,7 +281,6 @@ function computeSpectralEnergy(channel: Float64Array, width: number, height: num
     imag.set(rowI, offset);
   }
 
-  // FFT par colonnes
   const colR = new Float64Array(paddedH);
   const colI = new Float64Array(paddedH);
   for (let x = 0; x < paddedW; x++) {
@@ -305,37 +295,86 @@ function computeSpectralEnergy(channel: Float64Array, width: number, height: num
     }
   }
 
-  // Énergie = |F|² avec fftshift
   const cx = paddedW >> 1;
   const cy = paddedH >> 1;
-  const radius = Math.min(paddedH, paddedW) >> 3; // 1/8
+  const radius = Math.min(paddedH, paddedW) >> 3;
   const r2 = radius * radius;
-
-  let totalEnergy = 0;
-  let lowEnergy = 0;
+  let totalEnergy = 0, lowEnergy = 0;
 
   for (let y = 0; y < paddedH; y++) {
     for (let x = 0; x < paddedW; x++) {
       const idx = y * paddedW + x;
       const energy = real[idx] * real[idx] + imag[idx] * imag[idx];
       totalEnergy += energy;
-
-      // fftshift : le centre DC est à (cx, cy)
       const sx = ((x + cx) % paddedW) - cx;
       const sy = ((y + cy) % paddedH) - cy;
-      if (sx * sx + sy * sy <= r2) {
-        lowEnergy += energy;
-      }
+      if (sx * sx + sy * sy <= r2) lowEnergy += energy;
     }
   }
-
-  const highEnergy = totalEnergy - lowEnergy;
 
   return {
     totalEnergy: round4(totalEnergy),
     lowFreqEnergyRatio: totalEnergy > 0 ? round4(lowEnergy / totalEnergy) : 0,
-    highFreqEnergyRatio: totalEnergy > 0 ? round4(highEnergy / totalEnergy) : 0,
+    highFreqEnergyRatio: totalEnergy > 0 ? round4((totalEnergy - lowEnergy) / totalEnergy) : 0,
   };
+}
+
+// ===================== 2. STATISTIQUES =====================
+
+function computeChannelStats(channel: Float64Array): ChannelStatistics {
+  const n = channel.length;
+  if (n === 0) {
+    return { mean: 0, variance: 0, stdDev: 0, min: 0, max: 0, skewness: 0, kurtosis: 0, uniqueSymbols: 0 };
+  }
+
+  let sum = 0, minV = Infinity, maxV = -Infinity;
+  const uniqueSet = new Set<number>();
+
+  for (let i = 0; i < n; i++) {
+    const v = channel[i];
+    sum += v;
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+    uniqueSet.add(v);
+  }
+
+  const mean = sum / n;
+  let m2 = 0, m3 = 0, m4 = 0;
+
+  for (let i = 0; i < n; i++) {
+    const d = channel[i] - mean;
+    const d2 = d * d;
+    m2 += d2;
+    m3 += d2 * d;
+    m4 += d2 * d2;
+  }
+
+  const variance = m2 / n;
+  const stdDev = Math.sqrt(variance);
+  const skewness = stdDev > 0 ? (m3 / n) / (stdDev * stdDev * stdDev) : 0;
+  const kurtosis = stdDev > 0 ? (m4 / n) / (variance * variance) - 3 : 0;
+
+  return {
+    mean: round4(mean), variance: round4(variance), stdDev: round4(stdDev),
+    min: minV, max: maxV, skewness: round4(skewness), kurtosis: round4(kurtosis),
+    uniqueSymbols: uniqueSet.size,
+  };
+}
+
+// ===================== 3. ENTROPIE =====================
+
+function computeShannonEntropy(channel: Float64Array, totalPixels: number): number {
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < channel.length; i++) hist[channel[i]]++;
+
+  let H = 0;
+  for (let i = 0; i < 256; i++) {
+    if (hist[i] > 0) {
+      const p = hist[i] / totalPixels;
+      H -= p * Math.log2(p);
+    }
+  }
+  return round4(H);
 }
 
 // ===================== 5. GRADIENT SOBEL =====================
@@ -348,14 +387,12 @@ function computeGradientStats(channel: Float64Array, width: number, height: numb
   const innerW = width - 2;
   const innerH = height - 2;
   const count = innerW * innerH;
-
   const magnitudes = new Float64Array(count);
   const angles = new Float64Array(count);
 
   let idx = 0;
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
-      // Sobel 3×3
       const tl = channel[(y - 1) * width + (x - 1)];
       const tc = channel[(y - 1) * width + x];
       const tr = channel[(y - 1) * width + (x + 1)];
@@ -374,9 +411,7 @@ function computeGradientStats(channel: Float64Array, width: number, height: numb
     }
   }
 
-  // Stats sur magnitudes
-  let sumMag = 0;
-  let maxMag = 0;
+  let sumMag = 0, maxMag = 0;
   for (let i = 0; i < count; i++) {
     sumMag += magnitudes[i];
     if (magnitudes[i] > maxMag) maxMag = magnitudes[i];
@@ -384,30 +419,19 @@ function computeGradientStats(channel: Float64Array, width: number, height: numb
   const meanMag = sumMag / count;
 
   let varMag = 0;
-  for (let i = 0; i < count; i++) {
-    const d = magnitudes[i] - meanMag;
-    varMag += d * d;
-  }
-  const stdMag = Math.sqrt(varMag / count);
+  for (let i = 0; i < count; i++) { const d = magnitudes[i] - meanMag; varMag += d * d; }
 
-  // Stats sur angles
   let sumAng = 0;
   for (let i = 0; i < count; i++) sumAng += angles[i];
   const meanAng = sumAng / count;
 
   let varAng = 0;
-  for (let i = 0; i < count; i++) {
-    const d = angles[i] - meanAng;
-    varAng += d * d;
-  }
-  const stdAng = Math.sqrt(varAng / count);
+  for (let i = 0; i < count; i++) { const d = angles[i] - meanAng; varAng += d * d; }
 
   return {
-    meanMagnitude: round4(meanMag),
-    maxMagnitude: round4(maxMag),
-    stdMagnitude: round4(stdMag),
-    meanAngleRad: round4(meanAng),
-    stdAngleRad: round4(stdAng),
+    meanMagnitude: round4(meanMag), maxMagnitude: round4(maxMag),
+    stdMagnitude: round4(Math.sqrt(varMag / count)),
+    meanAngleRad: round4(meanAng), stdAngleRad: round4(Math.sqrt(varAng / count)),
   };
 }
 
@@ -418,10 +442,7 @@ function pearsonCorrelation(a: Float64Array, b: Float64Array): number {
   if (n === 0) return 0;
 
   let sumA = 0, sumB = 0;
-  for (let i = 0; i < n; i++) {
-    sumA += a[i];
-    sumB += b[i];
-  }
+  for (let i = 0; i < n; i++) { sumA += a[i]; sumB += b[i]; }
   const meanA = sumA / n;
   const meanB = sumB / n;
 

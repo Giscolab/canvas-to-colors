@@ -454,7 +454,7 @@ export async function analyzeImageColors(
   // === 8️⃣ Analyse brute du signal (FFT, gradient Sobel, corrélation) ===
   let bruteSignal: BruteSignalReport | undefined;
   try {
-    bruteSignal = analyzeBruteSignal(imageData);
+    bruteSignal = await analyzeBruteSignal(imageData);
   } catch (err) {
     console.warn("Analyse brute du signal échouée (non bloquant):", err);
   }
