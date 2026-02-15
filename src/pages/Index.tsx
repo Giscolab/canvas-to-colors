@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ColorPalette } from "@/components/ColorPalette";
@@ -50,8 +50,22 @@ function IndexContent() {
     new Map()
   );
   const [selectedColorIdx, setSelectedColorIdx] = useState<number | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const { width = 0, height = 0 } = useWindowSize() ?? {};
+
+  useEffect(() => {
+    if (!selectedImageUrl) {
+      setImageDimensions(null);
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      setImageDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.src = selectedImageUrl;
+  }, [selectedImageUrl]);
 
   // ========== IMAGE SELECTION ==========
   const handleImageSelect = async (file: File) => {
@@ -362,6 +376,13 @@ function IndexContent() {
           </>
         }
         bottomBar={<ExportBar />} // ✅ export PNG + ZIP
+        imageInfo={{
+          width: imageDimensions?.width,
+          height: imageDimensions?.height,
+          zoomPercent: studio.zoomPercent,
+          colorSpace: "sRGB",
+          bitDepth: 8,
+        }}
       />
     </div>
   );
