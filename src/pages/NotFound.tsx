@@ -54,7 +54,7 @@ export default function NotFound() {
 
             <Button asChild variant="outline" className="w-full gap-2">
               <a
-                href="https://github.com/Giscolab/canvas-to-colors"
+                href="https://github.com/Giscolab/paint-by-numbers-generator"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Ouvrir la documentation du projet"
