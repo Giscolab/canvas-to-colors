@@ -1,116 +1,255 @@
-# 🎨 Canvas to Colors
+# Canvas to Colors
 
 ![Canvas to Colors](https://img.shields.io/badge/Canvas_to_Colors-Professional_Web_Studio-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
-![React](https://img.shields.io/badge/react-18.3.1-blue?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue?style=for-the-badge&logo=typescript)
+![Version](https://img.shields.io/badge/version-0.0.0-blue?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![React](https://img.shields.io/badge/react-18.3.1-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/typescript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)
 
-> **Transformez n'importe quelle photo en planche de peinture numérotée**  
-> Interface studio professionnelle façon Figma, avec pipeline d'analyse colorimétrique avancé.
+A professional web studio to transform images into paint-by-numbers outputs, with analysis, processing controls, and export workflows.
 
----
+## Description
 
-## 🚀 Aperçu rapide
+**Canvas to Colors** is a client-side image-processing application built with React, TypeScript, and Vite. It lets users upload raster or SVG files, analyze colors, apply recommendations, generate paint-by-numbers renders, and export results in multiple formats.
 
-**Canvas to Colors** est un studio web de niveau pro pour générer des kits *Paint-by-Numbers* complets à partir d'images.  
-Conçu pour **studios créatifs**, **imprimeurs** et **artistes**, il combine rigueur scientifique et expérience visuelle fluide.
+The app includes:
+- Studio-style UI (left controls, center canvas/views, right analysis/debug panels, bottom export bar)
+- Worker-based processing pipeline with progress updates
+- Optional Supabase integration for authentication/profile data and SQL migrations for database policies
 
-### Fonctionnalités clés
-- 🎨 **Analyse intelligente des couleurs** (ΔE2000, K-means++, histogramme interactif)
-- ⚙️ **Pipeline paramétrable** : fusion, adoucissement, effets artistiques
-- 🖼️ **Canvas Figma-like** : zoom 10%-800%, pan fluide, overlays et sélection
-- 💾 **Gestion de projets** : favoris, recherche, import/export `.pbnproj`
-- 📤 **Exports pro** : PNG, JSON, SVG vectoriel
-- 📊 **Profiling intégré** : timeline de performance et cache LRU
-- 🌓 **Thème dark/light/système** + design system HSL uniforme
+## Table of Contents
 
----
+- [Features](#features)
+- [Technologies Used](#technologies-used)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Project Structure](#project-structure)
+- [API Documentation](#api-documentation)
+- [Contributing](#contributing)
+- [License](#license)
+- [Authors/Contributors](#authorscontributors)
+- [Acknowledgments](#acknowledgments)
 
-## ⚡ Installation rapide
+## Features
 
-### Prérequis
+- Upload image sources (raster + SVG import/rasterization)
+- Color analysis and recommendation workflow before processing
+- Parameterized generation controls:
+  - number of colors
+  - minimum region size
+  - smoothing and merge tolerance
+  - artistic merge and effect options
+- Processing progress tracking and profiler support
+- Multiple view modes: `original`, `contours`, `numbered`, `colorized`, `compare`
+- Export options:
+  - PNG
+  - JSON
+  - SVG
+  - ZIP bundle (from header/export actions)
+- Local preferences and autosave behavior
+- Theme support (light/dark/system)
+
+## Technologies Used
+
+### Frontend
+- React 18
+- TypeScript
+- Vite
+- React Router
+- Tailwind CSS + shadcn/ui + Radix UI
+
+### Image / Geometry / Export
+- Canvas API
+- `marchingsquares`
+- `martinez-polygon-clipping`
+- `polylabel`
+- `simplify-js`
+- `jszip` + `file-saver`
+
+### Backend Integration
+- Supabase JavaScript client (`@supabase/supabase-js`)
+- SQL migrations under `supabase/migrations/`
+
+## Prerequisites
+
 - Node.js 18+
-- npm ou yarn  
-- Navigateur moderne (Chrome, Edge, Firefox, Safari)
+- npm
+- Modern browser
+- (Optional) Supabase project for auth/profile and persisted DB features
 
-### Commandes
+## Installation
+
 ```bash
-git clone <repo-url>
+git clone <your-repository-url>
 cd paint-by-numbers-generator
 npm install
+```
+
+Run development server:
+
+```bash
 npm run dev
 ```
 
-Accès sur [http://localhost:5173](http://localhost:5173)
+Build and preview:
 
----
+```bash
+npm run build
+npm run preview
+```
 
-## 🧠 Pipeline & Architecture
+Lint:
 
-Le traitement suit **7 étapes optimisées** :
+```bash
+npm run lint
+```
 
-1. Normalisation & cache
-2. Quantification K-means++ (ΔE2000)
-3. Segmentation & fusion artistique
-4. Extraction des contours
-5. Placement intelligent des labels
-6. Effets peinture & artistiques
-7. Exports multi-format
+## Configuration
 
-🔬 Détails complets : [`docs/pipeline.md`](./docs/pipeline.md)
-🏗️ Architecture et design system : [`docs/architecture.md`](./docs/architecture.md)
+### 1) Environment variables
 
----
+The Supabase client reads Vite environment variables:
 
-## 🧩 Stack Technique
+```ts
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+```
 
-| Catégorie            | Technologies                                       |
-| -------------------- | -------------------------------------------------- |
-| **Front-end**        | React 18, TypeScript 5, Vite, Tailwind, shadcn/ui  |
-| **Image Processing** | Canvas API, Path2D, K-means++, Martinez, Polylabel |
-| **Backend**          | Supabase (Auth, DB, Storage)                       |
-| **Performance**      | Web Workers, LRU Cache, Profiler custom            |
-| **UI/UX**            | Design tokens HSL, thèmes dark/light               |
+Create `.env` in the repository root:
 
----
+```bash
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-anon-publishable-key>
+```
 
-## 📸 Aperçu du studio
+### 2) Core app constants
 
-![Démo du générateur](https://raw.githubusercontent.com/Giscolab/paint-by-numbers-generator/main/docs/demo.png)
----
+Centralized in `src/config/constants.ts` (examples: max file size, worker timeout, cache size, zoom bounds, export names).
 
-## 🤝 Contribution
+### 3) Build and dev server settings
 
-Les PR sont bienvenues !
+Configured in `vite.config.ts`:
+- host: `::`
+- port: `8080`
+- sourcemaps enabled
+- vendor manual chunking
 
-1. Fork le projet
-2. `git checkout -b feature/amazing-feature`
-3. `git commit -m "feat: add amazing feature"`
-4. `git push origin feature/amazing-feature`
-5. Ouvre ta Pull Request 🎉
+### 4) Supabase project files
 
-### Règles de code
+- `supabase/config.toml`
+- `supabase/migrations/*.sql`
 
-* TypeScript strict
-* Aucune couleur hardcodée (utiliser les tokens HSL)
-* Documenter les fonctions complexes
-* Profilage avant chaque merge
+Migrations include tables/policies for `image_jobs` and `profiles` with RLS policies.
 
----
+## Usage
 
+### Main app flow
 
-## 📄 Licence
+1. Start app with `npm run dev` and open the local URL.
+2. Upload an image in the left panel.
+3. Click **Analyze image** to generate metrics and recommendations.
+4. Adjust settings, then run processing.
+5. Switch visualization tabs/modes.
+6. Export output (PNG/JSON/SVG/ZIP).
 
-MIT © 2025 — **Franck**
+### Relevant script definitions (from `package.json`)
 
----
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  }
+}
+```
 
-## 🙏 Remerciements
+### Routing entry points
 
-Merci à la communauté open-source ❤️
-React • TypeScript • Tailwind • Supabase • shadcn/ui • Recharts • Martinez • Polylabel • Simplify.js
+```tsx
+<Routes>
+  <Route path="/" element={<Index />} />
+  <Route path="*" element={<NotFound />} />
+</Routes>
+```
 
----
+### Manual validation scenario
 
-**[⬆ Retour en haut](#-paint-by-numbers-generator--v20)**
+A manual test scenario is documented in `docs/manual-tests.md` for large uniform color segmentation and queue behavior.
+
+## Project Structure
+
+```text
+.
+├── docs/
+│   ├── demo.png
+│   └── manual-tests.md
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── studio/
+│   │   └── ui/
+│   ├── config/
+│   ├── contexts/
+│   ├── hooks/
+│   ├── integrations/supabase/
+│   ├── lib/
+│   ├── pages/
+│   ├── styles/
+│   ├── types/
+│   └── workers/
+├── supabase/
+│   ├── config.toml
+│   └── migrations/
+├── package.json
+├── vite.config.ts
+└── tailwind.config.ts
+```
+
+## API Documentation
+
+This project does **not** expose a traditional REST API from this repository.
+
+Available interfaces:
+- **Frontend routes**: `/` and catch-all `*`.
+- **Supabase auth usage** (client-side): sign-in, sign-up, sign-out through `supabase.auth` in `src/hooks/useAuth.ts`.
+- **Database schema (Supabase migrations)**:
+  - `public.image_jobs`
+  - `public.profiles`
+
+## Contributing
+
+1. Fork the repository.
+2. Create a branch:
+
+```bash
+git checkout -b feature/your-feature
+```
+
+3. Make your changes.
+4. Validate with:
+
+```bash
+npm run lint
+npm run build
+```
+
+5. If behavior changes in processing, run/extend `docs/manual-tests.md`.
+6. Open a pull request with a clear summary and validation steps.
+
+## License
+
+MIT.
+
+## Authors/Contributors
+
+- **Franck** (credited in historical project README)
+- Contributors via pull requests
+
+## Acknowledgments
+
+Open-source tools used in this project include React, TypeScript, Tailwind CSS, Supabase, shadcn/ui, Radix UI, Recharts, Martinez, and Polylabel.
