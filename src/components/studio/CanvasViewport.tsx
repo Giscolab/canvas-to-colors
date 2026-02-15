@@ -77,16 +77,22 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
   {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const imageFrameRef = useRef<HTMLDivElement>(null);
     const overlayRef = useRef<HTMLDivElement>(null);
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
     const [dpr, setDpr] = useState(() => Math.max(1, window.devicePixelRatio || 1));
-    const isPanningRef = useRef(false);
-    const panStartRef = useRef({ x: 0, y: 0, left: 0, top: 0 });
     const zoomInternalRef = useRef(false);
     const lastZoomRef = useRef(zoomPercent);
     const initialScrollAppliedRef = useRef(false);
 
-    const scale = clampScale(zoomPercent / 100);
+    const requestedScale = clampScale(zoomPercent / 100);
+    const fitScale = useMemo(() => {
+      if (width <= 0 || height <= 0 || containerSize.width <= 0 || containerSize.height <= 0) {
+        return 1;
+      }
+      return Math.min(containerSize.width / width, containerSize.height / height);
+    }, [containerSize.height, containerSize.width, height, width]);
+    const scale = Math.max(0.01, Math.min(requestedScale, fitScale));
 
     useEffect(() => {
       const handleResize = () => setDpr(Math.max(1, window.devicePixelRatio || 1));
@@ -112,99 +118,62 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
     useEffect(() => {
       const container = scrollRef.current;
       if (!container || !initialScroll || initialScrollAppliedRef.current) return;
-      container.scrollLeft = initialScroll.left;
-      container.scrollTop = initialScroll.top;
       initialScrollAppliedRef.current = true;
     }, [initialScroll]);
 
     const reportScroll = useCallback(() => {
-      if (!scrollRef.current) return;
-      onScrollChange?.({
-        left: scrollRef.current.scrollLeft,
-        top: scrollRef.current.scrollTop
-      });
+      onScrollChange?.({ left: 0, top: 0 });
     }, [onScrollChange]);
 
     const clientToImage = useCallback(
       (clientX: number, clientY: number) => {
-        const container = scrollRef.current;
-        if (!container || width <= 0 || height <= 0) return null;
-        const rect = container.getBoundingClientRect();
-        const x = (clientX - rect.left + container.scrollLeft) / scale;
-        const y = (clientY - rect.top + container.scrollTop) / scale;
+        const frame = imageFrameRef.current;
+        if (!frame || width <= 0 || height <= 0) return null;
+        const rect = frame.getBoundingClientRect();
+        const x = (clientX - rect.left) / scale;
+        const y = (clientY - rect.top) / scale;
         if (x < 0 || y < 0 || x > width || y > height) return null;
         return { x: Math.floor(x), y: Math.floor(y) };
       },
       [scale, width, height]
     );
 
-    const centerOnScale = useCallback(
-      (targetScale: number) => {
-        const container = scrollRef.current;
-        if (!container || width <= 0 || height <= 0) return;
-        const contentWidth = width * targetScale;
-        const contentHeight = height * targetScale;
-        container.scrollLeft = Math.max(0, (contentWidth - container.clientWidth) / 2);
-        container.scrollTop = Math.max(0, (contentHeight - container.clientHeight) / 2);
-        reportScroll();
-      },
-      [height, reportScroll, width]
-    );
-
     const applyZoom = useCallback(
-      (targetScale: number, anchor?: {x: number;y: number;}) => {
-        const container = scrollRef.current;
-        if (!container) return;
-        const rect = container.getBoundingClientRect();
-        const anchorX = anchor?.x ?? rect.width / 2;
-        const anchorY = anchor?.y ?? rect.height / 2;
-        const imageX = (container.scrollLeft + anchorX) / scale;
-        const imageY = (container.scrollTop + anchorY) / scale;
-        const nextScale = clampScale(targetScale);
-        const nextScrollLeft = imageX * nextScale - anchorX;
-        const nextScrollTop = imageY * nextScale - anchorY;
-
+      (targetScale: number) => {
+        const nextScale = Math.max(0.01, Math.min(clampScale(targetScale), fitScale));
         zoomInternalRef.current = true;
         onZoomChange(Math.round(nextScale * 100));
-
-        requestAnimationFrame(() => {
-          if (!scrollRef.current) return;
-          scrollRef.current.scrollLeft = nextScrollLeft;
-          scrollRef.current.scrollTop = nextScrollTop;
-          reportScroll();
-        });
+        reportScroll();
       },
-      [onZoomChange, reportScroll, scale]
+      [fitScale, onZoomChange, reportScroll]
     );
 
     const zoomIn = useCallback(() => applyZoom(scale + 0.1), [applyZoom, scale]);
     const zoomOut = useCallback(() => applyZoom(scale - 0.1), [applyZoom, scale]);
 
     const zoomTo = useCallback(
-      (percent: number, anchor?: {x: number;y: number;}) => {
-        applyZoom(percent / 100, anchor);
+      (percent: number) => {
+        applyZoom(percent / 100);
       },
       [applyZoom]
     );
 
     const reset = useCallback(() => {
       applyZoom(1);
-      requestAnimationFrame(() => centerOnScale(1));
-    }, [applyZoom, centerOnScale]);
+    }, [applyZoom]);
 
     const fitToScreen = useCallback(() => {
       if (width <= 0 || height <= 0) return;
-      const nextScale = clampScale(
+      const nextScale = Math.max(0.01, Math.min(8,
         Math.min(
           containerSize.width / width,
           containerSize.height / height
         )
-      );
+      ));
       applyZoom(nextScale);
-      requestAnimationFrame(() => centerOnScale(nextScale));
-    }, [applyZoom, centerOnScale, containerSize.height, containerSize.width, height, width]);
+    }, [applyZoom, containerSize.height, containerSize.width, height, width]);
 
-    const center = useCallback(() => centerOnScale(scale), [centerOnScale, scale]);
+    const center = useCallback(() => reportScroll(), [reportScroll]);
 
     useEffect(() => {
       if (zoomInternalRef.current) {
@@ -216,59 +185,19 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         lastZoomRef.current = zoomPercent;
 
       }
-    }, [centerOnScale, scale, zoomPercent]);
+    }, [scale, zoomPercent]);
 
     const handleWheel = useCallback(
       (event: React.WheelEvent<HTMLDivElement>) => {
-        if (!scrollRef.current) return;
         event.preventDefault();
-        const rect = scrollRef.current.getBoundingClientRect();
-        const anchor = {
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top
-        };
         const direction = event.deltaY > 0 ? 0.1 : -0.1;
-        applyZoom(scale + direction, anchor);
+        applyZoom(scale + direction);
 
       },
       [applyZoom, scale]
     );
 
-    const handleMouseDown = useCallback(
-      (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!panTool || event.button !== 0 || !scrollRef.current) return;
-        isPanningRef.current = true;
-        panStartRef.current = {
-          x: event.clientX,
-          y: event.clientY,
-          left: scrollRef.current.scrollLeft,
-          top: scrollRef.current.scrollTop
-        };
-      },
-      [panTool]
-    );
-
-    const handleMouseMove = useCallback((event: MouseEvent) => {
-      if (!isPanningRef.current || !scrollRef.current) return;
-      const dx = event.clientX - panStartRef.current.x;
-      const dy = event.clientY - panStartRef.current.y;
-      scrollRef.current.scrollLeft = panStartRef.current.left - dx;
-      scrollRef.current.scrollTop = panStartRef.current.top - dy;
-      reportScroll();
-    }, [reportScroll]);
-
-    const handleMouseUp = useCallback(() => {
-      isPanningRef.current = false;
-    }, []);
-
-    useEffect(() => {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-      };
-    }, [handleMouseMove, handleMouseUp]);
+    const handleMouseDown = useCallback(() => {}, []);
 
     useImperativeHandle(
       ref,
@@ -303,7 +232,7 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
         <div ref={wrapperRef} className={cn("relative h-full w-full", className)}>
           <div
             ref={scrollRef}
-            className={cn("absolute inset-0 overflow-auto bg-studio-canvas px-[100px]",
+            className={cn("absolute inset-0 overflow-hidden bg-studio-canvas",
 
             panTool ? "cursor-grab active:cursor-grabbing" : "cursor-default"
             )}
@@ -311,19 +240,13 @@ export const CanvasViewport = forwardRef<CanvasViewportHandle, CanvasViewportPro
             onMouseDown={handleMouseDown}
             onScroll={reportScroll}>
 
-            <div
-              className="relative"
-              style={{
-                width: width > 0 ? `${width * scale}px` : "100%",
-                height: height > 0 ? `${height * scale}px` : "100%"
-              }}>
-
+            <div className="absolute inset-0 flex items-center justify-center">
               <div
-                className="absolute left-0 top-0 origin-top-left"
+                ref={imageFrameRef}
+                className="relative"
                 style={{
-                  width: width || "auto",
-                  height: height || "auto",
-                  transform: `scale(${scale})`
+                  width: width > 0 ? `${width * scale}px` : "100%",
+                  height: height > 0 ? `${height * scale}px` : "100%"
                 }}>
 
                 {children}
