@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -6,7 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import type { BruteSignalReport } from "@/lib/bruteSignalAnalyzer";
+import type { BruteSignalReport, SpectralHeatmap } from "@/lib/bruteSignalAnalyzer";
 
 interface SignalAnalysisSectionProps {
   report: BruteSignalReport;
@@ -35,7 +36,7 @@ function fmt(v: number, decimals = 2): string {
 }
 
 export function SignalAnalysisSection({ report }: SignalAnalysisSectionProps) {
-  const { physical, statistics, entropy, spectral, gradient, correlation } = report;
+  const { physical, statistics, entropy, spectral, gradient, correlation, spectralHeatmap } = report;
 
   return (
     <div className="pt-2 border-t border-border/40">
@@ -163,6 +164,12 @@ export function SignalAnalysisSection({ report }: SignalAnalysisSectionProps) {
               <p className="text-[9px] text-muted-foreground">
                 BF = basses fréquences (structures globales), HF = hautes fréquences (détails/bruit).
               </p>
+              {spectralHeatmap && (
+                <div className="mt-2">
+                  <div className="text-[10px] text-muted-foreground mb-1">Spectre FFT 2D (log magnitude)</div>
+                  <FFTHeatmapCanvas heatmap={spectralHeatmap} />
+                </div>
+              )}
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -258,4 +265,87 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <div className="font-mono text-[11px] tabular-nums">{value}</div>
     </div>
   );
+}
+
+/**
+ * Renders the FFT 2D log-magnitude heatmap on a canvas using an inferno-like colormap.
+ */
+function FFTHeatmapCanvas({ heatmap }: { heatmap: SpectralHeatmap }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const { width, height, data } = heatmap;
+    canvas.width = width;
+    canvas.height = height;
+
+    const imageData = ctx.createImageData(width, height);
+    const pixels = imageData.data;
+
+    for (let i = 0; i < data.length; i++) {
+      const v = data[i] / 255; // 0..1
+      const [r, g, b] = infernoColormap(v);
+      const idx = i * 4;
+      pixels[idx] = r;
+      pixels[idx + 1] = g;
+      pixels[idx + 2] = b;
+      pixels[idx + 3] = 255;
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }, [heatmap]);
+
+  return (
+    <div className="relative rounded border border-border/50 overflow-hidden bg-black">
+      <canvas
+        ref={canvasRef}
+        className="w-full"
+        style={{ imageRendering: "pixelated", aspectRatio: `${heatmap.width} / ${heatmap.height}` }}
+      />
+      {/* Legend bar */}
+      <div className="flex items-center gap-1 px-1 py-0.5">
+        <span className="text-[8px] text-muted-foreground">0</span>
+        <div
+          className="flex-1 h-1.5 rounded"
+          style={{
+            background: "linear-gradient(to right, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4)",
+          }}
+        />
+        <span className="text-[8px] text-muted-foreground">max</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Inferno-like colormap: maps 0..1 → [R, G, B] (0-255)
+ */
+function infernoColormap(t: number): [number, number, number] {
+  // Simplified 6-stop inferno approximation
+  const stops: [number, number, number, number][] = [
+    [0.0, 0, 0, 4],
+    [0.2, 66, 10, 104],
+    [0.4, 147, 38, 103],
+    [0.6, 221, 81, 58],
+    [0.8, 252, 165, 10],
+    [1.0, 252, 255, 164],
+  ];
+
+  let i = 0;
+  while (i < stops.length - 2 && t > stops[i + 1][0]) i++;
+
+  const [t0, r0, g0, b0] = stops[i];
+  const [t1, r1, g1, b1] = stops[i + 1];
+  const f = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+
+  return [
+    Math.round(r0 + f * (r1 - r0)),
+    Math.round(g0 + f * (g1 - g0)),
+    Math.round(b0 + f * (b1 - b0)),
+  ];
 }
