@@ -37,7 +37,7 @@ Conçu pour **studios créatifs**, **imprimeurs** et **artistes**, il combine ri
 ### Commandes
 ```bash
 git clone <repo-url>
-cd canvas-to-colors
+cd paint-by-numbers-generator
 npm install
 npm run dev
 ```
@@ -114,4 +114,4 @@ React • TypeScript • Tailwind • Supabase • shadcn/ui • Recharts • Ma
 
 ---
 
-**[⬆ Retour en haut](#-canvas-to-colors--v20)**
+**[⬆ Retour en haut](#-paint-by-numbers-generator--v20)**

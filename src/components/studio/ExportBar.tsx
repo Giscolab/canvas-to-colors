@@ -7,29 +7,29 @@ import {
   Settings,
   ChevronDown,
   Check,
-  Copy,
-} from "lucide-react";
+  Copy } from
+"lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  DropdownMenuTrigger } from
+"@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  TooltipTrigger } from
+"@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DialogTitle } from
+"@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -84,7 +84,7 @@ export function ExportBar() {
         const canvas = studio.renderToCanvas(mode, scale, backgroundColor);
         if (!canvas) continue;
         const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob((b) => resolve(b), "image/png")
+        canvas.toBlob((b) => resolve(b), "image/png")
         );
         if (blob) zip.file(`pbn-${mode}-${date}.png`, blob);
       }
@@ -104,107 +104,107 @@ export function ExportBar() {
   // === COPIE INFO ===
   const handleCopy = useCallback(() => {
     if (!processedData) return;
-    navigator.clipboard
-      .writeText(`Image2Canvas export du ${new Date().toLocaleDateString()}`)
-      .then(() => {
-        setCopied(true);
-        toast.success("Copié !");
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch(() => toast.error("Échec de la copie"));
+    navigator.clipboard.
+    writeText(`Image2Canvas export du ${new Date().toLocaleDateString()}`).
+    then(() => {
+      setCopied(true);
+      toast.success("Copié !");
+      setTimeout(() => setCopied(false), 2000);
+    }).
+    catch(() => toast.error("Échec de la copie"));
   }, [processedData]);
 
   return (
     <TooltipProvider>
-      <div className="studio-export-bar flex justify-between items-center border-t bg-card/70 backdrop-blur px-3 py-2">
-        {/* Statut */}
-        <div className="text-xs sm:text-sm text-muted-foreground">
-          {processedData
-            ? `${processedData.zones.length} zones • ${processedData.palette.length} couleurs`
-            : "Aucun résultat"}
-        </div>
+      
 
-        {/* Boutons */}
-        <div className="flex items-center gap-2">
-          {/* Copier */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                disabled={disabled}
-              >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Copier une info</TooltipContent>
-          </Tooltip>
 
-          {/* Export PNG */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" disabled={disabled}>
-                <FileImage className="w-4 h-4" />
-                PNG
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExportPNG(1)}>
-                Export standard
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExportPNG(2)}>
-                Export HD ×2
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExportPNG(4)}>
-                Export UHD ×4
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
-          {/* Export ZIP */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportZIP}
-            disabled={disabled || isExporting}
-          >
-            <FileArchive className="w-4 h-4" />
-            ZIP
-          </Button>
 
-          {/* Paramètres */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDialog(true)}
-            disabled={disabled}
-          >
-            <Settings className="w-4 h-4" />
-          </Button>
 
-          {/* Bouton principal */}
-          <Button
-            size="sm"
-            className="studio-export-button studio-export-button--primary"
-            onClick={() => handleExportPNG(2)}
-            disabled={disabled || isExporting}
-          >
-            {isExporting ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Export...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Exporter
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       {/* Dialogue Export avancé */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -223,16 +223,16 @@ export function ExportBar() {
                 max={4}
                 step={0.5}
                 value={[scale]}
-                onValueChange={(val) => setScale(val[0])}
-              />
+                onValueChange={(val) => setScale(val[0])} />
+
             </div>
             <div>
               <Label>Couleur de fond</Label>
               <Input
                 type="color"
                 value={backgroundColor}
-                onChange={(e) => setBackgroundColor(e.target.value)}
-              />
+                onChange={(e) => setBackgroundColor(e.target.value)} />
+
             </div>
           </div>
           <DialogFooter>
@@ -245,6 +245,6 @@ export function ExportBar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
-  );
+    </TooltipProvider>);
+
 }
