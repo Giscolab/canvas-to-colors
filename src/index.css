@@ -1,0 +1,229 @@
+@import "./styles/theme-pro.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
+All colors MUST be HSL.
+*/
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: hsl(var(--border));
+    --tw-content: '';
+  }
+
+  :root {
+    font-family: "Inter", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-variation-settings: normal;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    -webkit-tap-highlight-color: transparent;
+
+    --background: 240 20% 99%;
+    --foreground: 260 40% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 260 40% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 260 40% 12%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 262 90% 70%;
+
+    --secondary: 240 15% 96%;
+    --secondary-foreground: 260 40% 12%;
+
+    --muted: 240 15% 96%;
+    --muted-foreground: 240 10% 46%;
+
+    --accent: 25 95% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 15% 90%;
+    --input: 240 15% 90%;
+    --ring: 262 83% 58%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Custom design tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(262 90% 70%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 63%), hsl(35 100% 70%));
+    --gradient-subtle: linear-gradient(180deg, hsl(240 20% 99%), hsl(240 15% 96%));
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(262 90% 70% / 0.15) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(25 95% 63% / 0.15) 0px, transparent 50%),
+                     radial-gradient(at 0% 50%, hsl(262 83% 58% / 0.1) 0px, transparent 50%);
+    
+    --shadow-elegant: 0 10px 30px -10px hsl(262 83% 58% / 0.2);
+    --shadow-card: 0 2px 8px hsl(260 40% 12% / 0.08);
+    --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.3);
+    --shadow-premium: 0 20px 60px -10px hsl(260 40% 12% / 0.12);
+ 
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    --glass-bg: hsl(240 20% 99% / 0.7);
+    --glass-border: hsl(240 15% 90% / 0.5);
+
+    --tw-ring-inset: ;
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-color: #fff;
+    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-shadow: 0 0 #0000;
+    --tw-shadow-colored: 0 0 #0000;
+  }
+
+  .dark {
+    --background: 260 40% 8%;
+    --foreground: 240 20% 98%;
+
+    --card: 260 35% 12%;
+    --card-foreground: 240 20% 98%;
+
+    --popover: 260 35% 12%;
+    --popover-foreground: 240 20% 98%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 262 90% 70%;
+
+    --secondary: 260 30% 18%;
+    --secondary-foreground: 240 20% 98%;
+
+    --muted: 260 30% 18%;
+    --muted-foreground: 240 15% 65%;
+
+    --accent: 25 95% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 100%;
+    --input: 260 25% 20%;
+    --ring: 262 83% 58%;
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(262 90% 70%));
+    --gradient-accent: linear-gradient(135deg, hsl(25 95% 63%), hsl(35 100% 70%));
+    --gradient-subtle: linear-gradient(180deg, hsl(260 40% 8%), hsl(260 35% 12%));
+    --gradient-mesh: radial-gradient(at 40% 20%, hsl(262 90% 70% / 0.2) 0px, transparent 50%),
+                     radial-gradient(at 80% 0%, hsl(25 95% 63% / 0.2) 0px, transparent 50%),
+                     radial-gradient(at 0% 50%, hsl(262 83% 58% / 0.15) 0px, transparent 50%);
+    
+    --shadow-elegant: 0 10px 30px -10px hsl(262 83% 58% / 0.3);
+    --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.3);
+    --shadow-glow: 0 0 40px hsl(262 83% 58% / 0.4);
+    --shadow-premium: 0 20px 60px -10px hsl(0 0% 0% / 0.4);
+    
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    --glass-bg: hsl(260 35% 12% / 0.7);
+    --glass-border: hsl(260 25% 20% / 0.5);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image: var(--gradient-mesh);
+    background-attachment: fixed;
+    font-family: inherit;
+  }
+  
+  /* Glassmorphism utilities */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+  
+  
+  /* Hover effects */
+  .hover-lift {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-4px);
+  }
+  
+  .hover-glow:hover {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: auto; 
+  min-height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: auto; 
+}
+
+.canvas-container canvas,
+.canvas-container img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
