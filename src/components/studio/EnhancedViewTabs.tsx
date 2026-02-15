@@ -271,9 +271,9 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
         className="h-full flex flex-col">
 
         {/* --- Barre d'onglets --- 
-              1) Si #topbar-tabs existe, on monte la barre dans la TopBar via portal
-              2) Sinon, fallback inline sous forme de bandeau (comme avant)
-          */}
+               1) Si #topbar-tabs existe, on monte la barre dans la TopBar via portal
+               2) Sinon, fallback inline sous forme de bandeau (comme avant)
+           */}
         {tabsHost ?
         createPortal(TabsBar, tabsHost) :
 
@@ -506,7 +506,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                 </div>
               </div> :
 
-            <div className="h-full flex items-center justify-center text-studio-foreground/50">
+            <div className="h-full flex items-center justify-center text-studio-foreground/50 py-[10px] my-0 px-[250px]">
                 <div className="text-center">
                   <Palette className="w-12 h-12 mx-auto mb-4 opacity-30" />
                   <p className="text-sm text-studio-foreground/70">Traitez l'image pour voir le rendu colorisé</p>
