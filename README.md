@@ -147,12 +147,10 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 Core settings are centralized in `src/config/constants.ts`:
 
 ```typescript
-export const APP_CONFIG = {
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-  WORKER_TIMEOUT: 60000,           // 60s
-  CACHE_SIZE: 100,
-  ZOOM_MIN: 0.1,
-  ZOOM_MAX: 8.0,
+export const IMAGE_PROCESSING = {
+  MAX_FILE_SIZE_MB: 20,
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024, // 20MB
+  WORKER_TIMEOUT_MS: 5 * 60 * 1000,
   // ...
 };
 ```

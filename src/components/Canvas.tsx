@@ -151,9 +151,11 @@ export const Canvas = ({
   const zonesCount = processedData?.zones?.length || 0;
 
   useEffect(() => {
-    document.body.style.overflow = isFullscreen ? "hidden" : "auto";
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = isFullscreen ? "hidden" : previousBodyOverflow;
+
     return () => {
-      document.body.style.overflow = "auto";
+      document.body.style.overflow = previousBodyOverflow;
     };
   }, [isFullscreen]);
 
