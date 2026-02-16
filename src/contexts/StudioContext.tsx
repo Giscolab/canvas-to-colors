@@ -384,7 +384,7 @@ const renderToCanvas = useCallback((
     // import { saveAs } from "file-saver";
     
     try {
-      // Dynamique import pour éviter les erreurs si les dépendances ne sont pas installées
+      // Dynamic import to avoid runtime errors when optional dependencies are missing
       const JSZip = (await import("jszip")).default;
       const { saveAs } = await import("file-saver");
       
