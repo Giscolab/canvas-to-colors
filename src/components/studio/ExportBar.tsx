@@ -66,7 +66,7 @@ export function ExportBar() {
       if (!processedData) return;
       try {
         studio.exportCanvasAsPNG(
-          studio.viewMode || "colorized",
+          (studio.viewMode || "colorized") as "colorized" | "contours" | "numbered",
           `pbn-${studio.viewMode}-${new Date().toISOString().slice(0, 10)}.png`,
           scaleValue,
           backgroundColor
