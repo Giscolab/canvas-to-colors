@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import { Palette, Download, FileArchive, ChevronDown } from "lucide-react";
+import { Palette, Download, FileArchive, FileText, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useStudio } from "@/contexts/StudioContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { exportToPdf, DEFAULT_PDF_OPTIONS } from "@/lib/exportPdf";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
