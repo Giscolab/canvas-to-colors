@@ -145,8 +145,8 @@ export function exportToPdf(
       // Label
       doc.setFontSize(8);
       doc.setTextColor(0);
-      const pct = entry.percentage != null ? ` (${entry.percentage.toFixed(1)}%)` : "";
-      doc.text(`#${entry.colorIndex + 1} ${hex}${pct}`, x + swatchSize + 2, y + swatchSize - 1);
+      const pct = entry.percent != null ? ` (${entry.percent.toFixed(1)}%)` : "";
+      doc.text(`#${entry.id + 1} ${hex}${pct}`, x + swatchSize + 2, y + swatchSize - 1);
     });
   }
 
