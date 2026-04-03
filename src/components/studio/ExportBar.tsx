@@ -89,7 +89,7 @@ export function ExportBar() {
     const date = new Date().toISOString().slice(0, 10);
 
     try {
-      const modes: Array<{ key: string; enabled: boolean }> = [
+      const modes: Array<{ key: ViewMode; enabled: boolean }> = [
         { key: "colorized", enabled: layerColorized },
         { key: "contours", enabled: layerContours },
         { key: "numbered", enabled: layerNumbers },
