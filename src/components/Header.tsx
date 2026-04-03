@@ -173,6 +173,27 @@ export const Header = () => {
               >
                 Seulement numéroté
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  if (!studio.result) return;
+                  try {
+                    const blob = exportToPdf(studio.result, studio.renderToCanvas, DEFAULT_PDF_OPTIONS);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `pbn-${Date.now()}.pdf`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Export PDF réussi 📄");
+                  } catch (e) {
+                    console.error(e);
+                    toast.error("Erreur export PDF");
+                  }
+                }}
+              >
+                Export PDF (prêt à imprimer)
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
