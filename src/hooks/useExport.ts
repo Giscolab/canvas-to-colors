@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { ProcessedResult } from "@/lib/imageProcessing";
 import { EXPORT } from "@/config/constants";
 import { exportToSvg, SvgExportOptions } from "@/lib/exportSvg";
+import { exportToPdf, PdfExportOptions, DEFAULT_PDF_OPTIONS } from "@/lib/exportPdf";
 
 interface ExportParams {
   numColors: number;
@@ -9,7 +10,7 @@ interface ExportParams {
   smoothness: number;
 }
 
-type ExportFormat = 'png' | 'json' | 'svg';
+type ExportFormat = 'png' | 'json' | 'svg' | 'pdf';
 
 export function useExport() {
   const exportPNG = (processedData: ProcessedResult | null) => {
@@ -94,5 +95,31 @@ export function useExport() {
     }
   };
 
-  return { exportPNG, exportJSON, exportSVG };
+  const exportPDF = (
+    processedData: ProcessedResult | null,
+    renderToCanvas: (mode: string, scale: number, bg: string) => HTMLCanvasElement | null,
+    options?: Partial<PdfExportOptions>
+  ) => {
+    if (!processedData) {
+      toast.error("Aucune donnée à exporter");
+      return;
+    }
+
+    try {
+      const mergedOptions = { ...DEFAULT_PDF_OPTIONS, ...options };
+      const blob = exportToPdf(processedData, renderToCanvas, mergedOptions);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pbn-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("✅ Export PDF réussi !");
+    } catch (error) {
+      console.error('PDF export error:', error);
+      toast.error("Erreur lors de l'export PDF");
+    }
+  };
+
+  return { exportPNG, exportJSON, exportSVG, exportPDF };
 }
