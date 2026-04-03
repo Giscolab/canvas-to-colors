@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import type { ViewMode } from "@/contexts/StudioContext";
 import {
   Download, FileImage, FileArchive, Settings, ChevronDown, Check, Copy, FileText
 } from "lucide-react";
