@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
+import { AiSuggestionsCard } from "@/components/AiSuggestionsCard";
+
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
