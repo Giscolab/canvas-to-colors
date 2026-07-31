@@ -618,6 +618,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                         <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Afficher ou masquer les numéros"
                         className="studio-action-button"
                         onClick={() => studio.setOverlay({ ...studio.overlay, numbered: !studio.overlay.numbered })}>
 

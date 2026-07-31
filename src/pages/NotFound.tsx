@@ -11,6 +11,12 @@ export default function NotFound() {
   const location = useLocation();
 
   useEffect(() => {
+    document.title = "Page introuvable — PaintByNumbers Studio";
+    const meta = document.querySelector('meta[name="description"]');
+    meta?.setAttribute(
+      "content",
+      "Cette page n'existe pas. Retournez à l'accueil de PaintByNumbers Studio pour créer vos modèles de peinture par numéros."
+    );
     console.error(
       "404 Error: User attempted to access non-existent route:",
       location.pathname
