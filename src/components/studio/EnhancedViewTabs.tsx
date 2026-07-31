@@ -316,7 +316,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" aria-label="Activer l'outil main (déplacement)" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -333,7 +333,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(originalImage, "original.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(originalImage, "original.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -424,7 +424,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" aria-label="Activer l'outil main (déplacement)" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -449,7 +449,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -555,7 +555,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -653,7 +653,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -726,7 +726,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -783,7 +783,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
