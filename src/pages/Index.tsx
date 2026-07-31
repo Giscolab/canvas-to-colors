@@ -300,7 +300,17 @@ function IndexContent() {
               </DialogContent>
             </Dialog>
 
+            <AiSuggestionsCard
+              analysis={studio.analysis}
+              recommendations={studio.recommendations}
+              onApply={(settings) => {
+                studio.updateSettings(settings);
+                toast.success("Paramètres IA appliqués");
+              }}
+            />
+
             <ParametersPanel
+
               numColors={studio.settings.numColors}
               onNumColorsChange={(v) =>
                 studio.updateSettings({ numColors: v })
