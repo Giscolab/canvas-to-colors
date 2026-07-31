@@ -300,7 +300,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom avant" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -308,7 +308,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom arrière" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -316,7 +316,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" aria-label="Activer l'outil main (déplacement)" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -324,7 +324,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                        <Button variant="ghost" size="icon" aria-label="Ajuster l'image à l'écran" className="studio-action-button" onClick={handleFitToScreen}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -333,7 +333,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(originalImage, "original.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(originalImage, "original.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -341,7 +341,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" aria-label="Basculer en plein écran" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -408,7 +408,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom avant" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -416,7 +416,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom arrière" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -424,7 +424,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => studio.togglePanTool()}>
+                        <Button variant="ghost" size="icon" aria-label="Activer l'outil main (déplacement)" className="studio-action-button" onClick={() => studio.togglePanTool()}>
                           <Move className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -440,7 +440,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                        <Button variant="ghost" size="icon" aria-label="Ajuster l'image à l'écran" className="studio-action-button" onClick={handleFitToScreen}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -449,7 +449,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -457,7 +457,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" aria-label="Basculer en plein écran" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -530,7 +530,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom avant" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -538,7 +538,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom arrière" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -547,7 +547,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                        <Button variant="ghost" size="icon" aria-label="Ajuster l'image à l'écran" className="studio-action-button" onClick={handleFitToScreen}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -555,7 +555,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(contoursUrl, "contours.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -618,6 +618,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                         <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Afficher ou masquer les numéros"
                         className="studio-action-button"
                         onClick={() => studio.setOverlay({ ...studio.overlay, numbered: !studio.overlay.numbered })}>
 
@@ -628,7 +629,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom avant" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -636,7 +637,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom arrière" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -645,7 +646,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                        <Button variant="ghost" size="icon" aria-label="Ajuster l'image à l'écran" className="studio-action-button" onClick={handleFitToScreen}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -653,7 +654,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl || "", "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -701,7 +702,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomIn}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom avant" className="studio-action-button" onClick={handleZoomIn}>
                           <ZoomIn className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -709,7 +710,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleZoomOut}>
+                        <Button variant="ghost" size="icon" aria-label="Zoom arrière" className="studio-action-button" onClick={handleZoomOut}>
                           <ZoomOut className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -718,7 +719,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     <Separator orientation="vertical" className="h-4 mx-1" />
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={handleFitToScreen}>
+                        <Button variant="ghost" size="icon" aria-label="Ajuster l'image à l'écran" className="studio-action-button" onClick={handleFitToScreen}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -726,7 +727,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(numberedUrl, "numbered.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -783,7 +784,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   <div className="flex items-center space-x-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
+                        <Button variant="ghost" size="icon" aria-label="Télécharger l'image" className="studio-action-button" onClick={() => handleDownloadImage(colorizedUrl, "colorized.png")}>
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
@@ -791,7 +792,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="studio-action-button" onClick={toggleFullscreen}>
+                        <Button variant="ghost" size="icon" aria-label="Basculer en plein écran" className="studio-action-button" onClick={toggleFullscreen}>
                           <Maximize2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>

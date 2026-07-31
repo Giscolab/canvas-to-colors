@@ -247,6 +247,8 @@ export const ImageUpload = ({ onImageSelect, selectedImage }: ImageUploadProps) 
                 variant="secondary"
                 onClick={handleImportUrl}
                 disabled={!urlInput.trim() || isLoadingUrl}
+                aria-label="Importer l'image depuis l'URL"
+                title="Importer l'image depuis l'URL"
                 className="h-7 px-2 text-xs shrink-0"
               >
                 {isLoadingUrl ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link className="h-3 w-3" />}

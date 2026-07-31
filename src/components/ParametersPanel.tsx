@@ -127,12 +127,12 @@ export const ParametersPanel = ({
 }: ParametersPanelProps) => {
   const quality =
     numColors <= 0
-      ? { label: "Non défini", className: "bg-slate-500" }
+      ? { label: "Non défini", className: "bg-slate-700" }
       : numColors <= 15
-      ? { label: "Simple", className: "bg-blue-500" }
+      ? { label: "Simple", className: "bg-blue-700" }
       : numColors <= 25
-      ? { label: "Détaillé", className: "bg-purple-500" }
-      : { label: "Artistique", className: "bg-pink-500" };
+      ? { label: "Détaillé", className: "bg-purple-700" }
+      : { label: "Artistique", className: "bg-pink-700" };
 
   return (
     <Card className="p-1.5 space-y-1.5 rounded-lg border bg-card text-card-foreground shadow-sm">

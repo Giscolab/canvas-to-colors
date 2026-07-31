@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://paint-by-numbers-generator.lovable.app/sitemap.xml
