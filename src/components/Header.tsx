@@ -96,9 +96,9 @@ export const Header = () => {
         {/* Zone gauche : icône + titre + baseline */}
         <div className="min-w-0 flex items-center gap-2">
           <Palette aria-hidden="true" className="h-6 w-6 text-foreground/60" />
-          <span className="truncate text-sm font-medium text-foreground/90">
+          <h1 className="truncate text-sm font-medium text-foreground/90">
             Paint By Numbers Generator
-          </span>
+          </h1>
           <span className="hidden sm:inline text-xs text-muted-foreground">
             – Convertissez vos visuels en modèles prêts à peindre
           </span>
