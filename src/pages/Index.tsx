@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ImageUpload } from "@/components/ImageUpload";
 import { ParametersPanel } from "@/components/ParametersPanel";
+import { AiSuggestionsCard } from "@/components/AiSuggestionsCard";
+
 import { ColorPalette } from "@/components/ColorPalette";
 import { PalettePanel } from "@/components/PalettePanel";
 import { ColorAnalysisPanel } from "@/components/ColorAnalysisPanel";
@@ -300,7 +302,17 @@ function IndexContent() {
               </DialogContent>
             </Dialog>
 
+            <AiSuggestionsCard
+              analysis={studio.analysis}
+              recommendations={studio.recommendations}
+              onApply={(settings) => {
+                studio.updateSettings(settings);
+                toast.success("Paramètres IA appliqués");
+              }}
+            />
+
             <ParametersPanel
+
               numColors={studio.settings.numColors}
               onNumColorsChange={(v) =>
                 studio.updateSettings({ numColors: v })
