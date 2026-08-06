@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Recommendations } from "@/lib/imageProcessing";
+import { PAINT_EFFECT_OPTIONS, type PaintEffectType } from "@/lib/postProcessing";
+import { ARTISTIC_EFFECT_OPTIONS, type ArtisticEffectType } from "@/lib/artisticEffects";
 
 interface ParametersPanelProps {
   numColors: number;
@@ -38,11 +40,11 @@ interface ParametersPanelProps {
   smartPalette: boolean;
   onSmartPaletteChange: (value: boolean) => void;
   paintEffect: PaintEffectType;
-  onPaintEffectChange: (effect: "none" | "watercolor" | "brush") => void;
+  onPaintEffectChange: (effect: PaintEffectType) => void;
   paintIntensity: number;
   onPaintIntensityChange: (intensity: number) => void;
   artisticEffect: ArtisticEffectType;
-  onArtisticEffectChange: (effect: "none" | "oil" | "pencil") => void;
+  onArtisticEffectChange: (effect: ArtisticEffectType) => void;
   artisticIntensity: number;
   onArtisticIntensityChange: (intensity: number) => void;
   profilingEnabled: boolean;
@@ -353,14 +355,16 @@ export const ParametersPanel = ({
             Effet peinture
           </Label>
 
-          <Select value={paintEffect} onValueChange={onPaintEffectChange}>
+          <Select value={paintEffect} onValueChange={(value) => onPaintEffectChange(value as PaintEffectType)}>
             <SelectTrigger id="paint-effect" className="h-8 text-xs">
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Aucun</SelectItem>
-              <SelectItem value="watercolor">Aquarelle</SelectItem>
-              <SelectItem value="brush">Pinceau</SelectItem>
+              {PAINT_EFFECT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -399,24 +403,19 @@ export const ParametersPanel = ({
             Choix de l'effet
           </Label>
 
-          <Select value={artisticEffect} onValueChange={onArtisticEffectChange}>
+          <Select
+            value={artisticEffect}
+            onValueChange={(value) => onArtisticEffectChange(value as ArtisticEffectType)}
+          >
             <SelectTrigger id="ai-effect" className="h-8 text-xs">
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Aucun</SelectItem>
-              <SelectItem value="oil">
-                <span className="flex items-center gap-1.5">
-                  <PaintBucket className="h-3 w-3" />
-                  Huile
-                </span>
-              </SelectItem>
-              <SelectItem value="pencil">
-                <span className="flex items-center gap-1.5">
-                  <Pencil className="h-3 w-3" />
-                  Crayon
-                </span>
-              </SelectItem>
+              {ARTISTIC_EFFECT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
