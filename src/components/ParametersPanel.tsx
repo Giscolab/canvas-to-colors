@@ -37,11 +37,11 @@ interface ParametersPanelProps {
   onEnableArtisticMergeChange: (value: boolean) => void;
   smartPalette: boolean;
   onSmartPaletteChange: (value: boolean) => void;
-  paintEffect: "none" | "watercolor" | "brush";
+  paintEffect: PaintEffectType;
   onPaintEffectChange: (effect: "none" | "watercolor" | "brush") => void;
   paintIntensity: number;
   onPaintIntensityChange: (intensity: number) => void;
-  artisticEffect: "none" | "oil" | "pencil";
+  artisticEffect: ArtisticEffectType;
   onArtisticEffectChange: (effect: "none" | "oil" | "pencil") => void;
   artisticIntensity: number;
   onArtisticIntensityChange: (intensity: number) => void;
