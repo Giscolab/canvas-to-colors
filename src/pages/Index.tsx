@@ -339,7 +339,14 @@ function IndexContent() {
               }
               paintEffect={studio.settings.paintEffect}
               onPaintEffectChange={(effect) =>
-                studio.updateSettings({ paintEffect: effect })
+                studio.updateSettings({
+                  paintEffect: effect,
+                  // Une intensité nulle rendrait l'effet invisible : on amorce à 55 %
+                  paintIntensity:
+                    effect !== "none" && studio.settings.paintIntensity === 0
+                      ? 55
+                      : studio.settings.paintIntensity,
+                })
               }
               paintIntensity={studio.settings.paintIntensity}
               onPaintIntensityChange={(intensity) =>
@@ -347,7 +354,13 @@ function IndexContent() {
               }
               artisticEffect={studio.settings.artisticEffect}
               onArtisticEffectChange={(effect) =>
-                studio.updateSettings({ artisticEffect: effect })
+                studio.updateSettings({
+                  artisticEffect: effect,
+                  artisticIntensity:
+                    effect !== "none" && studio.settings.artisticIntensity === 0
+                      ? 55
+                      : studio.settings.artisticIntensity,
+                })
               }
               artisticIntensity={studio.settings.artisticIntensity}
               onArtisticIntensityChange={(intensity) =>
