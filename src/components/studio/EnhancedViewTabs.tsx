@@ -397,6 +397,19 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                         {studio.settings.artisticEffect}
                       </span>
                   }
+                    {isApplyingEffects &&
+                  <span className="studio-status-badge">Application des effets…</span>
+                  }
+                    {!isApplyingEffects && effectsDuration !== null &&
+                  <span className="text-[10px] text-studio-foreground/50">
+                        {Math.round(effectsDuration)} ms
+                      </span>
+                  }
+                    {effectsError &&
+                  <span className="studio-status-badge studio-status-badge--error">
+                        {effectsError}
+                      </span>
+                  }
                   </div>
                   <div className="flex items-center space-x-1">
                     <Tooltip>
@@ -476,7 +489,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                       <img
                       src={colorizedUrl}
                       alt="Image colorisée avec effets appliqués"
-                      className="absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image"
+                      className={`absolute inset-0 w-full h-full object-contain rounded-lg shadow-studio-image transition-opacity duration-200 ${isApplyingEffects ? "opacity-60" : "opacity-100"}`}
                       draggable={false} />
 
                     </div>
