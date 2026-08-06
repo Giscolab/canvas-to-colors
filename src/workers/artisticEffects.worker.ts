@@ -32,7 +32,7 @@ self.onmessage = (e: MessageEvent<EffectsRequest>) => {
     }
 
     const out = imageData.data.buffer as ArrayBuffer;
-    self.postMessage(
+    (self as unknown as { postMessage: (msg: unknown, transfer: Transferable[]) => void }).postMessage(
       {
         type: 'result',
         requestId,
