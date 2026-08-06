@@ -8,8 +8,9 @@ import { CompareSlider } from "./CompareSlider";
 import { InspectionOverlay } from "./InspectionOverlay";
 import { CanvasViewport, CanvasViewportHandle } from "./CanvasViewport";
 import { ProfilerPanel } from "./ProfilerPanel";
-import { applyPaintEffect, PaintEffect } from "@/lib/postProcessing";
-import { applyArtisticEffect, ArtisticEffect } from "@/lib/artisticEffects";
+import type { PaintEffect } from "@/lib/postProcessing";
+import type { ArtisticEffect } from "@/lib/artisticEffects";
+import { useArtisticEffects } from "@/hooks/useArtisticEffects";
 import { CanvasHUD } from "@/components/studio/CanvasHUD";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -118,43 +119,35 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
     [processedData?.numbered, getCanvasDataUrl]
   );
 
-  const colorizedUrl = useMemo(() => {
-    if (!processedData?.colorized) return null;
-    let finalImageData = processedData.colorized;
-
-    if (studio.settings.paintEffect !== "none") {
-      const paintEffect: PaintEffect = {
-        type: studio.settings.paintEffect,
-        intensity: studio.settings.paintIntensity
-      };
-      finalImageData = measureSync(
-        `Paint Effect (${studio.settings.paintEffect})`,
-        () => applyPaintEffect(finalImageData, paintEffect)
-      );
-    }
-
-    if (studio.settings.artisticEffect !== "none") {
-      const artisticEffect: ArtisticEffect = {
-        type: studio.settings.artisticEffect,
-        intensity: studio.settings.artisticIntensity
-      };
-      finalImageData = measureSync(
-        `Artistic Effect (${studio.settings.artisticEffect})`,
-        () => applyArtisticEffect(finalImageData, artisticEffect)
-      );
-    }
-
-    const cacheKey = `colorized-${studio.settings.paintEffect}-${studio.settings.paintIntensity}-${studio.settings.artisticEffect}-${studio.settings.artisticIntensity}`;
-    return getCanvasDataUrl(finalImageData, cacheKey);
-  }, [
-  processedData?.colorized,
-  studio.settings.paintEffect,
-  studio.settings.paintIntensity,
-  studio.settings.artisticEffect,
-  studio.settings.artisticIntensity,
-  getCanvasDataUrl,
-  measureSync]
+  const paintEffect = useMemo<PaintEffect>(
+    () => ({ type: studio.settings.paintEffect, intensity: studio.settings.paintIntensity }),
+    [studio.settings.paintEffect, studio.settings.paintIntensity]
   );
+
+  const artisticEffect = useMemo<ArtisticEffect>(
+    () => ({ type: studio.settings.artisticEffect, intensity: studio.settings.artisticIntensity }),
+    [studio.settings.artisticEffect, studio.settings.artisticIntensity]
+  );
+
+  // Les effets tournent dans un Web Worker : l'UI reste fluide même en 4K
+  const {
+    imageData: effectImageData,
+    isApplying: isApplyingEffects,
+    error: effectsError,
+    durationMs: effectsDuration
+  } = useArtisticEffects(processedData?.colorized ?? null, paintEffect, artisticEffect);
+
+  useEffect(() => {
+    if (effectsError) {
+      console.error("[Studio] Effets artistiques :", effectsError);
+    }
+  }, [effectsError]);
+
+  const colorizedUrl = useMemo(() => {
+    if (!effectImageData) return null;
+    const cacheKey = `colorized-${paintEffect.type}-${paintEffect.intensity}-${artisticEffect.type}-${artisticEffect.intensity}`;
+    return getCanvasDataUrl(effectImageData, cacheKey);
+  }, [effectImageData, paintEffect, artisticEffect, getCanvasDataUrl]);
 
   // 2. Capturer automatiquement les dimensions du rendu colorisé
   useEffect(() => {
