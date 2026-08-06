@@ -36,6 +36,10 @@ const PAINT_EFFECT_LABELS: Record<string, string> = {
   brush: "Pinceau",
   oil: "Huile",
   pencil: "Crayon",
+  pointillism: "Pointillisme",
+  impasto: "Impasto",
+  ink: "Encre de Chine",
+  pastel: "Pastel",
 };
 
 /**

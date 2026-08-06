@@ -9,6 +9,8 @@ import {
 import { toast } from "sonner";
 import { ProcessedResult, ColorAnalysis, Recommendations } from "@/lib/imageProcessing";
 import { useProfiler } from "@/hooks/useProfiler";
+import type { PaintEffectType } from "@/lib/postProcessing";
+import type { ArtisticEffectType } from "@/lib/artisticEffects";
 
 // Note: Pour la fonctionnalité d'export ZIP, vous devrez installer ces dépendances:
 // npm install jszip file-saver
@@ -33,9 +35,9 @@ export interface StudioSettings {
   mergeTolerance: number;
   enableArtisticMerge: boolean;
   smartPalette: boolean;
-  paintEffect: "none" | "watercolor" | "brush";
+  paintEffect: PaintEffectType;
   paintIntensity: number;
-  artisticEffect: "none" | "oil" | "pencil";
+  artisticEffect: ArtisticEffectType;
   artisticIntensity: number;
   profilingEnabled: boolean;
   watermarkEnabled?: boolean; // Nouveau: option pour le filigrane
