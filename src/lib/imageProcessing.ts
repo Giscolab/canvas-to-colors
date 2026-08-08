@@ -6,7 +6,7 @@ import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } f
 import type { ArtisticMergeStats } from './regionMerge';
 import { analyzeBruteSignal, type BruteSignalReport } from './bruteSignalAnalyzer';
 import { LRUCache } from './lruCache';
-import { createCanvasFactory } from './canvasFactory';
+import { createCanvasFactory, type Canvas2DContext } from './canvasFactory';
 import { analysisPipeline } from './analysisPipeline';
 import { renderPipeline } from './renderPipeline';
 
