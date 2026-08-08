@@ -2,6 +2,7 @@ import {
   buildZonesFromLabels,
   consolidateColorMap,
   createNumberedVersion,
+  createNumbersOverlay,
   createPreviewFusion,
   detectEdges,
   generateLegend,
