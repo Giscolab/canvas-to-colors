@@ -6,7 +6,7 @@ import { rgbToLab, deltaE2000, perceptualDistance, rgbToHex as rgbToHexColor } f
 import type { ArtisticMergeStats } from './regionMerge';
 import { analyzeBruteSignal, type BruteSignalReport } from './bruteSignalAnalyzer';
 import { LRUCache } from './lruCache';
-import { createCanvasFactory } from './canvasFactory';
+import { createCanvasFactory, type Canvas2DContext } from './canvasFactory';
 import { analysisPipeline } from './analysisPipeline';
 import { renderPipeline } from './renderPipeline';
 
@@ -1815,6 +1815,10 @@ function findBestLabelPosition(
 
 /**
  * Create numbered version with optimal label positioning (enhanced with pbnify algorithm)
+ *
+ * La base visuelle est l'image de référence (même source de vérité que l'aperçu
+ * colorisé) afin que tous les onglets partagent exactement le même cadrage et le
+ * même rendu. Un voile blanc léger est appliqué pour garder les numéros lisibles.
  */
 export function createNumberedVersion(
   imageData: ImageData,
@@ -1827,59 +1831,91 @@ export function createNumberedVersion(
   const height = imageData.height;
 
   const { ctx } = canvasFactory.createCanvas(width, height);
-  
-  // Start with white background
-  ctx.fillStyle = '#ffffff';
+
+  // Base = image de référence (source de vérité commune à tous les onglets)
+  ctx.putImageData(imageData, 0, 0);
+
+  // Voile blanc pour la lisibilité des numéros
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
   ctx.fillRect(0, 0, width, height);
+
   if (contoursData.width !== width || contoursData.height !== height) {
     throw new Error('Contours invalides pour la version numérotée.');
   }
   const edgesData = contoursData;
+  ctx.fillStyle = '#000000';
   for (let i = 0; i < edgesData.data.length; i += 4) {
     if (edgesData.data[i] === 0) { // Black pixel = edge
       const pixelIdx = i / 4;
       const x = pixelIdx % width;
       const y = Math.floor(pixelIdx / width);
-      ctx.fillStyle = '#000000';
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  
+
+  drawZoneNumbers(ctx, zones, labels, width, height);
+
+  return ctx.getImageData(0, 0, width, height);
+}
+
+/**
+ * Dessine les numéros de zones (pastille blanche + chiffre noir) sur un contexte donné.
+ */
+function drawZoneNumbers(
+  ctx: Canvas2DContext,
+  zones: Zone[],
+  labels: Int32Array,
+  width: number,
+  height: number
+): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  
+
   for (const zone of zones) {
     if (zone.area < 100) continue; // Skip tiny zones
-    
+
     // Use palette index as number (matching ColorPalette component)
     const number = zone.colorIdx + 1;
-    
+
     // Calculate font size based on zone area
     const fontSize = Math.max(10, Math.min(48, Math.sqrt(zone.area) / 3));
     ctx.font = `bold ${fontSize}px Arial`;
-    
+
     // Use optimal position
     const position = findBestLabelPosition(zone, labels, width, height);
-    
+
     // Semi-transparent white background for better visibility on all colors
     const padding = fontSize * 0.4;
     const textMetrics = ctx.measureText(number.toString());
     const bgWidth = textMetrics.width + padding * 2;
     const bgHeight = fontSize + padding;
-    
+
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.fillRect(
-      position.x - bgWidth / 2, 
-      position.y - bgHeight / 2, 
-      bgWidth, 
+      position.x - bgWidth / 2,
+      position.y - bgHeight / 2,
+      bgWidth,
       bgHeight
     );
-    
+
     // Black number
     ctx.fillStyle = '#000000';
     ctx.fillText(number.toString(), position.x, position.y);
   }
-  
+}
+
+/**
+ * Calque transparent contenant uniquement les numéros (utilisé pour la fusion d'aperçu).
+ */
+export function createNumbersOverlay(
+  zones: Zone[],
+  labels: Int32Array,
+  width: number,
+  height: number
+): ImageData {
+  const { ctx } = canvasFactory.createCanvas(width, height);
+  ctx.clearRect(0, 0, width, height);
+  drawZoneNumbers(ctx, zones, labels, width, height);
   return ctx.getImageData(0, 0, width, height);
 }
 
@@ -1891,7 +1927,7 @@ export function createNumberedVersion(
 export function createPreviewFusion(
   quantizedData: ImageData,
   contoursData: ImageData,
-  numberedData: ImageData,
+  numbersOverlay: ImageData,
   width: number,
   height: number
 ): ImageData {
@@ -1914,23 +1950,19 @@ export function createPreviewFusion(
     }
   }
   
-  // Overlay numbers from numbered version
-  for (let i = 0; i < numberedData.data.length; i += 4) {
-    const r = numberedData.data[i];
-    const g = numberedData.data[i + 1];
-    const b = numberedData.data[i + 2];
-    
-    // If it's a number (black text on white background in numbered version)
-    // Numbers appear as dark pixels, detect them
-    if (r < 100 && g < 100 && b < 100) {
-      previewData.data[i] = 0;     // R - black
-      previewData.data[i + 1] = 0; // G - black
-      previewData.data[i + 2] = 0; // B - black
-      previewData.data[i + 3] = 255; // A
+  // Composite du calque de numéros (alpha blending)
+  for (let i = 0; i < numbersOverlay.data.length; i += 4) {
+    const alpha = numbersOverlay.data[i + 3] / 255;
+    if (alpha <= 0) continue;
+    for (let c = 0; c < 3; c++) {
+      previewData.data[i + c] =
+        numbersOverlay.data[i + c] * alpha + previewData.data[i + c] * (1 - alpha);
     }
+    previewData.data[i + 3] = 255;
   }
   
   return previewData;
+
 }
 
 // ============= LEGEND GENERATION =============

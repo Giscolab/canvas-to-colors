@@ -2,6 +2,7 @@ import {
   buildZonesFromLabels,
   consolidateColorMap,
   createNumberedVersion,
+  createNumbersOverlay,
   createPreviewFusion,
   detectEdges,
   generateLegend,
@@ -317,10 +318,10 @@ export function renderPipeline(
   report("Génération du SVG", 92, "Conversion des polygones en chemins");
   const svg = generateSVG(mergedContours, refinedZones, palette, width, height);
 
-  // === STEP 11: Numbered version ===
+  // === STEP 11: Numbered version (base = image de référence, comme l'aperçu) ===
   report("Création de la version numérotée", 94, "Rendu des zones et numéros");
   const numberedData = createNumberedVersion(
-    quantizedData,
+    referenceImageData,
     refinedZones,
     palette,
     smoothedLabels,
@@ -329,13 +330,15 @@ export function renderPipeline(
 
   // === STEP 12: True preview fusion ===
   report("Fusion de l'aperçu final", 96, "Superposition image + contours + numéros");
+  const numbersOverlay = createNumbersOverlay(refinedZones, smoothedLabels, width, height);
   const previewData = createPreviewFusion(
     referenceImageData,
     contoursData,
-    numberedData,
+    numbersOverlay,
     width,
     height
   );
+
 
   // === STEP 13: Legend generation ===
   report("Génération de la légende", 98, `${palette.length} couleurs ordonnées par surface`);
