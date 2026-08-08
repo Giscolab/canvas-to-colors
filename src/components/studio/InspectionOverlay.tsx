@@ -91,8 +91,6 @@ export function InspectionOverlay({
     if (!cnv || width <= 0 || height <= 0) return;
     cnv.width = Math.max(1, Math.floor(width * dpr));
     cnv.height = Math.max(1, Math.floor(height * dpr));
-    cnv.style.width = `${width}px`;
-    cnv.style.height = `${height}px`;
   }, [dpr, height, width]);
 
   // Dessin
@@ -127,17 +125,17 @@ export function InspectionOverlay({
     // Curseur "loupe" minimaliste (optionnel)
     if (mouseImg) {
       ctx.save();
-      const radius = Math.max(8, Math.floor(6 * dpr));
+      const radius = 8;
       ctx.beginPath();
       ctx.arc(
-        Math.floor(mouseImg.x * dpr),
-        Math.floor(mouseImg.y * dpr),
+        mouseImg.x,
+        mouseImg.y,
         radius,
         0,
         Math.PI * 2
       );
       ctx.strokeStyle = "rgba(0,0,0,0.35)";
-      ctx.lineWidth = Math.max(1, Math.floor(1.5 * dpr));
+      ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.restore();
     }
