@@ -681,7 +681,7 @@ export function EnhancedViewTabs({ originalImage, processedData }: EnhancedViewT
                   initialScroll={viewportScroll}
                   onScrollChange={setViewportScroll}>
 
-                    <div className="relative w-full h-full">
+                    <div className="relative h-full w-full overflow-hidden rounded-lg shadow-studio-image">
                       <InspectionOverlay
                       imageData={processedData.numbered}
                       zones={processedData.zones}
