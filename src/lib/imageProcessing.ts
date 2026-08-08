@@ -1815,6 +1815,10 @@ function findBestLabelPosition(
 
 /**
  * Create numbered version with optimal label positioning (enhanced with pbnify algorithm)
+ *
+ * La base visuelle est l'image de référence (même source de vérité que l'aperçu
+ * colorisé) afin que tous les onglets partagent exactement le même cadrage et le
+ * même rendu. Un voile blanc léger est appliqué pour garder les numéros lisibles.
  */
 export function createNumberedVersion(
   imageData: ImageData,
@@ -1827,23 +1831,28 @@ export function createNumberedVersion(
   const height = imageData.height;
 
   const { ctx } = canvasFactory.createCanvas(width, height);
-  
-  // Start with white background
-  ctx.fillStyle = '#ffffff';
+
+  // Base = image de référence (source de vérité commune à tous les onglets)
+  ctx.putImageData(imageData, 0, 0);
+
+  // Voile blanc pour la lisibilité des numéros
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
   ctx.fillRect(0, 0, width, height);
+
   if (contoursData.width !== width || contoursData.height !== height) {
     throw new Error('Contours invalides pour la version numérotée.');
   }
   const edgesData = contoursData;
+  ctx.fillStyle = '#000000';
   for (let i = 0; i < edgesData.data.length; i += 4) {
     if (edgesData.data[i] === 0) { // Black pixel = edge
       const pixelIdx = i / 4;
       const x = pixelIdx % width;
       const y = Math.floor(pixelIdx / width);
-      ctx.fillStyle = '#000000';
       ctx.fillRect(x, y, 1, 1);
     }
   }
+
   
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
