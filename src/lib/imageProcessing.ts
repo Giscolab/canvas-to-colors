@@ -1853,42 +1853,69 @@ export function createNumberedVersion(
     }
   }
 
-  
+  drawZoneNumbers(ctx, zones, labels, width, height);
+
+  return ctx.getImageData(0, 0, width, height);
+}
+
+/**
+ * Dessine les numéros de zones (pastille blanche + chiffre noir) sur un contexte donné.
+ */
+function drawZoneNumbers(
+  ctx: Canvas2DContext,
+  zones: Zone[],
+  labels: Int32Array,
+  width: number,
+  height: number
+): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  
+
   for (const zone of zones) {
     if (zone.area < 100) continue; // Skip tiny zones
-    
+
     // Use palette index as number (matching ColorPalette component)
     const number = zone.colorIdx + 1;
-    
+
     // Calculate font size based on zone area
     const fontSize = Math.max(10, Math.min(48, Math.sqrt(zone.area) / 3));
     ctx.font = `bold ${fontSize}px Arial`;
-    
+
     // Use optimal position
     const position = findBestLabelPosition(zone, labels, width, height);
-    
+
     // Semi-transparent white background for better visibility on all colors
     const padding = fontSize * 0.4;
     const textMetrics = ctx.measureText(number.toString());
     const bgWidth = textMetrics.width + padding * 2;
     const bgHeight = fontSize + padding;
-    
+
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.fillRect(
-      position.x - bgWidth / 2, 
-      position.y - bgHeight / 2, 
-      bgWidth, 
+      position.x - bgWidth / 2,
+      position.y - bgHeight / 2,
+      bgWidth,
       bgHeight
     );
-    
+
     // Black number
     ctx.fillStyle = '#000000';
     ctx.fillText(number.toString(), position.x, position.y);
   }
-  
+}
+
+/**
+ * Calque transparent contenant uniquement les numéros (utilisé pour la fusion d'aperçu).
+ */
+export function createNumbersOverlay(
+  zones: Zone[],
+  labels: Int32Array,
+  width: number,
+  height: number
+): ImageData {
+  const { ctx } = canvasFactory.createCanvas(width, height);
+  ctx.clearRect(0, 0, width, height);
+  drawZoneNumbers(ctx, zones, labels, width, height);
   return ctx.getImageData(0, 0, width, height);
 }
 
@@ -1900,7 +1927,7 @@ export function createNumberedVersion(
 export function createPreviewFusion(
   quantizedData: ImageData,
   contoursData: ImageData,
-  numberedData: ImageData,
+  numbersOverlay: ImageData,
   width: number,
   height: number
 ): ImageData {
@@ -1923,23 +1950,19 @@ export function createPreviewFusion(
     }
   }
   
-  // Overlay numbers from numbered version
-  for (let i = 0; i < numberedData.data.length; i += 4) {
-    const r = numberedData.data[i];
-    const g = numberedData.data[i + 1];
-    const b = numberedData.data[i + 2];
-    
-    // If it's a number (black text on white background in numbered version)
-    // Numbers appear as dark pixels, detect them
-    if (r < 100 && g < 100 && b < 100) {
-      previewData.data[i] = 0;     // R - black
-      previewData.data[i + 1] = 0; // G - black
-      previewData.data[i + 2] = 0; // B - black
-      previewData.data[i + 3] = 255; // A
+  // Composite du calque de numéros (alpha blending)
+  for (let i = 0; i < numbersOverlay.data.length; i += 4) {
+    const alpha = numbersOverlay.data[i + 3] / 255;
+    if (alpha <= 0) continue;
+    for (let c = 0; c < 3; c++) {
+      previewData.data[i + c] =
+        numbersOverlay.data[i + c] * alpha + previewData.data[i + c] * (1 - alpha);
     }
+    previewData.data[i + 3] = 255;
   }
   
   return previewData;
+
 }
 
 // ============= LEGEND GENERATION =============
